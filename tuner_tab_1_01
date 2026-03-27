@@ -164,7 +164,7 @@ const App = () => {
       freqHistoryRef.current = [];
     }
     animationRef.current = requestAnimationFrame(update);
-  }, []); // 의존성 배열에서 a4Freq를 제거하여 루프 재생성 방지
+  }, []); 
 
   const startTuner = async () => {
     setError(null);
@@ -219,13 +219,11 @@ const App = () => {
     return '#ff4d4d'; 
   };
 
-  // A4 주파수 순환 로직 (440 -> 441 -> 442 -> 443 -> 440) 및 재생 중인 소리 즉시 반영
+  // A4 주파수 순환 로직
   const cycleA4Freq = () => {
     setA4Freq(prev => {
       const next = prev >= 443 ? 440 : prev + 1;
-      a4FreqRef.current = next; // 애니메이션 루프에 즉시 반영
-      
-      // 재생 중인 기준음이 있다면 주파수 즉시 변경
+      a4FreqRef.current = next; 
       if (playingTone && oscillatorRef.current && audioContextRef.current) {
         const stringObj = VIOLIN_STRINGS.find(s => s.name === playingTone);
         if (stringObj) {
@@ -270,15 +268,14 @@ const App = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* 리셋 버튼 */}
           <button onClick={handleReset} className="text-gray-400 hover:text-white transition-all active:rotate-180 duration-500 bg-[#1a1a1a] p-2.5 rounded-full border border-gray-800 shadow-md">
             <RotateCcw size={14} />
           </button>
         </div>
       </div>
 
-      {/* Violin String Indicators */}
-      <div className="flex justify-between w-full max-w-sm px-2 h-32 shrink-0 mt-4">
+      {/* Violin String Indicators (위아래 막대기 포함) */}
+      <div className="flex justify-between items-end w-full max-w-sm px-2 h-40 shrink-0 mt-2">
         {VIOLIN_STRINGS.map((s) => {
           const isClosest = isStarted && pitch > 0 && closestString.name === s.name;
           const isPlaying = playingTone === s.name;
@@ -289,17 +286,35 @@ const App = () => {
           else if (absStringCents <= tolerance) activeColor = '#4afc9d';
           else if (absStringCents <= tolerance + 30) activeColor = '#ffcc00';
 
-          const displayCents = Math.max(-100, Math.min(100, stringCents));
-          const markerPos = isClosest ? ((-displayCents + 100) / 200) * 100 : 50;
+          // 상단/하단 게이지 바늘 위치 계산 (0 ~ 50 센트 범위를 0% ~ 100% 비율로 변환)
+          const sharpPos = isClosest && stringCents > 0 ? Math.min(100, (stringCents / 50) * 100) : 0;
+          const flatPos = isClosest && stringCents < 0 ? Math.min(100, (-stringCents / 50) * 100) : 0;
 
           return (
-            <div key={s.name} className={`flex flex-col items-center gap-1 transition-all duration-300 ${isClosest || isPlaying ? 'opacity-100' : 'opacity-30'}`}>
-              <span className={`text-[11px] font-black ${isClosest ? 'text-yellow-500' : 'text-gray-600'}`}>{s.id}</span>
-              <div className="relative">
+            <div key={s.name} className={`flex flex-col items-center justify-center transition-all duration-300 w-12 ${isClosest || isPlaying ? 'opacity-100' : 'opacity-30'}`}>
+              <span className={`text-[10px] font-black mb-1 ${isClosest ? 'text-yellow-500' : 'text-gray-600'}`}>{s.id}</span>
+              
+              {/* 상단 막대 (음이 목표보다 높을 때) */}
+              <div className="relative h-10 w-[3px] bg-gray-900 rounded-full overflow-hidden mb-1">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                {isClosest && stringCents > 0 && (
+                  <div 
+                    className="absolute left-1/2 -translate-x-1/2 w-5 h-[4px] transition-all duration-75 rounded-full"
+                    style={{ 
+                      bottom: `${sharpPos}%`, 
+                      backgroundColor: activeColor,
+                      boxShadow: `0 0 8px ${activeColor}`
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* 현 아이콘 (중앙) */}
+              <div className="relative my-0.5">
                 <div 
                   className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm font-black transition-all duration-200 ${
                     isClosest || isPlaying 
-                    ? 'bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)]' 
+                    ? 'bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)] z-10' 
                     : 'border-gray-800 text-gray-700'
                   }`}
                 >
@@ -308,23 +323,25 @@ const App = () => {
                 </div>
                 <button 
                   onClick={() => toggleTone(s)}
-                  className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border flex items-center justify-center transition-all ${isPlaying ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-[#151515] border-gray-700 text-gray-500 hover:text-white'}`}
+                  className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-20 ${isPlaying ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-[#151515] border-gray-700 text-gray-500 hover:text-white'}`}
                 >
                   {isPlaying ? <VolumeX size={12} /> : <Volume2 size={12} />}
                 </button>
               </div>
               
-              <div className="relative h-12 w-[3px] bg-gray-900 mt-3 rounded-full overflow-hidden">
-                {(isClosest || isPlaying) && (
+              {/* 하단 막대 (음이 목표보다 낮을 때) */}
+              <div className="relative h-10 w-[3px] bg-gray-900 rounded-full overflow-hidden mt-1">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                {(isClosest && stringCents <= 0) || isPlaying ? (
                   <div 
-                    className="absolute left-1/2 -translate-x-1/2 w-6 h-[5px] transition-all duration-100 rounded-full"
+                    className="absolute left-1/2 -translate-x-1/2 w-5 h-[4px] transition-all duration-75 rounded-full"
                     style={{ 
-                      top: `${isPlaying ? 50 : markerPos}%`, 
+                      top: `${isPlaying ? 0 : flatPos}%`, 
                       backgroundColor: activeColor,
-                      boxShadow: `0 0 10px ${activeColor}`
+                      boxShadow: `0 0 8px ${activeColor}`
                     }}
                   />
-                )}
+                ) : null}
               </div>
             </div>
           );
@@ -332,7 +349,7 @@ const App = () => {
       </div>
 
       {/* Main Center Interface */}
-      <div className="flex-1 flex flex-col items-center justify-center w-full min-h-[220px] max-w-sm relative mt-2">
+      <div className="flex-1 flex flex-col items-center justify-center w-full min-h-[200px] max-w-sm relative mt-2">
         <div className="w-full h-full max-h-[360px] aspect-square rounded-[3.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative">
           
           {/* Top-Left: Start/Stop Button */}
@@ -402,7 +419,6 @@ const App = () => {
 
         <div className="flex justify-between items-end gap-1.5 px-1 h-8">
           {CENT_STEPS.map((step) => {
-            // 하단 게이지 점등은 현재 범위(tolerance)의 절반 이내에 들어올 때만 가장 가까운 칸이 켜지게 함
             const isTarget = isStarted && pitch > 0 && Math.abs(cents - step) <= 5;
             return (
               <div key={step} className="flex flex-col items-center flex-1">
