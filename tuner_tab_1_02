@@ -1,0 +1,452 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Play, Square, Mic, AlertCircle, RefreshCw, Settings, Info, RotateCcw, Volume2, VolumeX, SlidersHorizontal } from 'lucide-react';
+
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+const VIOLIN_STRINGS = [
+  { name: 'G3', id: 4, note: 'G', octave: 3, semitone: -14 }, 
+  { name: 'D4', id: 3, note: 'D', octave: 4, semitone: -7 },
+  { name: 'A4', id: 2, note: 'A', octave: 4, semitone: 0 },
+  { name: 'E5', id: 1, note: 'E', octave: 5, semitone: 7 },
+];
+
+const CENT_STEPS = [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50];
+
+const App = () => {
+  const [isStarted, setIsStarted] = useState(false);
+  const [pitch, setPitch] = useState(0);
+  const [cents, setCents] = useState(0);
+  const [stringCents, setStringCents] = useState(0); 
+  const [a4Freq, setA4Freq] = useState(442);
+  const [tolerance, setTolerance] = useState(10); // 초록색 판정 기준 범위
+  const [currentNote, setCurrentNote] = useState({ name: 'A', octave: 4, symbol: '' });
+  const [closestString, setClosestString] = useState(VIOLIN_STRINGS[2]);
+  const [error, setError] = useState(null);
+  const [playingTone, setPlayingTone] = useState(null);
+
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animationRef = useRef(null);
+  const bufferRef = useRef(null);
+  const oscillatorRef = useRef(null);
+  const gainNodeRef = useRef(null);
+  const freqHistoryRef = useRef([]);
+  const a4FreqRef = useRef(442); 
+
+  const initAudioContext = async () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      gainNodeRef.current = audioContextRef.current.createGain();
+      gainNodeRef.current.connect(audioContextRef.current.destination);
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+  };
+
+  const toggleTone = async (stringObj) => {
+    await initAudioContext();
+    const targetFreq = a4FreqRef.current * Math.pow(2, stringObj.semitone / 12);
+
+    if (playingTone === stringObj.name) {
+      stopTone();
+      return;
+    }
+    stopTone();
+    const osc = audioContextRef.current.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(targetFreq, audioContextRef.current.currentTime);
+    osc.connect(gainNodeRef.current);
+    gainNodeRef.current.gain.setValueAtTime(0, audioContextRef.current.currentTime);
+    gainNodeRef.current.gain.linearRampToValueAtTime(0.3, audioContextRef.current.currentTime + 0.1);
+    osc.start();
+    oscillatorRef.current = osc;
+    setPlayingTone(stringObj.name);
+  };
+
+  const stopTone = () => {
+    if (oscillatorRef.current) {
+      const now = audioContextRef.current.currentTime;
+      gainNodeRef.current.gain.linearRampToValueAtTime(0, now + 0.1);
+      oscillatorRef.current.stop(now + 0.2);
+      oscillatorRef.current = null;
+    }
+    setPlayingTone(null);
+  };
+
+  const autoCorrelate = (buffer, sampleRate) => {
+    let SIZE = buffer.length;
+    let rms = 0;
+    for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+    rms = Math.sqrt(rms / SIZE);
+    if (rms < 0.025) return -1; 
+
+    let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+    for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
+    for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buffer[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+
+    const buf = buffer.slice(r1, r2);
+    SIZE = buf.length;
+    let c = new Array(SIZE).fill(0);
+    for (let i = 0; i < SIZE; i++)
+      for (let j = 0; j < SIZE - i; j++)
+        c[i] = c[i] + buf[j] * buf[j + i];
+
+    let d = 0; while (c[d] > c[d + 1]) d++;
+    let maxval = -1, maxpos = -1;
+    for (let i = d; i < SIZE; i++) {
+      if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+    }
+
+    let T0 = maxpos;
+    if (maxpos > 0 && maxpos < SIZE - 1) {
+      const y1 = c[maxpos - 1];
+      const y2 = c[maxpos];
+      const y3 = c[maxpos + 1];
+      const a = (y1 + y3 - 2 * y2) / 2;
+      const b = (y3 - y1) / 2;
+      if (a !== 0) T0 = maxpos - b / (2 * a);
+    }
+    return sampleRate / T0;
+  };
+
+  const update = useCallback(() => {
+    if (!analyserRef.current) return;
+    analyserRef.current.getFloatTimeDomainData(bufferRef.current);
+    const rawFreq = autoCorrelate(bufferRef.current, audioContextRef.current.sampleRate);
+
+    if (rawFreq !== -1 && rawFreq > 50 && rawFreq < 3000) {
+      const lastFreq = freqHistoryRef.current[freqHistoryRef.current.length - 1];
+      if (lastFreq && Math.abs(lastFreq - rawFreq) / lastFreq > 0.1) {
+        freqHistoryRef.current = [];
+      }
+      
+      freqHistoryRef.current.push(rawFreq);
+      if (freqHistoryRef.current.length > 5) freqHistoryRef.current.shift();
+      
+      const freq = freqHistoryRef.current.reduce((a, b) => a + b, 0) / freqHistoryRef.current.length;
+
+      const currentA4 = a4FreqRef.current;
+      const semitonesFromA4Exact = 12 * Math.log2(freq / currentA4);
+      const noteNum = Math.round(semitonesFromA4Exact) + 69; 
+      
+      const chromaticTargetFreq = currentA4 * Math.pow(2, Math.round(semitonesFromA4Exact) / 12);
+      const chromaticCentsOff = Math.floor(1200 * Math.log2(freq / chromaticTargetFreq));
+
+      let minDiff = Infinity;
+      let closestStr = VIOLIN_STRINGS[2];
+      VIOLIN_STRINGS.forEach(s => {
+        const diff = Math.abs(semitonesFromA4Exact - s.semitone);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestStr = s;
+        }
+      });
+
+      const stringTargetFreq = currentA4 * Math.pow(2, closestStr.semitone / 12);
+      const strCentsOff = Math.floor(1200 * Math.log2(freq / stringTargetFreq));
+
+      const noteIndex = (noteNum % 12 + 12) % 12;
+      const octave = Math.floor(noteNum / 12) - 1;
+      const fullNote = NOTE_NAMES[noteIndex];
+
+      setPitch(freq.toFixed(1));
+      setCents(chromaticCentsOff);
+      setStringCents(strCentsOff);
+      setClosestString(closestStr);
+      setCurrentNote({
+        name: fullNote.replace('#', ''),
+        symbol: fullNote.includes('#') ? '#' : '',
+        octave: octave
+      });
+    } else {
+      freqHistoryRef.current = [];
+    }
+    animationRef.current = requestAnimationFrame(update);
+  }, []); 
+
+  const startTuner = async () => {
+    setError(null);
+    if (isStarted) { stopTuner(); return; }
+    try {
+      await initAudioContext();
+      
+      const constraints = {
+        audio: {
+          echoCancellation: false,
+          autoGainControl: false,
+          noiseSuppression: false,
+        }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 2048;
+      bufferRef.current = new Float32Array(analyserRef.current.fftSize);
+      audioContextRef.current.createMediaStreamSource(stream).connect(analyserRef.current);
+      
+      setIsStarted(true);
+      update();
+    } catch (err) {
+      setError("마이크 권한이 거부되었거나 장치를 찾을 수 없습니다.");
+      setIsStarted(false);
+    }
+  };
+
+  const stopTuner = () => {
+    cancelAnimationFrame(animationRef.current);
+    setIsStarted(false);
+    setPitch(0);
+    setCents(0);
+    setStringCents(0);
+  };
+
+  const handleReset = () => {
+    stopTuner();
+    stopTone();
+    setA4Freq(442);
+    a4FreqRef.current = 442;
+    setTolerance(10);
+    setClosestString(VIOLIN_STRINGS[2]);
+    setError(null);
+  };
+
+  const getStatusColor = () => {
+    if (!isStarted || pitch === 0) return '#1a1a1a';
+    if (Math.abs(cents) <= tolerance) return '#4afc9d'; 
+    if (Math.abs(cents) <= tolerance + 15) return '#ffcc00'; 
+    return '#ff4d4d'; 
+  };
+
+  const cycleA4Freq = () => {
+    setA4Freq(prev => {
+      const next = prev >= 443 ? 440 : prev + 1;
+      a4FreqRef.current = next; 
+      if (playingTone && oscillatorRef.current && audioContextRef.current) {
+        const stringObj = VIOLIN_STRINGS.find(s => s.name === playingTone);
+        if (stringObj) {
+          const targetFreq = next * Math.pow(2, stringObj.semitone / 12);
+          oscillatorRef.current.frequency.setValueAtTime(targetFreq, audioContextRef.current.currentTime);
+        }
+      }
+      return next;
+    });
+  };
+
+  const cycleTolerance = () => {
+    setTolerance(prev => prev >= 24 ? 4 : prev + 2);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black text-white flex flex-col items-center pt-8 pb-6 px-4 font-sans select-none z-50 overflow-hidden">
+      
+      {/* Top Header */}
+      <div className="w-full flex justify-between items-center h-12 shrink-0 max-w-sm">
+        <div className="flex gap-2">
+          <button 
+            onClick={cycleA4Freq}
+            className="flex items-center gap-1.5 bg-[#1a1a1a] border border-gray-800 px-3 py-2 rounded-full text-xs font-bold hover:bg-gray-700 transition-all active:scale-95 shadow-md shadow-black/50"
+          >
+            <Settings size={14} className="text-gray-500" />
+            <span className="text-gray-400">A4=</span>
+            <span className="text-white font-mono text-sm w-7 text-left">{a4Freq}</span>
+          </button>
+          
+          <button 
+            onClick={cycleTolerance}
+            className="flex items-center gap-1.5 bg-[#1a1a1a] border border-gray-800 px-3 py-2 rounded-full text-xs font-bold hover:bg-gray-700 transition-all active:scale-95 shadow-md shadow-black/50"
+          >
+            <div className="w-2.5 h-2.5 rounded-full bg-[#4afc9d] shadow-[0_0_6px_#4afc9d]" />
+            <span className="text-gray-400">범위</span>
+            <span className="text-white font-mono text-sm w-7 text-left">±{tolerance}</span>
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <button onClick={handleReset} className="text-gray-400 hover:text-white transition-all active:rotate-180 duration-500 bg-[#1a1a1a] p-2.5 rounded-full border border-gray-800 shadow-md">
+            <RotateCcw size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Violin String Indicators (높이가 확장된 위아래 막대기 포함) */}
+      <div className="flex justify-between items-center w-full max-w-sm px-2 h-56 shrink-0 mt-2">
+        {VIOLIN_STRINGS.map((s) => {
+          const isClosest = isStarted && pitch > 0 && closestString.name === s.name;
+          const isPlaying = playingTone === s.name;
+          
+          const absStringCents = Math.abs(stringCents);
+          let activeColor = '#ff4d4d'; 
+          if (isPlaying) activeColor = '#eab308';
+          else if (absStringCents <= tolerance) activeColor = '#4afc9d';
+          else if (absStringCents <= tolerance + 30) activeColor = '#ffcc00';
+
+          // 상단/하단 게이지 바늘 위치 계산 (0 ~ 50 센트 범위를 0% ~ 100% 비율로 변환)
+          const sharpPos = isClosest && stringCents > 0 ? Math.min(100, (stringCents / 50) * 100) : 0;
+          const flatPos = isClosest && stringCents < 0 ? Math.min(100, (-stringCents / 50) * 100) : 0;
+
+          return (
+            <div key={s.name} className={`flex flex-col items-center justify-center transition-all duration-300 w-14 ${isClosest || isPlaying ? 'opacity-100' : 'opacity-30'}`}>
+              <span className={`text-[10px] font-black mb-1.5 ${isClosest ? 'text-yellow-500' : 'text-gray-600'}`}>{s.id}</span>
+              
+              {/* 상단 막대 (음이 목표보다 높을 때) - h-16으로 범위 확장 */}
+              <div className="relative h-16 w-[3px] bg-gray-900 rounded-full mb-1.5">
+                {/* 척도 (눈금) 표시 */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-3/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                
+                {isClosest && stringCents > 0 && (
+                  <div 
+                    className="absolute left-1/2 -translate-x-1/2 w-8 h-[4px] transition-all duration-75 rounded-full z-10"
+                    style={{ 
+                      bottom: `${sharpPos}%`, 
+                      backgroundColor: activeColor,
+                      boxShadow: `0 0 10px ${activeColor}`
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* 현 아이콘 (중앙) */}
+              <div className="relative my-0.5">
+                <div 
+                  className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm font-black transition-all duration-200 ${
+                    isClosest || isPlaying 
+                    ? 'bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)] z-10' 
+                    : 'border-gray-800 text-gray-700'
+                  }`}
+                >
+                  {s.note}
+                  <span className="text-[9px] absolute bottom-1.5 right-2 opacity-60">{s.octave}</span>
+                </div>
+                <button 
+                  onClick={() => toggleTone(s)}
+                  className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-20 ${isPlaying ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-[#151515] border-gray-700 text-gray-500 hover:text-white'}`}
+                >
+                  {isPlaying ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                </button>
+              </div>
+              
+              {/* 하단 막대 (음이 목표보다 낮을 때) - h-16으로 범위 확장 */}
+              <div className="relative h-16 w-[3px] bg-gray-900 rounded-full mt-1.5">
+                {/* 척도 (눈금) 표시 */}
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-3/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                
+                {(isClosest && stringCents <= 0) || isPlaying ? (
+                  <div 
+                    className="absolute left-1/2 -translate-x-1/2 w-8 h-[4px] transition-all duration-75 rounded-full z-10"
+                    style={{ 
+                      top: `${isPlaying ? 0 : flatPos}%`, 
+                      backgroundColor: activeColor,
+                      boxShadow: `0 0 10px ${activeColor}`
+                    }}
+                  />
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Main Center Interface */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full min-h-[180px] max-w-sm relative mt-2">
+        <div className="w-full h-full max-h-[360px] aspect-square rounded-[3.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative">
+          
+          {/* Top-Left: Start/Stop Button */}
+          <div className="absolute top-6 left-6 flex flex-col items-center gap-1.5 z-10">
+            <button 
+              onClick={startTuner}
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 shadow-xl border-4 ${isStarted ? 'bg-red-900/20 border-red-700/50 text-red-500' : 'bg-[#4afc9d]/10 border-[#4afc9d]/30 text-[#4afc9d]'}`}
+            >
+              {isStarted ? <Square size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="translate-x-0.5" />}
+            </button>
+            <span className="text-[11px] font-black tracking-widest text-gray-600 mt-1 uppercase">
+              {isStarted ? 'STOP' : 'START'}
+            </span>
+          </div>
+
+          {/* Top-Right: LED Status Light & Text */}
+          <div className="absolute top-6 right-6 flex flex-col items-center gap-1.5 z-10">
+            <div 
+              className="w-14 h-14 rounded-full transition-all duration-300 border-[4px] border-black shadow-[inset_0_4px_10px_rgba(0,0,0,0.6)]"
+              style={{ 
+                backgroundColor: getStatusColor(),
+                boxShadow: isStarted && pitch > 0 ? `0 0 40px ${getStatusColor()}, inset 0 0 15px rgba(0,0,0,0.8)` : 'none'
+              }}
+            />
+            <span 
+              className="text-[11px] font-black tracking-widest mt-1 uppercase transition-colors duration-300"
+              style={{ color: !isStarted ? '#444' : (Math.abs(cents) <= tolerance ? '#4afc9d' : '#888') }}
+            >
+              {!isStarted ? 'IDLE' : (Math.abs(cents) <= tolerance ? 'PERFECT' : 'TUNE')}
+            </span>
+          </div>
+
+          {/* Large Center Note Display */}
+          <div className="flex flex-col items-center justify-center mt-10">
+            <div className="flex items-start">
+              <span className="text-[140px] sm:text-[160px] font-black leading-none tracking-tighter" style={{ color: (isStarted && pitch > 0) || playingTone ? '#fff' : '#111' }}>
+                {playingTone ? playingTone.replace(/[0-9]/, '') : (isStarted && pitch > 0 ? currentNote.name : 'A')}
+              </span>
+              <div className="flex flex-col mt-4 ml-2">
+                <span className="text-6xl sm:text-7xl font-bold text-[#4afc9d] leading-none mb-1">
+                  {isStarted && pitch > 0 ? currentNote.symbol : (playingTone && playingTone.includes('#') ? '#' : '')}
+                </span>
+                <span className="text-4xl sm:text-5xl font-bold text-gray-700 leading-none mt-2">
+                  {isStarted && pitch > 0 ? currentNote.octave : (playingTone ? playingTone.match(/[0-9]/)[0] : '4')}
+                </span>
+              </div>
+            </div>
+            <div className="text-lg font-mono tracking-[0.5em] text-gray-500 mt-2 bg-black/60 px-6 py-2 rounded-xl border border-white/5 shadow-inner">
+              {pitch > 0 ? `${pitch} Hz` : '000.0 Hz'}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Bottom Meter */}
+      <div className="w-full max-w-sm h-36 shrink-0 flex flex-col justify-end gap-5 pb-2 mt-4">
+        <div className="flex justify-center items-center gap-5 bg-[#050505] py-4 rounded-3xl border border-white/5 shadow-[inset_0_2px_15px_rgba(0,0,0,1)]">
+          <div className={`text-6xl font-black font-mono tracking-tighter transition-all duration-300 ${isStarted && pitch > 0 ? (Math.abs(cents) <= tolerance ? 'text-[#4afc9d]' : cents > 0 ? 'text-red-500' : 'text-blue-500') : 'text-[#111]'}`}>
+            {isStarted && pitch > 0 ? (cents > 0 ? `+${cents}` : cents) : '0'}
+          </div>
+          <div className="flex flex-col border-l border-gray-800 pl-4">
+            <span className="text-[11px] text-gray-500 font-black uppercase tracking-widest italic">Cents</span>
+            <span className="text-[11px] text-gray-700 font-bold uppercase tracking-widest">Offset</span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-end gap-1.5 px-1 h-8">
+          {CENT_STEPS.map((step) => {
+            const isTarget = isStarted && pitch > 0 && Math.abs(cents - step) <= 5;
+            return (
+              <div key={step} className="flex flex-col items-center flex-1">
+                <div 
+                  className={`w-full transition-all duration-200 rounded-sm ${isTarget ? 'h-8 bg-white shadow-[0_0_20px_white]' : 'h-2 bg-gray-900'}`}
+                  style={step === 0 && !isTarget ? {backgroundColor: '#333'} : {}}
+                />
+                <span className={`text-[8px] mt-2 font-black ${isTarget ? 'text-white' : 'text-gray-800'}`}>{step === 0 ? '0' : step}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] bg-red-950/95 p-6 rounded-3xl flex flex-col items-center gap-3 border border-red-500/50 backdrop-blur-md z-50 shadow-2xl">
+          <AlertCircle size={32} className="text-red-400" />
+          <p className="text-sm text-center text-white font-bold leading-relaxed">{error}</p>
+          <button onClick={() => window.location.reload()} className="mt-2 px-6 py-2 bg-red-500 text-white font-bold rounded-full">새로고침</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
