@@ -168,7 +168,9 @@ const Tuner = () => {
   const stopTone = () => {
     if (oscillatorRef.current) {
       const now = audioContextRef.current.currentTime;
-      gainNodeRef.current.gain.linearRampToValueAtTime(0, now + 0.1);
+      if (gainNodeRef.current) {
+         gainNodeRef.current.gain.linearRampToValueAtTime(0, now + 0.1);
+      }
       oscillatorRef.current.stop(now + 0.2);
       oscillatorRef.current = null;
     }
@@ -339,7 +341,7 @@ const Tuner = () => {
   };
 
   return (
-    <div className="w-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+    <div className="w-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-300 relative">
       {/* Top Header */}
       <div className="w-full flex justify-between items-center h-12 shrink-0 max-w-sm">
         <div className="flex gap-2">
@@ -385,8 +387,8 @@ const Tuner = () => {
           const flatPos = isClosest && stringCents < 0 ? Math.min(100, (-stringCents / 50) * 100) : 0;
 
           return (
-            <div key={s.name} className={`flex flex-col items-center justify-center transition-all duration-300 w-14 ${isClosest || isPlaying ? 'opacity-100' : 'opacity-30'}`}>
-              <span className={`text-[10px] font-black mb-1.5 ${isClosest ? 'text-yellow-500' : 'text-gray-600'}`}>{s.id}</span>
+            <div key={s.name} className={`flex flex-col items-center justify-center transition-all duration-300 w-14 ${isClosest || isPlaying ? 'opacity-100' : 'opacity-70'}`}>
+              <span className={`text-[10px] font-black mb-1.5 ${isClosest ? 'text-yellow-500' : 'text-gray-400'}`}>{s.id}</span>
               
               <div className="relative h-16 w-[3px] bg-gray-900 rounded-full mb-1.5">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
@@ -411,11 +413,11 @@ const Tuner = () => {
                   className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm font-black transition-all duration-200 ${
                     isClosest || isPlaying 
                     ? 'bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)] z-10' 
-                    : 'border-gray-800 text-gray-700'
+                    : 'bg-[#1a1a1a] border-gray-600 text-gray-300'
                   }`}
                 >
                   {s.note}
-                  <span className="text-[9px] absolute bottom-1.5 right-2 opacity-60">{s.octave}</span>
+                  <span className="text-[9px] absolute bottom-1.5 right-2 opacity-80">{s.octave}</span>
                 </div>
                 <button 
                   onClick={() => toggleTone(s)}
@@ -694,25 +696,31 @@ const Metronome = () => {
       const osc = metroAudioCtxRef.current.createOscillator();
       const gainNode = metroAudioCtxRef.current.createGain();
 
-      if (soundType === 2) {
-        osc.frequency.value = 880.0;
+      // 연주 시 잘 들리도록 고음역대의 짧고 명쾌한 소리로 설정
+      osc.type = 'sine'; 
+
+      if (soundType === 2) { // 강세 (Accent)
+        osc.frequency.value = 1760.0; // A6
         gainNode.gain.setValueAtTime(1, time);
-      } else if (soundType === 3) {
-        osc.frequency.value = 660.0;
+      } else if (soundType === 3) { // 중강세 (Medium)
+        osc.frequency.value = 1174.66; // D6
         gainNode.gain.setValueAtTime(0.7, time);
-      } else if (soundType === 1) {
-        osc.frequency.value = 440.0;
-        gainNode.gain.setValueAtTime(0.4, time);
-      } else if (soundType === -1) {
-        osc.frequency.value = 700.0; 
-        gainNode.gain.setValueAtTime(0.2, time);
+      } else if (soundType === 1) { // 약세 (Weak)
+        osc.frequency.value = 880.0; // A5
+        gainNode.gain.setValueAtTime(0.5, time);
+      } else if (soundType === -1) { // 쪼갠 박자 (Subdivision)
+        osc.frequency.value = 1318.51; // E6
+        gainNode.gain.setValueAtTime(0.25, time);
       }
       
-      gainNode.gain.exponentialRampToValueAtTime(0.001, time + (soundType === -1 ? 0.03 : 0.08));
+      // 소리가 길게 끌리지 않고 짧게 "틱" 끊어지도록 decay 시간 축소
+      const duration = soundType === -1 ? 0.03 : 0.05;
+      gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+      
       osc.connect(gainNode);
       gainNode.connect(metroAudioCtxRef.current.destination);
       osc.start(time);
-      osc.stop(time + 0.1);
+      osc.stop(time + duration + 0.01);
     }
   };
 
