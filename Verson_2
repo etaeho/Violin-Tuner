@@ -1,0 +1,956 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  Play, Square, RefreshCcw, Settings, Volume2, VolumeX, AlertCircle,
+  Music, Activity, Minus, Plus, Hand, ChevronUp, ChevronDown, RotateCcw
+} from 'lucide-react';
+
+// ==========================================
+// 공통 상수 및 헬퍼 함수
+// ==========================================
+const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+const VIOLIN_STRINGS = [
+  { name: 'G3', id: 4, note: 'G', octave: 3, semitone: -14 }, 
+  { name: 'D4', id: 3, note: 'D', octave: 4, semitone: -7 },
+  { name: 'A4', id: 2, note: 'A', octave: 4, semitone: 0 },
+  { name: 'E5', id: 1, note: 'E', octave: 5, semitone: 7 },
+];
+
+const CENT_STEPS = [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50];
+
+const NoteQuarter = ({ className = "h-6 w-auto drop-shadow-md" }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <circle cx="10" cy="17" r="2.8" />
+    <rect x="11.8" y="5" width="1.2" height="12" />
+  </svg>
+);
+
+const NoteEighths = ({ className = "h-6 w-auto drop-shadow-md" }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <circle cx="7" cy="17" r="2.5" />
+    <circle cx="17" cy="17" r="2.5" />
+    <rect x="8.5" y="6" width="1.2" height="11" />
+    <rect x="18.5" y="6" width="1.2" height="11" />
+    <rect x="8.5" y="5" width="11.2" height="2" />
+  </svg>
+);
+
+const NoteTriplet = ({ className = "h-6 w-auto drop-shadow-md" }) => (
+  <svg viewBox="0 0 32 24" fill="currentColor" className={className}>
+    <circle cx="6" cy="17" r="2.2" />
+    <circle cx="16" cy="17" r="2.2" />
+    <circle cx="26" cy="17" r="2.2" />
+    <rect x="7" y="7" width="1.2" height="10" />
+    <rect x="17" y="7" width="1.2" height="10" />
+    <rect x="27" y="7" width="1.2" height="10" />
+    <rect x="7" y="6" width="21.2" height="1.8" />
+    <text x="17" y="4.5" fontSize="6.5" fontWeight="900" textAnchor="middle" style={{ fontStyle: 'italic' }}>3</text>
+  </svg>
+);
+
+const NoteSixteenths = ({ className = "h-6 w-auto drop-shadow-md" }) => (
+  <svg viewBox="0 0 40 24" fill="currentColor" className={className}>
+    <circle cx="6" cy="17" r="2" />
+    <circle cx="15" cy="17" r="2" />
+    <circle cx="24" cy="17" r="2" />
+    <circle cx="33" cy="17" r="2" />
+    <rect x="7" y="6" width="1" height="11" />
+    <rect x="16" y="6" width="1" height="11" />
+    <rect x="25" y="6" width="1" height="11" />
+    <rect x="34" y="6" width="1" height="11" />
+    <rect x="7" y="5" width="28" height="1.5" />
+    <rect x="7" y="8.5" width="28" height="1.5" />
+  </svg>
+);
+
+const renderSubdivisionIcon = (val, className) => {
+  switch(val) {
+    case 1: return <NoteQuarter className={className} />;
+    case 2: return <NoteEighths className={className} />;
+    case 3: return <NoteTriplet className={className} />;
+    case 4: return <NoteSixteenths className={className} />;
+    default: return null;
+  }
+};
+
+const getDefaultBeatSounds = (num) => {
+  if (num === 2) return [2, 1];
+  if (num === 3) return [2, 1, 1];
+  if (num === 4) return [2, 1, 1, 1]; 
+  if (num === 5) return [2, 1, 2, 1, 1]; 
+  if (num === 6) return [2, 1, 1, 3, 1, 1]; 
+  if (num === 7) return [2, 1, 1, 2, 1, 2, 1]; 
+  if (num === 8) return [2, 1, 1, 3, 1, 1, 3, 1];
+  if (num === 9) return [2, 1, 1, 3, 1, 1, 3, 1, 1]; 
+  if (num === 12) return [2, 1, 1, 3, 1, 1, 2, 1, 1, 3, 1, 1]; 
+  
+  const arr = Array(num).fill(1);
+  arr[0] = 2;
+  return arr;
+};
+
+const getTempoMarking = (bpm) => {
+  if (bpm < 40) return "Grave (매우 느리게)";
+  if (bpm < 60) return "Largo (넓고 느리게)";
+  if (bpm < 66) return "Larghetto (조금 느리게)";
+  if (bpm < 76) return "Adagio (침착하고 느리게)";
+  if (bpm < 108) return "Andante (걷는 속도로)";
+  if (bpm < 120) return "Moderato (보통 빠르기로)";
+  if (bpm < 168) return "Allegro (빠르고 경쾌하게)";
+  if (bpm < 200) return "Presto (매우 빠르게)";
+  return "Prestissimo (가장 빠르게)";
+};
+
+
+// ==========================================
+// 1. Tuner Component (첫 번째 소스 완벽 유지)
+// ==========================================
+const Tuner = () => {
+  const [isStarted, setIsStarted] = useState(false);
+  const [pitch, setPitch] = useState(0);
+  const [cents, setCents] = useState(0);
+  const [stringCents, setStringCents] = useState(0); 
+  const [a4Freq, setA4Freq] = useState(442);
+  const [tolerance, setTolerance] = useState(10);
+  const [currentNote, setCurrentNote] = useState({ name: 'A', octave: 4, symbol: '' });
+  const [closestString, setClosestString] = useState(VIOLIN_STRINGS[2]);
+  const [error, setError] = useState(null);
+  const [playingTone, setPlayingTone] = useState(null);
+
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const animationRef = useRef(null);
+  const bufferRef = useRef(null);
+  const oscillatorRef = useRef(null);
+  const gainNodeRef = useRef(null);
+  const freqHistoryRef = useRef([]);
+  const a4FreqRef = useRef(442); 
+
+  // 컴포넌트 언마운트 시(탭 이동 시) 튜너/재생 정지
+  useEffect(() => {
+    return () => {
+      stopTuner();
+      stopTone();
+    };
+  }, []);
+
+  const initAudioContext = async () => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      gainNodeRef.current = audioContextRef.current.createGain();
+      gainNodeRef.current.connect(audioContextRef.current.destination);
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      await audioContextRef.current.resume();
+    }
+  };
+
+  const toggleTone = async (stringObj) => {
+    await initAudioContext();
+    const targetFreq = a4FreqRef.current * Math.pow(2, stringObj.semitone / 12);
+
+    if (playingTone === stringObj.name) {
+      stopTone();
+      return;
+    }
+    stopTone();
+    const osc = audioContextRef.current.createOscillator();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(targetFreq, audioContextRef.current.currentTime);
+    osc.connect(gainNodeRef.current);
+    gainNodeRef.current.gain.setValueAtTime(0, audioContextRef.current.currentTime);
+    gainNodeRef.current.gain.linearRampToValueAtTime(0.3, audioContextRef.current.currentTime + 0.1);
+    osc.start();
+    oscillatorRef.current = osc;
+    setPlayingTone(stringObj.name);
+  };
+
+  const stopTone = () => {
+    if (oscillatorRef.current) {
+      const now = audioContextRef.current.currentTime;
+      gainNodeRef.current.gain.linearRampToValueAtTime(0, now + 0.1);
+      oscillatorRef.current.stop(now + 0.2);
+      oscillatorRef.current = null;
+    }
+    setPlayingTone(null);
+  };
+
+  const autoCorrelate = (buffer, sampleRate) => {
+    let SIZE = buffer.length;
+    let rms = 0;
+    for (let i = 0; i < SIZE; i++) rms += buffer[i] * buffer[i];
+    rms = Math.sqrt(rms / SIZE);
+    if (rms < 0.025) return -1; 
+
+    let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+    for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buffer[i]) < thres) { r1 = i; break; }
+    for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buffer[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+
+    const buf = buffer.slice(r1, r2);
+    SIZE = buf.length;
+    let c = new Array(SIZE).fill(0);
+    for (let i = 0; i < SIZE; i++)
+      for (let j = 0; j < SIZE - i; j++)
+        c[i] = c[i] + buf[j] * buf[j + i];
+
+    let d = 0; while (c[d] > c[d + 1]) d++;
+    let maxval = -1, maxpos = -1;
+    for (let i = d; i < SIZE; i++) {
+      if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+    }
+
+    let T0 = maxpos;
+    if (maxpos > 0 && maxpos < SIZE - 1) {
+      const y1 = c[maxpos - 1];
+      const y2 = c[maxpos];
+      const y3 = c[maxpos + 1];
+      const a = (y1 + y3 - 2 * y2) / 2;
+      const b = (y3 - y1) / 2;
+      if (a !== 0) T0 = maxpos - b / (2 * a);
+    }
+    return sampleRate / T0;
+  };
+
+  const update = useCallback(() => {
+    if (!analyserRef.current) return;
+    analyserRef.current.getFloatTimeDomainData(bufferRef.current);
+    const rawFreq = autoCorrelate(bufferRef.current, audioContextRef.current.sampleRate);
+
+    if (rawFreq !== -1 && rawFreq > 50 && rawFreq < 3000) {
+      const lastFreq = freqHistoryRef.current[freqHistoryRef.current.length - 1];
+      if (lastFreq && Math.abs(lastFreq - rawFreq) / lastFreq > 0.1) {
+        freqHistoryRef.current = [];
+      }
+      
+      freqHistoryRef.current.push(rawFreq);
+      if (freqHistoryRef.current.length > 5) freqHistoryRef.current.shift();
+      
+      const freq = freqHistoryRef.current.reduce((a, b) => a + b, 0) / freqHistoryRef.current.length;
+
+      const currentA4 = a4FreqRef.current;
+      const semitonesFromA4Exact = 12 * Math.log2(freq / currentA4);
+      const noteNum = Math.round(semitonesFromA4Exact) + 69; 
+      
+      const chromaticTargetFreq = currentA4 * Math.pow(2, Math.round(semitonesFromA4Exact) / 12);
+      const chromaticCentsOff = Math.floor(1200 * Math.log2(freq / chromaticTargetFreq));
+
+      let minDiff = Infinity;
+      let closestStr = VIOLIN_STRINGS[2];
+      VIOLIN_STRINGS.forEach(s => {
+        const diff = Math.abs(semitonesFromA4Exact - s.semitone);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestStr = s;
+        }
+      });
+
+      const stringTargetFreq = currentA4 * Math.pow(2, closestStr.semitone / 12);
+      const strCentsOff = Math.floor(1200 * Math.log2(freq / stringTargetFreq));
+
+      const noteIndex = (noteNum % 12 + 12) % 12;
+      const octave = Math.floor(noteNum / 12) - 1;
+      const fullNote = NOTE_NAMES[noteIndex];
+
+      setPitch(freq.toFixed(1));
+      setCents(chromaticCentsOff);
+      setStringCents(strCentsOff);
+      setClosestString(closestStr);
+      setCurrentNote({
+        name: fullNote.replace('#', ''),
+        symbol: fullNote.includes('#') ? '#' : '',
+        octave: octave
+      });
+    } else {
+      freqHistoryRef.current = [];
+    }
+    animationRef.current = requestAnimationFrame(update);
+  }, []); 
+
+  const startTuner = async () => {
+    setError(null);
+    if (isStarted) { stopTuner(); return; }
+    try {
+      await initAudioContext();
+      
+      const constraints = {
+        audio: {
+          echoCancellation: false,
+          autoGainControl: false,
+          noiseSuppression: false,
+        }
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 2048;
+      bufferRef.current = new Float32Array(analyserRef.current.fftSize);
+      audioContextRef.current.createMediaStreamSource(stream).connect(analyserRef.current);
+      
+      setIsStarted(true);
+      update();
+    } catch (err) {
+      setError("마이크 권한이 거부되었거나 장치를 찾을 수 없습니다.");
+      setIsStarted(false);
+    }
+  };
+
+  const stopTuner = () => {
+    cancelAnimationFrame(animationRef.current);
+    setIsStarted(false);
+    setPitch(0);
+    setCents(0);
+    setStringCents(0);
+  };
+
+  const handleReset = () => {
+    stopTuner();
+    stopTone();
+    setA4Freq(442);
+    a4FreqRef.current = 442;
+    setTolerance(10);
+    setClosestString(VIOLIN_STRINGS[2]);
+    setError(null);
+  };
+
+  const getStatusColor = () => {
+    if (!isStarted || pitch === 0) return '#1a1a1a';
+    if (Math.abs(cents) <= tolerance) return '#4afc9d'; 
+    if (Math.abs(cents) <= tolerance + 15) return '#ffcc00'; 
+    return '#ff4d4d'; 
+  };
+
+  const cycleA4Freq = () => {
+    setA4Freq(prev => {
+      const next = prev >= 443 ? 440 : prev + 1;
+      a4FreqRef.current = next; 
+      if (playingTone && oscillatorRef.current && audioContextRef.current) {
+        const stringObj = VIOLIN_STRINGS.find(s => s.name === playingTone);
+        if (stringObj) {
+          const targetFreq = next * Math.pow(2, stringObj.semitone / 12);
+          oscillatorRef.current.frequency.setValueAtTime(targetFreq, audioContextRef.current.currentTime);
+        }
+      }
+      return next;
+    });
+  };
+
+  const cycleTolerance = () => {
+    setTolerance(prev => prev >= 24 ? 4 : prev + 2);
+  };
+
+  return (
+    <div className="w-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-300">
+      {/* Top Header */}
+      <div className="w-full flex justify-between items-center h-12 shrink-0 max-w-sm">
+        <div className="flex gap-2">
+          <button 
+            onClick={cycleA4Freq}
+            className="flex items-center gap-1.5 bg-[#1a1a1a] border border-gray-800 px-3 py-2 rounded-full text-xs font-bold hover:bg-gray-700 transition-all active:scale-95 shadow-md shadow-black/50"
+          >
+            <Settings size={14} className="text-gray-500" />
+            <span className="text-gray-400">A4=</span>
+            <span className="text-white font-mono text-sm w-7 text-left">{a4Freq}</span>
+          </button>
+          
+          <button 
+            onClick={cycleTolerance}
+            className="flex items-center gap-1.5 bg-[#1a1a1a] border border-gray-800 px-3 py-2 rounded-full text-xs font-bold hover:bg-gray-700 transition-all active:scale-95 shadow-md shadow-black/50"
+          >
+            <div className="w-2.5 h-2.5 rounded-full bg-[#4afc9d] shadow-[0_0_6px_#4afc9d]" />
+            <span className="text-gray-400">범위</span>
+            <span className="text-white font-mono text-sm w-7 text-left">±{tolerance}</span>
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <button onClick={handleReset} className="text-gray-400 hover:text-white transition-all active:rotate-180 duration-500 bg-[#1a1a1a] p-2.5 rounded-full border border-gray-800 shadow-md">
+            <RotateCcw size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Violin String Indicators (h-56 및 상/하단 게이지 바늘 유지) */}
+      <div className="flex justify-between items-center w-full max-w-sm px-2 h-56 shrink-0 mt-2">
+        {VIOLIN_STRINGS.map((s) => {
+          const isClosest = isStarted && pitch > 0 && closestString.name === s.name;
+          const isPlaying = playingTone === s.name;
+          
+          const absStringCents = Math.abs(stringCents);
+          let activeColor = '#ff4d4d'; 
+          if (isPlaying) activeColor = '#eab308';
+          else if (absStringCents <= tolerance) activeColor = '#4afc9d';
+          else if (absStringCents <= tolerance + 30) activeColor = '#ffcc00';
+
+          const sharpPos = isClosest && stringCents > 0 ? Math.min(100, (stringCents / 50) * 100) : 0;
+          const flatPos = isClosest && stringCents < 0 ? Math.min(100, (-stringCents / 50) * 100) : 0;
+
+          return (
+            <div key={s.name} className={`flex flex-col items-center justify-center transition-all duration-300 w-14 ${isClosest || isPlaying ? 'opacity-100' : 'opacity-30'}`}>
+              <span className={`text-[10px] font-black mb-1.5 ${isClosest ? 'text-yellow-500' : 'text-gray-600'}`}>{s.id}</span>
+              
+              <div className="relative h-16 w-[3px] bg-gray-900 rounded-full mb-1.5">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-3/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                
+                {isClosest && stringCents > 0 && (
+                  <div 
+                    className="absolute left-1/2 -translate-x-1/2 w-8 h-[4px] transition-all duration-75 rounded-full z-10"
+                    style={{ 
+                      bottom: `${sharpPos}%`, 
+                      backgroundColor: activeColor,
+                      boxShadow: `0 0 10px ${activeColor}`
+                    }}
+                  />
+                )}
+              </div>
+
+              <div className="relative my-0.5">
+                <div 
+                  className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-sm font-black transition-all duration-200 ${
+                    isClosest || isPlaying 
+                    ? 'bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)] z-10' 
+                    : 'border-gray-800 text-gray-700'
+                  }`}
+                >
+                  {s.note}
+                  <span className="text-[9px] absolute bottom-1.5 right-2 opacity-60">{s.octave}</span>
+                </div>
+                <button 
+                  onClick={() => toggleTone(s)}
+                  className={`absolute -bottom-1 -right-1 w-6 h-6 rounded-full border flex items-center justify-center transition-all z-20 ${isPlaying ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-[#151515] border-gray-700 text-gray-500 hover:text-white'}`}
+                >
+                  {isPlaying ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                </button>
+              </div>
+              
+              <div className="relative h-16 w-[3px] bg-gray-900 rounded-full mt-1.5">
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-3/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700" />
+                <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-2 h-[1px] bg-gray-800" />
+                
+                {(isClosest && stringCents <= 0) || isPlaying ? (
+                  <div 
+                    className="absolute left-1/2 -translate-x-1/2 w-8 h-[4px] transition-all duration-75 rounded-full z-10"
+                    style={{ 
+                      top: `${isPlaying ? 0 : flatPos}%`, 
+                      backgroundColor: activeColor,
+                      boxShadow: `0 0 10px ${activeColor}`
+                    }}
+                  />
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Main Center Interface */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full min-h-[180px] max-w-sm relative mt-2">
+        <div className="w-full h-full max-h-[360px] aspect-square rounded-[3.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative">
+          
+          <div className="absolute top-6 left-6 flex flex-col items-center gap-1.5 z-10">
+            <button 
+              onClick={startTuner}
+              className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 shadow-xl border-4 ${isStarted ? 'bg-red-900/20 border-red-700/50 text-red-500' : 'bg-[#4afc9d]/10 border-[#4afc9d]/30 text-[#4afc9d]'}`}
+            >
+              {isStarted ? <Square size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="translate-x-0.5" />}
+            </button>
+            <span className="text-[11px] font-black tracking-widest text-gray-600 mt-1 uppercase">
+              {isStarted ? 'STOP' : 'START'}
+            </span>
+          </div>
+
+          <div className="absolute top-6 right-6 flex flex-col items-center gap-1.5 z-10">
+            <div 
+              className="w-14 h-14 rounded-full transition-all duration-300 border-[4px] border-black shadow-[inset_0_4px_10px_rgba(0,0,0,0.6)]"
+              style={{ 
+                backgroundColor: getStatusColor(),
+                boxShadow: isStarted && pitch > 0 ? `0 0 40px ${getStatusColor()}, inset 0 0 15px rgba(0,0,0,0.8)` : 'none'
+              }}
+            />
+            <span 
+              className="text-[11px] font-black tracking-widest mt-1 uppercase transition-colors duration-300"
+              style={{ color: !isStarted ? '#444' : (Math.abs(cents) <= tolerance ? '#4afc9d' : '#888') }}
+            >
+              {!isStarted ? 'IDLE' : (Math.abs(cents) <= tolerance ? 'PERFECT' : 'TUNE')}
+            </span>
+          </div>
+
+          <div className="flex flex-col items-center justify-center mt-10">
+            <div className="flex items-start">
+              <span className="text-[140px] sm:text-[160px] font-black leading-none tracking-tighter" style={{ color: (isStarted && pitch > 0) || playingTone ? '#fff' : '#111' }}>
+                {playingTone ? playingTone.replace(/[0-9]/, '') : (isStarted && pitch > 0 ? currentNote.name : 'A')}
+              </span>
+              <div className="flex flex-col mt-4 ml-2">
+                <span className="text-6xl sm:text-7xl font-bold text-[#4afc9d] leading-none mb-1">
+                  {isStarted && pitch > 0 ? currentNote.symbol : (playingTone && playingTone.includes('#') ? '#' : '')}
+                </span>
+                <span className="text-4xl sm:text-5xl font-bold text-gray-700 leading-none mt-2">
+                  {isStarted && pitch > 0 ? currentNote.octave : (playingTone ? playingTone.match(/[0-9]/)[0] : '4')}
+                </span>
+              </div>
+            </div>
+            <div className="text-lg font-mono tracking-[0.5em] text-gray-500 mt-2 bg-black/60 px-6 py-2 rounded-xl border border-white/5 shadow-inner">
+              {pitch > 0 ? `${pitch} Hz` : '000.0 Hz'}
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Bottom Meter */}
+      <div className="w-full max-w-sm h-36 shrink-0 flex flex-col justify-end gap-5 pb-2 mt-4">
+        <div className="flex justify-center items-center gap-5 bg-[#050505] py-4 rounded-3xl border border-white/5 shadow-[inset_0_2px_15px_rgba(0,0,0,1)]">
+          <div className={`text-6xl font-black font-mono tracking-tighter transition-all duration-300 ${isStarted && pitch > 0 ? (Math.abs(cents) <= tolerance ? 'text-[#4afc9d]' : cents > 0 ? 'text-red-500' : 'text-blue-500') : 'text-[#111]'}`}>
+            {isStarted && pitch > 0 ? (cents > 0 ? `+${cents}` : cents) : '0'}
+          </div>
+          <div className="flex flex-col border-l border-gray-800 pl-4">
+            <span className="text-[11px] text-gray-500 font-black uppercase tracking-widest italic">Cents</span>
+            <span className="text-[11px] text-gray-700 font-bold uppercase tracking-widest">Offset</span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-end gap-1.5 px-1 h-8">
+          {CENT_STEPS.map((step) => {
+            const isTarget = isStarted && pitch > 0 && Math.abs(cents - step) <= 5;
+            return (
+              <div key={step} className="flex flex-col items-center flex-1">
+                <div 
+                  className={`w-full transition-all duration-200 rounded-sm ${isTarget ? 'h-8 bg-white shadow-[0_0_20px_white]' : 'h-2 bg-gray-900'}`}
+                  style={step === 0 && !isTarget ? {backgroundColor: '#333'} : {}}
+                />
+                <span className={`text-[8px] mt-2 font-black ${isTarget ? 'text-white' : 'text-gray-800'}`}>{step === 0 ? '0' : step}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[85%] bg-red-950/95 p-6 rounded-3xl flex flex-col items-center gap-3 border border-red-500/50 backdrop-blur-md z-50 shadow-2xl">
+          <AlertCircle size={32} className="text-red-400" />
+          <p className="text-sm text-center text-white font-bold leading-relaxed">{error}</p>
+          <button onClick={() => window.location.reload()} className="mt-2 px-6 py-2 bg-red-500 text-white font-bold rounded-full">새로고침</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// ==========================================
+// 2. Metronome Component (두 번째 소스의 메트로놈)
+// ==========================================
+const Metronome = () => {
+  const [bpm, setBpm] = useState(60);
+  const [isPlayingMetro, setIsPlayingMetro] = useState(false);
+  const [currentBeat, setCurrentBeat] = useState(0); 
+  const [timeSig, setTimeSig] = useState({ num: 4, den: 4 });
+  const [beatSounds, setBeatSounds] = useState([2, 1, 1, 1]); 
+  const [beatSubdivisions, setBeatSubdivisions] = useState([1, 1, 1, 1]); 
+  const [visualFlash, setVisualFlash] = useState(false); 
+
+  const isPlayingRef = useRef(false);
+  const bpmRef = useRef(bpm); 
+
+  const metroAudioCtxRef = useRef(null);
+  const nextNoteTimeRef = useRef(0.0);
+  const currentBeatRef = useRef(0);
+  const currentSubBeatRef = useRef(0); 
+  const timerIDRef = useRef(null);
+  const lookahead = 25.0; 
+  const scheduleAheadTime = 0.1; 
+  const tapTimesRef = useRef([]);
+
+  const timeSigRef = useRef(timeSig);
+  const beatSoundsRef = useRef(beatSounds);
+  const beatSubdivisionsRef = useRef(beatSubdivisions);
+
+  useEffect(() => {
+    // 컴포넌트 언마운트 시 정지
+    return () => {
+      stopMetronome();
+    };
+  }, []);
+
+  useEffect(() => {
+    timeSigRef.current = timeSig;
+    beatSoundsRef.current = beatSounds;
+    beatSubdivisionsRef.current = beatSubdivisions;
+    if (currentBeat >= timeSig.num) {
+      setCurrentBeat(0);
+      currentBeatRef.current = 0;
+    }
+  }, [timeSig, beatSounds, beatSubdivisions, currentBeat]);
+
+  useEffect(() => { 
+    bpmRef.current = bpm; 
+  }, [bpm]);
+
+  const initMetroAudioContext = () => {
+    if (!metroAudioCtxRef.current) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      metroAudioCtxRef.current = new AudioContext();
+    }
+    if (metroAudioCtxRef.current.state === 'suspended') {
+      metroAudioCtxRef.current.resume();
+    }
+  };
+
+  const restartMetroIfNeeded = () => {
+    if (isPlayingRef.current) {
+      stopMetronome();
+      setTimeout(startMetronome, 50); 
+    }
+  };
+
+  const changeNumerator = (delta) => {
+    setTimeSig(prev => {
+      const nextNum = Math.max(1, Math.min(16, prev.num + delta));
+      setBeatSounds(getDefaultBeatSounds(nextNum)); 
+      
+      setBeatSubdivisions(prevSub => {
+        const nextSub = [...prevSub];
+        if (nextNum > nextSub.length) {
+          for (let i = nextSub.length; i < nextNum; i++) nextSub.push(1);
+        } else {
+          nextSub.length = nextNum;
+        }
+        return nextSub;
+      });
+      return { ...prev, num: nextNum };
+    });
+    restartMetroIfNeeded();
+  };
+
+  const changeDenominator = () => {
+    setTimeSig(prev => {
+      const opts = [2, 4, 8, 16];
+      const idx = opts.indexOf(prev.den);
+      return { ...prev, den: opts[(idx + 1) % opts.length] };
+    });
+    restartMetroIfNeeded();
+  };
+
+  const toggleBeatSubdivision = (index) => {
+    setBeatSubdivisions(prev => {
+      const next = [...prev];
+      next[index] = next[index] === 4 ? 1 : next[index] + 1;
+      return next;
+    });
+    restartMetroIfNeeded();
+  };
+
+  const toggleBeatSound = (index) => {
+    setBeatSounds(prev => {
+      const next = [...prev];
+      const current = next[index];
+      if (current === 2) next[index] = 3;
+      else if (current === 3) next[index] = 1;
+      else if (current === 1) next[index] = 0;
+      else next[index] = 2;
+      return next;
+    });
+  };
+
+  const nextNote = () => {
+    const currentBeatSubdiv = beatSubdivisionsRef.current[currentBeatRef.current] || 1;
+    const secondsPerBeat = (60.0 / bpmRef.current) * (4 / timeSigRef.current.den);
+    const secondsPerSubBeat = secondsPerBeat / currentBeatSubdiv;
+    
+    nextNoteTimeRef.current += secondsPerSubBeat;
+    currentSubBeatRef.current++;
+    
+    if (currentSubBeatRef.current >= currentBeatSubdiv) {
+      currentSubBeatRef.current = 0;
+      currentBeatRef.current = (currentBeatRef.current + 1) % timeSigRef.current.num;
+    }
+  };
+
+  const scheduleNote = (beatNumber, subBeatNumber, time) => {
+    const delay = (time - metroAudioCtxRef.current.currentTime) * 1000;
+    
+    if (subBeatNumber === 0) {
+      setTimeout(() => {
+        if (!isPlayingRef.current) return; 
+        setCurrentBeat(beatNumber);
+        setVisualFlash('main');
+        setTimeout(() => { if (isPlayingRef.current) setVisualFlash(false); }, 150);
+      }, Math.max(0, delay));
+    } else {
+      setTimeout(() => {
+        if (!isPlayingRef.current) return;
+        setVisualFlash('sub');
+        setTimeout(() => { if (isPlayingRef.current) setVisualFlash(false); }, 100);
+      }, Math.max(0, delay));
+    }
+
+    const soundType = subBeatNumber === 0 ? beatSoundsRef.current[beatNumber] : -1;
+    
+    if (soundType > 0 || soundType === -1) {
+      const osc = metroAudioCtxRef.current.createOscillator();
+      const gainNode = metroAudioCtxRef.current.createGain();
+
+      if (soundType === 2) {
+        osc.frequency.value = 880.0;
+        gainNode.gain.setValueAtTime(1, time);
+      } else if (soundType === 3) {
+        osc.frequency.value = 660.0;
+        gainNode.gain.setValueAtTime(0.7, time);
+      } else if (soundType === 1) {
+        osc.frequency.value = 440.0;
+        gainNode.gain.setValueAtTime(0.4, time);
+      } else if (soundType === -1) {
+        osc.frequency.value = 700.0; 
+        gainNode.gain.setValueAtTime(0.2, time);
+      }
+      
+      gainNode.gain.exponentialRampToValueAtTime(0.001, time + (soundType === -1 ? 0.03 : 0.08));
+      osc.connect(gainNode);
+      gainNode.connect(metroAudioCtxRef.current.destination);
+      osc.start(time);
+      osc.stop(time + 0.1);
+    }
+  };
+
+  const scheduler = () => {
+    if (!isPlayingRef.current) return; 
+
+    while (nextNoteTimeRef.current < metroAudioCtxRef.current.currentTime + scheduleAheadTime) {
+      scheduleNote(currentBeatRef.current, currentSubBeatRef.current, nextNoteTimeRef.current);
+      nextNote();
+    }
+    timerIDRef.current = window.setTimeout(scheduler, lookahead);
+  };
+
+  const startMetronome = () => {
+    if (isPlayingRef.current) return;
+    window.clearTimeout(timerIDRef.current); 
+    initMetroAudioContext(); 
+    
+    isPlayingRef.current = true;
+    setIsPlayingMetro(true);
+    currentBeatRef.current = 0;
+    currentSubBeatRef.current = 0;
+    setCurrentBeat(0);
+    nextNoteTimeRef.current = metroAudioCtxRef.current.currentTime + 0.05;
+    scheduler();
+  };
+
+  const stopMetronome = () => {
+    isPlayingRef.current = false;
+    setIsPlayingMetro(false);
+    window.clearTimeout(timerIDRef.current); 
+    setCurrentBeat(-1); 
+  };
+
+  const toggleMetronome = () => {
+    if (isPlayingRef.current) stopMetronome();
+    else startMetronome();
+  };
+
+  const handleTapTempo = () => {
+    const now = Date.now();
+    let times = tapTimesRef.current;
+    
+    if (times.length > 0 && now - times[times.length - 1] > 2000) { times = []; }
+    times.push(now);
+    
+    if (times.length > 1) {
+      let sum = 0;
+      for (let i = 1; i < times.length; i++) { sum += times[i] - times[i - 1]; }
+      let calculatedBpm = Math.round(60000 / (sum / (times.length - 1)));
+      setBpm(Math.min(Math.max(30, calculatedBpm), 250));
+    }
+    if (times.length > 4) times.shift();
+    tapTimesRef.current = times;
+
+    const wasPlaying = isPlayingRef.current;
+    if (wasPlaying) stopMetronome(); 
+
+    const activeBeat = wasPlaying ? currentBeatRef.current : (currentBeat === -1 ? -1 : currentBeat);
+    const nextBeat = (activeBeat + 1) % timeSigRef.current.num;
+
+    setCurrentBeat(nextBeat);
+    setVisualFlash('main');
+    setTimeout(() => setVisualFlash(false), 100);
+
+    if (wasPlaying) {
+      currentBeatRef.current = nextBeat;
+      currentSubBeatRef.current = 0;
+      
+      initMetroAudioContext();
+      isPlayingRef.current = true;
+      setIsPlayingMetro(true);
+      nextNoteTimeRef.current = metroAudioCtxRef.current.currentTime + 0.05;
+      scheduler();
+    }
+  };
+
+  const handleBpmChange = (e) => setBpm(Number(e.target.value));
+  const changeBpmBy = (amount) => setBpm(prev => Math.min(Math.max(30, prev + amount), 250));
+
+  return (
+    <div className="w-full h-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-300 gap-5">
+      <div className="w-full flex-1 rounded-[2.5rem] sm:rounded-[3rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center py-6 px-4 relative min-h-[420px]">
+        <div className="w-full flex flex-col gap-3 shrink-0">
+          <div className="flex items-center justify-between w-full px-2">
+            <div className="flex flex-col items-center bg-[#111] p-1.5 rounded-2xl border border-gray-800 w-16">
+              <button onClick={() => changeNumerator(1)} className="text-gray-500 hover:text-white"><ChevronUp size={20}/></button>
+              <span className="text-2xl font-black text-white leading-none my-0.5">{timeSig.num}</span>
+              <button onClick={() => changeNumerator(-1)} className="text-gray-500 hover:text-white"><ChevronDown size={20}/></button>
+            </div>
+            <span className="text-3xl font-black text-gray-700 italic">/</span>
+            <div className="flex flex-col items-center bg-[#111] p-1.5 rounded-2xl border border-gray-800 w-16">
+              <button onClick={changeDenominator} className="text-gray-500 hover:text-white"><ChevronUp size={20}/></button>
+              <span className="text-2xl font-black text-[#4afc9d] leading-none my-0.5">{timeSig.den}</span>
+              <button onClick={changeDenominator} className="text-gray-500 hover:text-white"><ChevronDown size={20}/></button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mt-5 w-full px-1 shrink-0">
+          {beatSounds.map((s, i) => {
+            const isThisBeatFired = (i === currentBeat) && (visualFlash === 'main');
+            const currentSubVal = beatSubdivisions[i];
+            return (
+              <div key={i} className="flex flex-col items-center gap-2">
+                <button 
+                  onClick={() => toggleBeatSound(i)}
+                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full transition-all duration-100 border-2 ${
+                    isThisBeatFired
+                      ? 'scale-110 ring-2 ring-white/30 ring-offset-2 ring-offset-[#080808]' 
+                      : 'hover:scale-105'
+                  } ${
+                    s === 2 ? 'bg-[#ffcc00] border-[#ffcc00] shadow-[0_0_15px_#ffcc00]' :
+                    s === 3 ? 'bg-[#f97316] border-[#f97316] shadow-[0_0_12px_#f97316]' : 
+                    s === 1 ? 'bg-[#4afc9d] border-[#4afc9d] shadow-[0_0_10px_#4afc9d]' :
+                    'bg-transparent border-gray-700'
+                  }`}
+                />
+                <button
+                  onClick={() => toggleBeatSubdivision(i)}
+                  className="text-gray-500 hover:text-[#4afc9d] transition-colors active:scale-95"
+                  title="터치하여 박자 쪼개기 변경"
+                >
+                  {renderSubdivisionIcon(currentSubVal, "h-5 w-auto sm:h-6")}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex-1 w-full flex items-center justify-center my-4">
+          {(() => {
+            const isActiveBeatSound = currentBeat >= 0 && beatSounds[currentBeat] > 0;
+            const beatSoundType = currentBeat >= 0 ? beatSounds[currentBeat] : 0;
+
+            let pulseClass = 'bg-[#151515] border-4 border-[#080808] shadow-[inset_0_4px_10px_rgba(0,0,0,0.8)] scale-90';
+            
+            if (visualFlash === 'main' && isActiveBeatSound) {
+              if (beatSoundType === 2) { 
+                  pulseClass = 'bg-[#ffcc00] shadow-[0_0_60px_#ffcc00] scale-125 border-transparent';
+              } else if (beatSoundType === 3) { 
+                  pulseClass = 'bg-[#f97316] shadow-[0_0_55px_#f97316] scale-115 border-transparent';
+              } else { 
+                  pulseClass = 'bg-[#4afc9d] shadow-[0_0_50px_#4afc9d] scale-110 border-transparent';
+              }
+            } else if (visualFlash === 'sub') {
+              pulseClass = 'bg-[#0ea5e9] shadow-[0_0_40px_#0ea5e9] scale-105 border-transparent';
+            }
+
+            return (
+              <div className={`w-20 h-20 sm:w-28 sm:h-28 rounded-full transition-all duration-100 ease-out flex items-center justify-center ${pulseClass}`}>
+                <div className="w-8 h-8 rounded-full bg-white/20 mix-blend-overlay"></div>
+              </div>
+            );
+          })()}
+        </div>
+
+        <div className="flex flex-col items-center shrink-0 mb-2">
+          <span className="text-[55px] sm:text-[65px] font-black leading-none tracking-tighter text-white">
+            {bpm}
+          </span>
+          <span className="text-[10px] sm:text-[11px] font-bold text-[#ffcc00] tracking-widest uppercase mt-2">
+            {getTempoMarking(bpm)}
+          </span>
+        </div>
+      </div>
+
+      <div className="w-full flex flex-col gap-4 shrink-0">
+        <div className="flex justify-between items-center gap-3">
+          <button onClick={() => changeBpmBy(-1)} className="w-14 h-14 rounded-2xl bg-[#111] border border-gray-800 flex items-center justify-center active:bg-gray-800 transition-colors">
+            <Minus size={22} className="text-gray-400" />
+          </button>
+          <button 
+            onClick={toggleMetronome}
+            className={`flex-1 h-16 rounded-[2rem] flex items-center justify-center transition-all duration-300 shadow-xl border-[3px] ${isPlayingMetro ? 'bg-[#ffcc00]/10 border-[#ffcc00]/30 text-[#ffcc00]' : 'bg-[#4afc9d]/10 border-[#4afc9d]/30 text-[#4afc9d]'}`}
+          >
+            {isPlayingMetro ? <Square size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="translate-x-1" />}
+          </button>
+          <button onClick={() => changeBpmBy(1)} className="w-14 h-14 rounded-2xl bg-[#111] border border-gray-800 flex items-center justify-center active:bg-gray-800 transition-colors">
+            <Plus size={22} className="text-gray-400" />
+          </button>
+        </div>
+
+        <div className="flex items-center bg-[#0a0a0a] py-4 px-5 rounded-[2rem] border border-gray-800 shadow-inner">
+          <input 
+            type="range" min="30" max="250" value={bpm} onChange={handleBpmChange}
+            className="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-[#4afc9d]"
+          />
+        </div>
+
+        <button 
+          onClick={handleTapTempo}
+          className="w-full h-12 rounded-2xl bg-[#0a0a0a] border border-gray-800 text-gray-500 hover:text-gray-300 font-black uppercase tracking-[0.2em] text-[10px] sm:text-[11px] flex items-center justify-center gap-2 active:bg-[#4afc9d]/10 active:text-[#4afc9d] active:border-[#4afc9d]/30 transition-all shadow-inner"
+        >
+          <Hand size={14} />
+          Tap Tempo
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
+// ==========================================
+// 3. Main App Component (탭 및 네비게이션 관리)
+// ==========================================
+const App = () => {
+  const [activeTab, setActiveTab] = useState('tuner');
+
+  return (
+    <div className="fixed inset-0 bg-black text-white flex flex-col items-center font-sans select-none z-50 overflow-hidden">
+      
+      {/* 화면 스크롤 영역 (하단 탭 높이만큼 여백) */}
+      <div className="flex-1 w-full max-w-md flex flex-col pt-6 pb-24 px-4 overflow-y-auto overflow-x-hidden no-scrollbar">
+        {activeTab === 'tuner' ? <Tuner /> : <Metronome />}
+      </div>
+
+      {/* 하단 네비게이션 탭 */}
+      <div className="absolute bottom-0 w-full max-w-md bg-black/95 backdrop-blur-md border-t border-gray-900 pb-safe pb-3 pt-2.5 px-8 flex justify-around z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+        <button 
+          onClick={() => setActiveTab('tuner')}
+          className={`flex flex-col items-center gap-1 transition-all duration-300 w-16 ${activeTab === 'tuner' ? 'text-[#4afc9d] scale-110' : 'text-gray-600 hover:text-gray-400'}`}
+        >
+          <Activity size={20} strokeWidth={activeTab === 'tuner' ? 2.5 : 2} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Tuner</span>
+        </button>
+        
+        <button 
+          onClick={() => setActiveTab('metronome')}
+          className={`flex flex-col items-center gap-1 transition-all duration-300 w-16 ${activeTab === 'metronome' ? 'text-[#ffcc00] scale-110' : 'text-gray-600 hover:text-gray-400'}`}
+        >
+          <Music size={20} strokeWidth={activeTab === 'metronome' ? 2.5 : 2} />
+          <span className="text-[9px] font-black uppercase tracking-widest">Metro</span>
+        </button>
+      </div>
+
+    </div>
+  );
+};
+
+export default App;
