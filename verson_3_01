@@ -643,7 +643,8 @@ const Tuner = ({ tuner }) => {
 // ==========================================
 // 2. Metronome Component
 // ==========================================
-const Metronome = () => {
+// 공통 Metronome Hook (메트로놈 상태 및 오디오 로직)
+const useMetronomeLogic = () => {
   const [bpm, setBpm] = useState(60);
   const [isPlayingMetro, setIsPlayingMetro] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0); 
@@ -880,6 +881,20 @@ const Metronome = () => {
     clearInterval(pressIntervalRef.current);
   };
 
+  return {
+    bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
+    toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
+    handleBpmChange, handlePressStart, handlePressEnd
+  };
+};
+
+const Metronome = ({ metro }) => {
+  const {
+    bpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
+    toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
+    handleBpmChange, handlePressStart, handlePressEnd
+  } = metro;
+
   return (
     <div className="w-full h-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-300 gap-3 sm:gap-4">
       <div className="w-full flex-1 rounded-[2.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center py-4 px-3 sm:px-4 relative min-h-0">
@@ -1014,7 +1029,7 @@ const Metronome = () => {
 // ==========================================
 // 3. Fingerboard Component
 // ==========================================
-const Fingerboard = ({ tuner }) => {
+const Fingerboard = ({ tuner, metro }) => {
   const [selectedKey, setSelectedKey] = useState('C Major (0)');
   const currentScale = KEY_SIGNATURES[selectedKey];
 
@@ -1043,27 +1058,46 @@ const Fingerboard = ({ tuner }) => {
         </div>
         
         <div className="flex items-center gap-3 pr-2">
-          {tuner.isStarted ? (
+          {tuner.isStarted && (
             <div className="flex items-center gap-1.5">
               <div className={`w-2 h-2 rounded-full animate-pulse ${detectedStr ? (Math.abs(tuner.cents) <= tuner.tolerance ? 'bg-[#4afc9d]' : 'bg-[#ff4d4d]') : 'bg-[#4afc9d]'}`} />
               <span className="text-white font-bold text-[10px] sm:text-xs">
-                {detectedStr ? <span className={`text-[11px] sm:text-[13px] font-black tracking-widest ${Math.abs(tuner.cents) <= tuner.tolerance ? 'text-[#4afc9d]' : 'text-[#ff4d4d]'}`}>{detectedStr}{detectedOctave}</span> : '대기중'}
+                {detectedStr ? <span className={`text-[11px] sm:text-[13px] font-black tracking-widest ${Math.abs(tuner.cents) <= tuner.tolerance ? 'text-[#4afc9d]' : 'text-[#ff4d4d]'}`}>{detectedStr}{detectedOctave}</span> : '마이크 ON'}
               </span>
             </div>
-          ) : (
-            <span className="text-gray-600 text-[10px] sm:text-[11px] font-bold">마이크 OFF</span>
           )}
 
-          <button 
-            onClick={tuner.isStarted ? tuner.stopTuner : tuner.startTuner}
-            className={`flex items-center justify-center w-7 h-7 rounded-full transition-all ${
-              tuner.isStarted 
-                ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30' 
-                : 'bg-[#4afc9d]/20 text-[#4afc9d] border border-[#4afc9d]/50 hover:bg-[#4afc9d]/30'
-            }`}
-          >
-            {tuner.isStarted ? <Square size={12} fill="currentColor" /> : <Mic size={14} />}
-          </button>
+          {tuner.isStarted && <div className="w-[1px] h-3 bg-gray-700 mx-1" />}
+
+          {(() => {
+            let metroBtnClass = 'bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700';
+            
+            if (metro.isPlayingMetro) {
+              const beatSoundType = metro.currentBeat >= 0 ? metro.beatSounds[metro.currentBeat] : 0;
+              
+              if (metro.visualFlash === 'main') {
+                if (beatSoundType === 2) { 
+                  metroBtnClass = 'bg-[#ffcc00] text-black shadow-[0_0_15px_#ffcc00] scale-110 border-transparent';
+                } else if (beatSoundType === 3) { 
+                  metroBtnClass = 'bg-[#f97316] text-black shadow-[0_0_12px_#f97316] scale-110 border-transparent';
+                } else { 
+                  metroBtnClass = 'bg-[#4afc9d] text-black shadow-[0_0_10px_#4afc9d] scale-105 border-transparent';
+                }
+              } else if (metro.visualFlash === 'sub') {
+                metroBtnClass = 'bg-[#0ea5e9] text-white shadow-[0_0_10px_#0ea5e9] scale-105 border-transparent';
+              }
+            }
+
+            return (
+              <button 
+                onClick={metro.toggleMetronome}
+                className={`flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full transition-all duration-75 ${metroBtnClass}`}
+              >
+                <span className="text-[10px] sm:text-[11px] font-black">{metro.bpm}</span>
+                {metro.isPlayingMetro ? <Square size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" className="translate-x-[0.5px]" />}
+              </button>
+            );
+          })()}
         </div>
       </div>
 
@@ -1168,6 +1202,7 @@ const Fingerboard = ({ tuner }) => {
 // ==========================================
 const App = () => {
   const tuner = useTunerLogic();
+  const metro = useMetronomeLogic();
   const [activeTab, setActiveTab] = useState('tuner');
 
   return (
@@ -1181,10 +1216,10 @@ const App = () => {
           <Tuner tuner={tuner} />
         </div>
         <div className={activeTab === 'metronome' ? 'flex flex-col w-full h-full' : 'hidden'}>
-          <Metronome />
+          <Metronome metro={metro} />
         </div>
         <div className={activeTab === 'fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}>
-          <Fingerboard tuner={tuner} />
+          <Fingerboard tuner={tuner} metro={metro} />
         </div>
       </div>
 
