@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbars */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* Range input styling */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #374151;
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4afc9d;
+  margin-top: -8px;
+  box-shadow: 0 0 6px rgba(74, 252, 157, 0.6);
+}
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: #374151;
+}
+input[type='range']::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #4afc9d;
+  border: none;
+  box-shadow: 0 0 6px rgba(74, 252, 157, 0.6);
+}
+
+/* Tab enter animation */
+@keyframes tabIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.tab-enter {
+  animation: tabIn 0.2s ease-out forwards;
+}
+
+/* Splash screen */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.splash-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Pulse glow for active tuner */
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(74, 252, 157, 0.4); }
+  50%       { box-shadow: 0 0 20px rgba(74, 252, 157, 0.8); }
+}
+.glow-pulse {
+  animation: glowPulse 1.5s ease-in-out infinite;
+}
