@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="#000000"/>
+
+  <!-- Tuning pegs (top) -->
+  <rect x="228" y="48" width="12" height="32" rx="6" fill="#4afc9d"/>
+  <rect x="252" y="48" width="12" height="32" rx="6" fill="#4afc9d"/>
+  <rect x="276" y="48" width="12" height="32" rx="6" fill="#4afc9d"/>
+  <rect x="300" y="48" width="12" height="32" rx="6" fill="#4afc9d"/>
+
+  <!-- Violin body outline -->
+  <path d="
+    M256 90
+    C220 90 190 110 180 140
+    C165 180 170 220 180 250
+    C160 265 148 285 148 310
+    C148 360 195 400 256 400
+    C317 400 364 360 364 310
+    C364 285 352 265 332 250
+    C342 220 347 180 332 140
+    C322 110 292 90 256 90 Z
+  " fill="none" stroke="#4afc9d" stroke-width="8" opacity="0.9"/>
+
+  <!-- F-holes -->
+  <path d="M220 250 Q210 265 215 280 Q220 295 215 310" stroke="#4afc9d" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7"/>
+  <path d="M292 250 Q302 265 297 280 Q292 295 297 310" stroke="#4afc9d" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- Strings (4 strings) -->
+  <line x1="232" y1="80" x2="232" y2="390" stroke="#4afc9d" stroke-width="1.5" opacity="0.5"/>
+  <line x1="248" y1="80" x2="248" y2="390" stroke="#4afc9d" stroke-width="2" opacity="0.5"/>
+  <line x1="264" y1="80" x2="264" y2="390" stroke="#4afc9d" stroke-width="2.5" opacity="0.5"/>
+  <line x1="280" y1="80" x2="280" y2="390" stroke="#4afc9d" stroke-width="3" opacity="0.5"/>
+
+  <!-- Bridge -->
+  <rect x="225" y="295" width="62" height="6" rx="3" fill="#4afc9d" opacity="0.8"/>
+
+  <!-- Tailpiece -->
+  <path d="M235 385 L256 410 L277 385 Z" fill="#4afc9d" opacity="0.6"/>
+
+  <!-- Bow (diagonal accent) -->
+  <path d="M340 360 Q380 320 420 160" stroke="#4afc9d" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- Glow pulse ring -->
+  <circle cx="256" cy="256" r="230" fill="none" stroke="#4afc9d" stroke-width="2" opacity="0.08"/>
+</svg>
