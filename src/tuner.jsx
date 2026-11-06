@@ -1,6 +1,6 @@
 // ==========================================
 // tuner — 튜너 탭 (로직 + 화면 + 설정 시트)
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
 // ==========================================
 
 const useTunerLogic = () => {

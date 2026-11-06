@@ -1,6 +1,6 @@
 // ==========================================
 // metronome — 메트로놈 탭
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
 // ==========================================
 
 // ==========================================

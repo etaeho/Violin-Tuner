@@ -1,6 +1,6 @@
 // ==========================================
 // commands — 연주 명령: 바이올린으로 정해진 음 패턴을 연주하면 명령 실행
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
 //
 // 튜너가 확정한 음(예: 'G3')을 프레임마다 feed() 로 넣으면
 //   1) 150ms 이상 유지된 음만 '음 하나'로 인정 (스치는 음 무시)
@@ -24,6 +24,7 @@ const createNoteTracker = () => {
     recording: null,    // 패턴 녹음 중: { notes: [], start: null|ms, windowMs }
     cooldownUntil: 0,
     onCommand: null,    // (name) => void  — app.jsx 에서 연결
+    droneActive: false, // 드론 재생 중이면 명령 감지 안 함 (drone.jsx)
     onRecorded: null,   // (pattern | null) => void — 설정 시트에서 연결 (null = 음 부족)
   };
 
@@ -62,6 +63,7 @@ const createNoteTracker = () => {
   };
 
   const feed = (note, now, S) => {
+    if (st.droneActive) return;
     const continuing = st.run && st.run.note === note && now - st.lastSeen < NOTE_GAP_MS;
     if (!continuing) st.run = { note, start: now, fired: false };
     st.lastSeen = now;

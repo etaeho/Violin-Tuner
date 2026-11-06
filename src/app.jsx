@@ -1,6 +1,6 @@
 // ==========================================
 // app — 탭 전환, 테마 적용, 마운트
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
 // ==========================================
 
 // ==========================================
@@ -9,6 +9,7 @@
 const App = () => {
   const tuner = useTunerLogic();
   const metro = useMetronomeLogic();
+  const drone = useDroneLogic(tuner.a4Freq, tuner.noteTracker);
   const [activeTab, setActiveTab] = useState('tuner');
   const theme = tuner.settings.uiMode;
   const [toast, setToast] = useState(null);
@@ -59,6 +60,7 @@ const App = () => {
     { id:'tuner',       label:'Tuner',  color:'#4afc9d', Icon:Activity },
     { id:'metronome',   label:'Metro',  color:'#ffcc00', Icon:Music    },
     { id:'fingerboard', label:'Finger', color:'#0ea5e9', Icon:LayoutGrid },
+    { id:'drone',       label:'Drone',  color:'#a78bfa', Icon:Waves },
   ];
 
   return (
@@ -82,6 +84,7 @@ const App = () => {
         <div className={activeTab==='tuner'       ? 'flex flex-col w-full h-full' : 'hidden'}><Tuner       tuner={tuner}/></div>
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro}/></div>
+        <div className={activeTab==='drone'       ? 'flex flex-col w-full h-full' : 'hidden'}><Drone       drone={drone} metro={metro}/></div>
       </div>
 
       {/* 연주 명령 알림 */}
@@ -99,13 +102,14 @@ const App = () => {
         className="absolute bottom-0 w-full max-w-md t-nav backdrop-blur-md pt-2 px-2 flex justify-around z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]"
         style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
       >
-        {TAB_NAV.map(({ id, label, color, Icon }) => {
+        {TAB_NAV.map(({ id, label, color: tabColor, Icon }) => {
           const active = activeTab === id;
+          const color = theme === 'vintage' ? '#f6dd94' : tabColor;   // 빈티지: 모든 탭 황동색
           return (
             <button
               key={id}
               onClick={() => switchTab(id)}
-              className="flex flex-col items-center gap-0.5 py-1 px-4 rounded-2xl transition-all duration-200 active:scale-90"
+              className="flex flex-col items-center gap-0.5 py-1 px-3 rounded-2xl transition-all duration-200 active:scale-90"
               style={{ color: active ? color : '#4b5563' }}
             >
               {/* Active indicator dot */}

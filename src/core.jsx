@@ -1,6 +1,6 @@
 // ==========================================
 // core — 공통 상수, 설정, 피치 검출
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
 // ==========================================
 
 /* =====================================================
@@ -10,7 +10,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 const {
   Play, Square, Settings, Volume2, VolumeX, AlertCircle,
   Music, Activity, Minus, Plus, ChevronUp, ChevronDown, RotateCcw,
-  LayoutGrid, SlidersHorizontal, X, Mic, ZoomIn, ZoomOut, AudioWaveform
+  LayoutGrid, SlidersHorizontal, X, Mic, ZoomIn, ZoomOut, AudioWaveform, Waves
 } = LucideReact;
 
 /* 햅틱 피드백 헬퍼 */
