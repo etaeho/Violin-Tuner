@@ -420,6 +420,7 @@
       const candidateRef   = useRef({ freq: 0, count: 0 });
       const lastGoodRef    = useRef(0);
       const calibRef       = useRef(null);
+      const startingRef    = useRef(null);
 
       const updateSettings = (patch) => {
         const next = { ...settingsRef.current, ...patch };
@@ -429,7 +430,23 @@
       };
       const resetSettings = () => updateSettings({ ...DEFAULT_SETTINGS, mapMode: settingsRef.current.mapMode });
 
-      useEffect(() => () => { stopTuner(); stopTone(); }, []);
+      useEffect(() => {
+        ensureMic();
+        const onVisibility = () => {
+          if (document.visibilityState === 'hidden') stopTuner();
+          else ensureMic();
+        };
+        const resumeAudio = () => {
+          if (audioContextRef.current?.state === 'suspended') audioContextRef.current.resume();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        document.addEventListener('pointerdown', resumeAudio);
+        return () => {
+          document.removeEventListener('visibilitychange', onVisibility);
+          document.removeEventListener('pointerdown', resumeAudio);
+          stopTuner(); stopTone();
+        };
+      }, []);
 
       const initAudioContext = async () => {
         if (!audioContextRef.current) {
@@ -549,8 +566,9 @@
       // 마이크 켜기 (이미 켜져 있으면 그대로)
       const ensureMic = async () => {
         if (streamRef.current) return true;
+        if (startingRef.current) return startingRef.current;
         setError(null);
-        try {
+        startingRef.current = (async () => { try {
           await initAudioContext();
           if (!navigator.mediaDevices?.getUserMedia)
             throw new Error("브라우저에서 마이크 기능을 지원하지 않습니다.");
@@ -574,7 +592,8 @@
           }
           setIsStarted(false);
           return false;
-        }
+        } finally { startingRef.current = null; } })();
+        return startingRef.current;
       };
 
       const startTuner = async () => {
@@ -610,7 +629,7 @@
       };
 
       const handleReset = () => {
-        stopTuner(); stopTone();
+        stopTone();
         setA4Freq(442); a4FreqRef.current=442;
         setTolerance(10); setClosestString(VIOLIN_STRINGS[2]); setError(null);
         haptic(10);
@@ -803,7 +822,7 @@
           </button>
           {!isStarted && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-gray-700 bg-black/60 px-3 py-1 rounded-full">START를 누르면 음정이 그려집니다</span>
+              <span className="text-[10px] font-bold text-gray-700 bg-black/60 px-3 py-1 rounded-full">마이크 연결 중… (권한을 허용해주세요)</span>
             </div>
           )}
         </div>
@@ -971,7 +990,7 @@
       const {
         isStarted, pitch, cents, stringCents, a4Freq, tolerance,
         currentNote, closestString, error, playingTone,
-        startTuner, handleReset, cycleA4Freq, cycleTolerance, toggleTone
+        ensureMic, handleReset, cycleA4Freq, cycleTolerance, toggleTone
       } = tuner;
       const [showSettings, setShowSettings] = useState(false);
 
@@ -1055,14 +1074,16 @@
           {/* Main display */}
           <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0 max-w-sm relative mt-1">
             <div className="w-full h-full max-h-[230px] rounded-[2.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative py-4">
-              {/* Start button */}
+              {/* Mic status */}
               <div className="absolute top-4 left-4 flex flex-col items-center gap-1 z-10">
-                <button onClick={startTuner}
-                  className={`w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 shadow-xl border-[3px] ${isStarted?'bg-red-900/20 border-red-700/50 text-red-500':'bg-[#4afc9d]/10 border-[#4afc9d]/30 text-[#4afc9d]'}`}>
-                  {isStarted ? <Square size={16} fill="currentColor"/> : <Play size={16} fill="currentColor" className="translate-x-0.5"/>}
+                <button onClick={isStarted ? undefined : ensureMic} disabled={isStarted}
+                  className={`w-11 h-11 rounded-full flex items-center justify-center border-[3px] transition-all duration-300 ${isStarted?'bg-[#4afc9d]/5 border-[#4afc9d]/20 text-[#4afc9d]':'bg-red-900/20 border-red-700/50 text-red-500 active:scale-90'}`}>
+                  <Mic size={16}/>
                 </button>
-                <span className="text-[9px] font-black tracking-widest text-gray-600 mt-0.5 uppercase">
-                  {isStarted?'STOP':'START'}
+                <span className="text-[9px] font-black tracking-widest mt-0.5 uppercase flex items-center gap-1"
+                  style={{color:isStarted?'#4afc9d':'#ef4444'}}>
+                  {isStarted && <span className="w-1.5 h-1.5 rounded-full bg-[#4afc9d] animate-pulse"/>}
+                  {isStarted?'LIVE':'MIC OFF'}
                 </span>
               </div>
               {/* Status indicator */}
@@ -1071,7 +1092,7 @@
                   style={{backgroundColor:getStatusColor(),boxShadow:isStarted&&pitch>0?`0 0 30px ${getStatusColor()},inset 0 0 10px rgba(0,0,0,0.8)`:'none'}}/>
                 <span className="text-[9px] font-black tracking-widest mt-0.5 uppercase transition-colors duration-300"
                   style={{color:!isStarted?'#444':Math.abs(cents)<=tolerance?'#4afc9d':'#888'}}>
-                  {!isStarted?'IDLE':Math.abs(cents)<=tolerance?'PERFECT':'TUNE'}
+                  {!isStarted?'OFF':Math.abs(cents)<=tolerance?'PERFECT':'TUNE'}
                 </span>
               </div>
               {/* Note display */}
@@ -1132,7 +1153,7 @@
                 <p className="text-sm text-center text-white font-bold leading-relaxed whitespace-pre-line">{error}</p>
                 <div className="flex gap-3 mt-2 w-full">
                   <button onClick={handleReset} className="flex-1 py-3 bg-gray-800 text-white text-sm font-bold rounded-full border border-gray-600">닫기</button>
-                  <button onClick={()=>window.location.reload()} className="flex-1 py-3 bg-[#4afc9d] text-black text-sm font-bold rounded-full">새로고침</button>
+                  <button onClick={ensureMic} className="flex-1 py-3 bg-[#4afc9d] text-black text-sm font-bold rounded-full">다시 시도</button>
                 </div>
               </div>
             </div>
@@ -1561,7 +1582,7 @@
                 <p className="text-sm text-center text-white font-bold leading-relaxed">{tuner.error}</p>
                 <div className="flex gap-3 mt-2 w-full">
                   <button onClick={tuner.handleReset} className="flex-1 py-3 bg-gray-800 text-white text-sm font-bold rounded-full border border-gray-600">닫기</button>
-                  <button onClick={()=>window.location.reload()} className="flex-1 py-3 bg-[#4afc9d] text-black text-sm font-bold rounded-full">새로고침</button>
+                  <button onClick={tuner.ensureMic} className="flex-1 py-3 bg-[#4afc9d] text-black text-sm font-bold rounded-full">다시 시도</button>
                 </div>
               </div>
             </div>
