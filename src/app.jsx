@@ -1,6 +1,6 @@
 // ==========================================
 // app — 탭 전환, 테마 적용, 마운트
-// (index.html에서 순서대로 로드됨: core → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
 // ==========================================
 
 // ==========================================
@@ -11,6 +11,24 @@ const App = () => {
   const metro = useMetronomeLogic();
   const [activeTab, setActiveTab] = useState('tuner');
   const theme = tuner.settings.uiMode;
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const showToast = (msg) => {
+    setToast(msg);
+    clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 1800);
+  };
+
+  // 연주 명령(commands.jsx) → 메트로놈 켜기/끄기. 켤 때는 메트로놈 탭으로 이동
+  useEffect(() => {
+    tuner.noteTracker.state.onCommand = () => {
+      const starting = !metro.isPlayingMetro;
+      metro.toggleMetronome();
+      if (starting) setActiveTab('metronome');
+      haptic([30, 40, 30]);
+      showToast(`🎻 ${tuner.settings.cmdPattern.join(' → ')}  ·  메트로놈 ${starting ? '시작' : '정지'}`);
+    };
+  });
 
   // 테마(화면 모드)를 <html data-theme>에 반영 → 모든 탭의 t-* 색이 함께 바뀜
   useEffect(() => { applyTheme(theme); }, [theme]);
@@ -65,6 +83,16 @@ const App = () => {
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro}/></div>
       </div>
+
+      {/* 연주 명령 알림 */}
+      {toast && (
+        <div className="absolute inset-x-0 z-[70] flex justify-center pointer-events-none"
+          style={{ top: 'max(4rem, calc(env(safe-area-inset-top, 0px) + 3rem))' }}>
+          <div className="px-4 py-2.5 rounded-full t-panel text-sm font-bold text-white shadow-[0_10px_30px_rgba(0,0,0,0.7)] whitespace-nowrap tab-enter">
+            {toast}
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation */}
       <nav

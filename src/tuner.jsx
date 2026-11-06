@@ -1,6 +1,6 @@
 // ==========================================
 // tuner — 튜너 탭 (로직 + 화면 + 설정 시트)
-// (index.html에서 순서대로 로드됨: core → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
 // ==========================================
 
 const useTunerLogic = () => {
@@ -32,6 +32,8 @@ const useTunerLogic = () => {
   const lastGoodRef    = useRef(0);
   const calibRef       = useRef(null);
   const startingRef    = useRef(null);
+  const trackerRef     = useRef(null);
+  if (!trackerRef.current) trackerRef.current = createNoteTracker();
 
   const updateSettings = (patch) => {
     const next = { ...settingsRef.current, ...patch };
@@ -154,6 +156,7 @@ const useTunerLogic = () => {
           symbol: fullNote.includes('#') ? '#' : '',
           octave
         });
+        trackerRef.current.feed(fullNote + octave, now, S);   // 연주 명령 감지
       }
     } else {
       candidateRef.current.count = 0;
@@ -279,7 +282,8 @@ const useTunerLogic = () => {
     isStarted, pitch, cents, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
     startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
-    settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise
+    settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise,
+    noteTracker: trackerRef.current
   };
 };
 
@@ -514,14 +518,26 @@ const Section = ({ title, children }) => (
 );
 
 const SettingsSheet = ({ tuner, onClose }) => {
-  const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise } = tuner;
+  const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise, noteTracker } = tuner;
   const [lv, setLv] = useState(levelRef.current);
   const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
+  const [cmd, setCmd] = useState({ recording: null, events: [] });   // 연주 명령 상태 표시용
+
+  // 패턴 녹음 완료 → 저장
+  useEffect(() => {
+    noteTracker.state.onRecorded = (p) => { updateSettings({ cmdPattern: p, cmdEnabled: true }); haptic(30); };
+    return () => { noteTracker.state.onRecorded = null; noteTracker.cancelRecording(); };
+  }, []);
 
   useEffect(() => {
     let raf, last = 0;
     const tick = (t) => {
-      if (t - last > 50) { setLv({ ...levelRef.current }); last = t; }
+      if (t - last > 50) {
+        setLv({ ...levelRef.current });
+        const st = noteTracker.state;
+        setCmd({ recording: st.recording ? [...st.recording] : null, events: st.events.slice(-5).map(e => e.note) });
+        last = t;
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -642,6 +658,71 @@ const SettingsSheet = ({ tuner, onClose }) => {
             hint="바이올린 최저음 G3 = 196Hz. 180Hz면 저음 웅웅거림을 걸러냅니다."/>
           <SliderRow label="최고 주파수" value={S.maxFreq} display={`${S.maxFreq} Hz`} min={1000} max={5000} step={100}
             onChange={v => updateSettings({ maxFreq: v })}/>
+        </Section>
+
+        <Section title="⑤ 연주 명령 · 메트로놈">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-gray-300">음 패턴으로 메트로놈 켜기/끄기</span>
+              <span className="text-[10px] text-gray-600">켜지면 메트로놈 탭으로 이동</span>
+            </div>
+            <button onClick={() => { updateSettings({ cmdEnabled: !S.cmdEnabled }); haptic(8); }}
+              className={`w-12 h-7 rounded-full p-1 transition-colors ${S.cmdEnabled ? 'bg-[#4afc9d]' : 'bg-gray-700'}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${S.cmdEnabled ? 'translate-x-5' : ''}`}/>
+            </button>
+          </div>
+
+          <div className="flex flex-col items-center gap-2 py-1">
+            <div className="flex items-center gap-2">
+              {Array.from({ length: CMD_PATTERN_LEN }, (_, i) => {
+                const rec = cmd.recording;
+                const n = rec ? rec[i] : S.cmdPattern[i];
+                const pending = rec && !n;
+                return (
+                  <React.Fragment key={i}>
+                    {i > 0 && <span className="text-gray-600 text-xs">→</span>}
+                    <span className={`min-w-[52px] text-center px-2.5 py-1.5 rounded-xl font-mono font-black text-base border-2 transition-all ${
+                      pending ? 'border-dashed border-gray-600 text-gray-600 animate-pulse'
+                      : rec ? 'border-[#ffcc00] text-[#ffcc00] bg-[#ffcc00]/10'
+                      : S.cmdEnabled ? 'border-[#4afc9d]/60 text-[#4afc9d] bg-[#4afc9d]/10' : 'border-gray-700 text-gray-500'}`}>
+                      {n || '?'}
+                    </span>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            {cmd.recording && (
+              <span className="text-[11px] font-bold text-[#ffcc00]">녹음 중… 음 {CMD_PATTERN_LEN}개를 차례로 연주하세요 ({cmd.recording.length}/{CMD_PATTERN_LEN})</span>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            {cmd.recording ? (
+              <button onClick={() => { noteTracker.cancelRecording(); haptic(8); }}
+                className="flex-1 py-2.5 rounded-full t-chip text-gray-300 text-xs font-bold">녹음 취소</button>
+            ) : (
+              <button onClick={async () => { if (await ensureMic()) { noteTracker.startRecording(); haptic(15); } }}
+                className="flex-1 py-2.5 rounded-full bg-[#ffcc00]/10 border border-[#ffcc00]/40 text-[#ffcc00] text-xs font-bold">● 패턴 녹음</button>
+            )}
+            <button onClick={() => { updateSettings({ cmdPattern: DEFAULT_CMD_PATTERN }); haptic(8); }}
+              className="flex-1 py-2.5 rounded-full t-chip text-gray-300 text-xs font-bold">기본 (G3→E5→G3)</button>
+          </div>
+
+          <SliderRow label="제한 시간" value={S.cmdWindowMs} display={`${(S.cmdWindowMs / 1000).toFixed(1)}초`} min={1500} max={5000} step={500}
+            onChange={v => updateSettings({ cmdWindowMs: v })}
+            hint="패턴 전체를 이 시간 안에 연주해야 합니다. 각 음은 0.15초 이상 유지. 같은 패턴을 다시 연주하면 정지."/>
+
+          {isStarted && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-gray-500 font-bold">최근 인식:</span>
+              {cmd.events.length ? cmd.events.map((n, i) => (
+                <span key={i} className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">{n}</span>
+              )) : <span className="text-[10px] text-gray-700">—</span>}
+            </div>
+          )}
+          <span className="text-[10px] text-gray-600 leading-snug">
+            튜닝할 때 자주 켜는 인접 현(G→D, A→E)은 피하고, G→E→G처럼 현을 건너뛰는 패턴을 추천합니다.
+          </span>
         </Section>
 
         <div className="flex gap-3 mt-1">

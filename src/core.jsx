@@ -1,6 +1,6 @@
 // ==========================================
 // core — 공통 상수, 설정, 피치 검출
-// (index.html에서 순서대로 로드됨: core → theme → tuner → metronome → fingerboard → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → app)
 // ==========================================
 
 /* =====================================================
@@ -154,6 +154,9 @@ const DEFAULT_SETTINGS = {
   minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
   maxFreq: 3500,     // 감지 최고 Hz
   uiMode: 'tape',    // 화면 모드(테마): 'tape' | 'vintage'  → theme.jsx UI_MODES
+  cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
+  cmdPattern: ['G3', 'E5', 'G3'],
+  cmdWindowMs: 3000, // 패턴을 이 시간 안에 연주해야 인정
 };
 const SETTINGS_KEY = 'vt.tunerSettings.v1';
 const loadSettings = () => {
