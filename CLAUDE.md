@@ -18,4 +18,6 @@
 ## 주의
 - 이 클라우드 환경에는 Android SDK가 없어 로컬 빌드 불가. 빌드 검증은 GitHub Actions 결과로 확인.
 - `app/debug.keystore`는 업데이트 설치용 고정 디버그 키. 삭제/재생성하면 폰에서 앱을 지우고 다시 깔아야 함.
-- 앱은 첫 실행 시 CDN(React/Tailwind/Babel)을 받아야 하므로 인터넷 필요.
+- React/ReactDOM/Lucide/Babel은 `vendor/`에 버전 고정으로 포함 (CDN `@latest` 쓰지 말 것 — lucide-react 1.x는 UMD 빌드가 없어 앱이 로딩화면에서 멈췄었음).
+- Tailwind만 CDN 사용 → 첫 실행 시 인터넷 필요.
+- 로딩 중 JS 에러가 나면 로딩화면에 빨간 글씨로 표시됨.

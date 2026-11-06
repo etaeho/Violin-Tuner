@@ -20,18 +20,31 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
 
+  <script>
+    // 시작 중 에러가 나면 로딩화면에 표시 (무한 로딩 대신 원인 확인용)
+    window.addEventListener('error', (e) => {
+      const sp = document.getElementById('splash');
+      if (!sp || document.getElementById('splash-error')) return;
+      const box = document.createElement('pre');
+      box.id = 'splash-error';
+      box.style.cssText = 'color:#f87171;font-size:12px;white-space:pre-wrap;padding:16px;max-width:90vw;margin-top:16px';
+      box.textContent = '⚠️ 로딩 오류\n' + (e.message || e) + (e.filename ? '\n' + e.filename + ':' + e.lineno : '');
+      sp.appendChild(box);
+    });
+  </script>
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- React 18 -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="vendor/react.production.min.js"></script>
+  <script src="vendor/react-dom.production.min.js"></script>
 
   <!-- Lucide React UMD -->
-  <script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js"></script>
+  <script>window.react = window.React; // lucide UMD는 소문자 react 전역을 찾음</script>
+  <script src="vendor/lucide-react.min.js"></script>
 
   <!-- Babel Standalone (JSX in browser) -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="vendor/babel.min.js"></script>
 
   <style>
     :root {

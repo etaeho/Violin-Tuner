@@ -1,15 +1,16 @@
-const CACHE = 'violin-tuner-v1';
+// 버전 올리면 예전 캐시 삭제됨
+const CACHE = 'violin-tuner-v2';
 
 const PRECACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/icons/icon.svg',
+  './',
+  'index.html',
+  'manifest.json',
+  'icons/icon.svg',
+  'vendor/react.production.min.js',
+  'vendor/react-dom.production.min.js',
+  'vendor/lucide-react.min.js',
+  'vendor/babel.min.js',
   'https://cdn.tailwindcss.com',
-  'https://unpkg.com/react@18/umd/react.production.min.js',
-  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
-  'https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.js',
-  'https://unpkg.com/@babel/standalone/babel.min.js',
 ];
 
 self.addEventListener('install', (e) => {
@@ -28,18 +29,18 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// 네트워크 우선 → 실패하면 캐시 (수정한 내용이 바로 반영되고, 오프라인이면 캐시로 동작)
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(response => {
-        if (!response || response.status !== 200 || response.type === 'opaque') return response;
+    fetch(e.request).then(response => {
+      if (response && response.status === 200 && response.type !== 'opaque') {
         const clone = response.clone();
         caches.open(CACHE).then(cache => cache.put(e.request, clone));
-        return response;
-      }).catch(() => caches.match('/index.html'));
-    })
+      }
+      return response;
+    }).catch(() =>
+      caches.match(e.request).then(c => c || caches.match('index.html'))
+    )
   );
 });

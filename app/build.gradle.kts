@@ -8,7 +8,7 @@ plugins {
 val webAssetsDir = layout.buildDirectory.dir("generated/webAssets")
 val copyWebAssets by tasks.registering(Sync::class) {
     from(rootDir) {
-        include("index.html", "manifest.json", "sw.js", "icons/**")
+        include("index.html", "manifest.json", "sw.js", "icons/**", "vendor/**")
     }
     into(webAssetsDir)
 }
