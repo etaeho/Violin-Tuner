@@ -1,6 +1,6 @@
 // ==========================================
 // app — 탭 전환, 테마 적용, 마운트
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
 // ==========================================
 
 // ==========================================
@@ -10,8 +10,18 @@ const App = () => {
   const tuner = useTunerLogic();
   const metro = useMetronomeLogic();
   const drone = useDroneLogic(tuner.a4Freq, tuner.noteTracker);
+
+  // 연습 기록: 지금 상태를 ref로 넘겨주고(practice.jsx가 1초마다 읽음), 튜너가 확정한 음을 전달
+  const practiceCtxRef = useRef({});
+  const log = usePracticeLog(practiceCtxRef);
+  tuner.practiceSinkRef.current = log.note;
   const [activeTab, setActiveTab] = useState('tuner');
   const theme = tuner.settings.uiMode;
+  practiceCtxRef.current = {
+    tab: activeTab, metroPlaying: metro.isPlayingMetro, bpm: metro.bpm,
+    droneActive: drone.playing, droneClasses: new Set(droneChordNotes(drone.cfg).map(n => n.replace(/\d+$/, ''))),
+    onGoal: (m) => { haptic([60, 60, 60]); showToast(`🎯 오늘 목표 ${m}분 달성!`); },
+  };
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
   const showToast = (msg) => {
@@ -61,6 +71,7 @@ const App = () => {
     { id:'metronome',   label:'Metro',  color:'#ffcc00', Icon:Music    },
     { id:'fingerboard', label:'Finger', color:'#0ea5e9', Icon:LayoutGrid },
     { id:'drone',       label:'Drone',  color:'#a78bfa', Icon:Waves },
+    { id:'log',         label:'기록',    color:'#fb923c', Icon:BarChart3 },
   ];
 
   return (
@@ -85,6 +96,7 @@ const App = () => {
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro}/></div>
         <div className={activeTab==='drone'       ? 'flex flex-col w-full h-full' : 'hidden'}><Drone       drone={drone} metro={metro}/></div>
+        <div className={activeTab==='log'         ? 'flex flex-col w-full h-full' : 'hidden'}><PracticeLog log={log}/></div>
       </div>
 
       {/* 연주 명령 알림 */}
@@ -109,7 +121,7 @@ const App = () => {
             <button
               key={id}
               onClick={() => switchTab(id)}
-              className="flex flex-col items-center gap-0.5 py-1 px-3 rounded-2xl transition-all duration-200 active:scale-90"
+              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-2xl transition-all duration-200 active:scale-90"
               style={{ color: active ? color : '#4b5563' }}
             >
               {/* Active indicator dot */}
@@ -117,13 +129,35 @@ const App = () => {
                 className="w-1 h-1 rounded-full mb-0.5 transition-all duration-200"
                 style={{ background: active ? color : 'transparent', boxShadow: active ? `0 0 6px ${color}` : 'none' }}
               />
-              <Icon size={22} strokeWidth={active ? 2.5 : 2}/>
-              <span
-                className="text-[9px] font-black uppercase tracking-widest transition-all duration-200"
-                style={{ color: active ? color : '#4b5563' }}
-              >
-                {label}
-              </span>
+              {id === 'log' ? (() => {
+                // 기록 탭: 오늘 목표 진행 링 + 오늘 연습 분
+                const ms = practiceMs(log.today), pct = Math.min(1, ms / (log.goalMin * 60000)), c = 2 * Math.PI * 11;
+                const ring = theme === 'vintage' ? '#f6dd94' : '#4afc9d';
+                return (
+                  <>
+                    <span className="relative w-[22px] h-[22px] flex items-center justify-center">
+                      <svg viewBox="0 0 26 26" className="absolute -inset-[2px] w-[26px] h-[26px] -rotate-90">
+                        <circle cx="13" cy="13" r="11" fill="none" stroke="#1f2937" strokeWidth="2"/>
+                        <circle cx="13" cy="13" r="11" fill="none" stroke={ring} strokeWidth="2" strokeLinecap="round" strokeDasharray={`${c * pct} ${c}`}/>
+                      </svg>
+                      <Icon size={13} strokeWidth={active ? 2.5 : 2}/>
+                    </span>
+                    <span className="text-[9px] font-black tracking-widest transition-all duration-200" style={{ color: active ? color : (ms >= 60000 ? ring : '#4b5563') }}>
+                      {ms >= 60000 ? `${Math.floor(ms / 60000)}분` : label}
+                    </span>
+                  </>
+                );
+              })() : (
+                <>
+                  <Icon size={22} strokeWidth={active ? 2.5 : 2}/>
+                  <span
+                    className="text-[9px] font-black uppercase tracking-widest transition-all duration-200"
+                    style={{ color: active ? color : '#4b5563' }}
+                  >
+                    {label}
+                  </span>
+                </>
+              )}
             </button>
           );
         })}

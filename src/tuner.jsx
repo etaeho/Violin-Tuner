@@ -1,6 +1,6 @@
 // ==========================================
 // tuner — 튜너 탭 (로직 + 화면 + 설정 시트)
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
 // ==========================================
 
 const useTunerLogic = () => {
@@ -33,6 +33,7 @@ const useTunerLogic = () => {
   const calibRef       = useRef(null);
   const startingRef    = useRef(null);
   const trackerRef     = useRef(null);
+  const practiceSinkRef = useRef(null);  // 연습 기록(practice.jsx) — app.jsx에서 연결
   const toneGuardRef   = useRef(0);      // 이 시각까지 연주 명령 무시 (기준음 재생 중)
   if (!trackerRef.current) trackerRef.current = createNoteTracker();
 
@@ -159,7 +160,10 @@ const useTunerLogic = () => {
           symbol: fullNote.includes('#') ? '#' : '',
           octave
         });
-        if (now > toneGuardRef.current) trackerRef.current.feed(fullNote + octave, now, S);   // 연주 명령 감지
+        if (now > toneGuardRef.current) {
+          trackerRef.current.feed(fullNote + octave, now, S);              // 연주 명령 감지
+          practiceSinkRef.current?.(fullNote + octave, chromaticCentsOff, now); // 연습 시간 기록
+        }
       }
     } else {
       candidateRef.current.count = 0;
@@ -287,7 +291,7 @@ const useTunerLogic = () => {
     currentNote, closestString, error, playingTone,
     startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
     settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise,
-    noteTracker: trackerRef.current
+    noteTracker: trackerRef.current, practiceSinkRef
   };
 };
 

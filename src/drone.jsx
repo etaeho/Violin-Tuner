@@ -1,6 +1,6 @@
 // ==========================================
 // drone — 드론 탭: 근음(+5도·옥타브·3도)을 계속 울려 두고 그 위에서 음정 연습
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
 // 구성안: docs/drone-mode-plan.md  (현재 1단계: 기본 드론)
 // ==========================================
 
@@ -29,6 +29,11 @@ const DRONE_CROSSFADE = 0.08;   // 음 바꿀 때 전환 시간(초)
 
 const droneRootFreq = (cfg, a4) => a4 * Math.pow(2, ((cfg.octave * 12 + NOTE_NAMES.indexOf(cfg.root)) - 57) / 12);
 const droneRatios = (cfg) => [1, ...DRONE_INTERVALS.filter(i => cfg.intervals[i.id]).map(i => i.ratio)];
+// 드론이 내는 음 이름들 (예: ['D4','A4'])
+const droneChordNotes = (cfg) => droneRatios(cfg).map(r => {
+  const idx = NOTE_NAMES.indexOf(cfg.root) + Math.round(12 * Math.log2(r));
+  return NOTE_NAMES[((idx % 12) + 12) % 12] + (cfg.octave + Math.floor(idx / 12));
+});
 
 // ── 오디오 로직 ──
 const useDroneLogic = (a4Freq, noteTracker) => {
@@ -240,11 +245,7 @@ const Drone = ({ drone, metro }) => {
   const vintage = useVintage();
   const [wheelRef, wheelSize] = useFitSquare(0, 300);
   const accent = vintage ? '#f6dd94' : '#a78bfa';
-  const chord = droneRatios(cfg).map(r => {
-    const semi = Math.round(12 * Math.log2(r));
-    const idx = NOTE_NAMES.indexOf(cfg.root) + semi;
-    return NOTE_NAMES[((idx % 12) + 12) % 12].replace('#', '♯') + (cfg.octave + Math.floor(idx / 12));
-  });
+  const chord = droneChordNotes(cfg).map(n => n.replace('#', '♯'));
 
   return (
     <div className="w-full h-full flex flex-col items-center tab-enter gap-2.5">

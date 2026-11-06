@@ -1,6 +1,6 @@
 # 연습 기록 구상안
 
-> 상태: **제안 (미구현)** · 근거: [research.md](research.md) — Soundcorset·TonalEnergy의 강점(연습 시간 통계, 음정 기록)
+> 상태: **1단계 구현됨** (src/practice.jsx) · 2·3단계 미구현 · 근거: [research.md](research.md) — Soundcorset·TonalEnergy의 강점(연습 시간 통계, 음정 기록)
 
 ## 핵심 방향
 - **버튼 없이 자동 측정**: 마이크가 이미 계속 듣고 있으므로, 바이올린 소리가 감지된 시간만 연습 시간으로 센다. (START 버튼을 없앤 것과 같은 철학)
