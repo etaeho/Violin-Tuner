@@ -33,6 +33,7 @@ const useTunerLogic = () => {
   const calibRef       = useRef(null);
   const startingRef    = useRef(null);
   const trackerRef     = useRef(null);
+  const toneGuardRef   = useRef(0);      // 이 시각까지 연주 명령 무시 (기준음 재생 중)
   if (!trackerRef.current) trackerRef.current = createNoteTracker();
 
   const updateSettings = (patch) => {
@@ -90,6 +91,7 @@ const useTunerLogic = () => {
     gainNodeRef.current.gain.linearRampToValueAtTime(0.6, audioContextRef.current.currentTime + 0.1);
     osc.start();
     oscillatorRef.current = osc;
+    toneGuardRef.current = Infinity;
     setPlayingTone(id);
   };
 
@@ -100,6 +102,7 @@ const useTunerLogic = () => {
       oscillatorRef.current.stop(now + 0.2);
       oscillatorRef.current = null;
     }
+    if (toneGuardRef.current === Infinity) toneGuardRef.current = performance.now() + 600;
     setPlayingTone(null);
   };
 
@@ -156,7 +159,7 @@ const useTunerLogic = () => {
           symbol: fullNote.includes('#') ? '#' : '',
           octave
         });
-        trackerRef.current.feed(fullNote + octave, now, S);   // 연주 명령 감지
+        if (now > toneGuardRef.current) trackerRef.current.feed(fullNote + octave, now, S);   // 연주 명령 감지
       }
     } else {
       candidateRef.current.count = 0;
@@ -169,6 +172,7 @@ const useTunerLogic = () => {
         setPitch(0); setCents(0); setStringCents(0);
       }
     }
+    trackerRef.current.tick(now);
     levelRef.current = { db, clarity, freq: raw, gate: gateOpenRef.current, accepted };
     animationRef.current = requestAnimationFrame(update);
   }, []);
@@ -369,16 +373,17 @@ const StringBars = ({ tuner }) => {
               {showSharp ? `+${stringCents}` : s.id}
             </span>
             <StringBar dir="up" show={showSharp} pos={pos} color={activeColor} tolerance={tolerance}/>
-            <div className="relative my-0.5">
+            {/* 원 전체(+여백)가 터치 영역 → 기준음 재생/정지 */}
+            <button onClick={()=>toggleTone(s.name,s.semitone)} aria-label={`${s.name} 기준음`}
+              className="relative my-0.5 p-1.5 -m-1.5 rounded-full active:scale-95 transition-transform">
               <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-base transition-all duration-200 font-black ${circleClasses}`}>
                 {s.note}
-                <span className="text-[8px] absolute top-1.5 right-2.5 opacity-70">{s.octave}</span>
+                <span className="text-[8px] absolute top-3 right-4 opacity-70">{s.octave}</span>
               </div>
-              <button onClick={()=>toggleTone(s.name,s.semitone)}
-                className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border flex items-center justify-center transition-all z-20 ${isPlaying?'bg-yellow-500 border-yellow-400 text-black':'bg-[#151515] border-gray-700 text-gray-500'}`}>
+              <span className={`absolute bottom-0 right-0 w-5 h-5 rounded-full border flex items-center justify-center transition-all z-20 pointer-events-none ${isPlaying?'bg-yellow-500 border-yellow-400 text-black':'bg-[#151515] border-gray-700 text-gray-500'}`}>
                 {isPlaying ? <VolumeX size={10}/> : <Volume2 size={10}/>}
-              </button>
-            </div>
+              </span>
+            </button>
             <StringBar dir="down" show={showFlat} pos={pos} color={activeColor} tolerance={tolerance}/>
             <span className={`text-[10px] font-black mt-1 h-3 leading-3 font-mono ${showFlat?'text-blue-400':'text-transparent'}`}>
               {showFlat ? stringCents : '0'}
@@ -522,10 +527,14 @@ const SettingsSheet = ({ tuner, onClose }) => {
   const [lv, setLv] = useState(levelRef.current);
   const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
   const [cmd, setCmd] = useState({ recording: null, events: [] });   // 연주 명령 상태 표시용
+  const [recMsg, setRecMsg] = useState(null);
 
   // 패턴 녹음 완료 → 저장
   useEffect(() => {
-    noteTracker.state.onRecorded = (p) => { updateSettings({ cmdPattern: p, cmdEnabled: true }); haptic(30); };
+    noteTracker.state.onRecorded = (p) => {
+      if (p) { updateSettings({ cmdPattern: p, cmdEnabled: true }); setRecMsg(`패턴 저장됨 (${p.length}음)`); haptic(30); }
+      else { setRecMsg(`음이 ${CMD_PATTERN_MIN}개 이상 필요합니다. 다시 녹음해주세요.`); haptic(80); }
+    };
     return () => { noteTracker.state.onRecorded = null; noteTracker.cancelRecording(); };
   }, []);
 
@@ -535,7 +544,11 @@ const SettingsSheet = ({ tuner, onClose }) => {
       if (t - last > 50) {
         setLv({ ...levelRef.current });
         const st = noteTracker.state;
-        setCmd({ recording: st.recording ? [...st.recording] : null, events: st.events.slice(-5).map(e => e.note) });
+        const rec = st.recording;
+        setCmd({
+          recording: rec ? { notes: [...rec.notes], left: rec.start === null ? null : Math.max(0, rec.windowMs - (performance.now() - rec.start)) } : null,
+          events: st.events.slice(-6).map(e => e.note),
+        });
         last = t;
       }
       raf = requestAnimationFrame(tick);
@@ -673,27 +686,32 @@ const SettingsSheet = ({ tuner, onClose }) => {
           </div>
 
           <div className="flex flex-col items-center gap-2 py-1">
-            <div className="flex items-center gap-2">
-              {Array.from({ length: CMD_PATTERN_LEN }, (_, i) => {
+            <div className="flex items-center justify-center gap-1.5 flex-wrap min-h-[38px]">
+              {(() => {
                 const rec = cmd.recording;
-                const n = rec ? rec[i] : S.cmdPattern[i];
-                const pending = rec && !n;
-                return (
+                const notes = rec ? rec.notes : S.cmdPattern;
+                if (rec && !notes.length) return <span className="text-xs font-bold text-[#ffcc00] animate-pulse">첫 음을 연주하면 녹음이 시작됩니다</span>;
+                return notes.map((n, i) => (
                   <React.Fragment key={i}>
                     {i > 0 && <span className="text-gray-600 text-xs">→</span>}
-                    <span className={`min-w-[52px] text-center px-2.5 py-1.5 rounded-xl font-mono font-black text-base border-2 transition-all ${
-                      pending ? 'border-dashed border-gray-600 text-gray-600 animate-pulse'
-                      : rec ? 'border-[#ffcc00] text-[#ffcc00] bg-[#ffcc00]/10'
+                    <span className={`min-w-[44px] text-center px-2 py-1.5 rounded-xl font-mono font-black text-sm border-2 ${
+                      rec ? 'border-[#ffcc00] text-[#ffcc00] bg-[#ffcc00]/10'
                       : S.cmdEnabled ? 'border-[#4afc9d]/60 text-[#4afc9d] bg-[#4afc9d]/10' : 'border-gray-700 text-gray-500'}`}>
-                      {n || '?'}
+                      {n}
                     </span>
                   </React.Fragment>
-                );
-              })}
+                ));
+              })()}
             </div>
-            {cmd.recording && (
-              <span className="text-[11px] font-bold text-[#ffcc00]">녹음 중… 음 {CMD_PATTERN_LEN}개를 차례로 연주하세요 ({cmd.recording.length}/{CMD_PATTERN_LEN})</span>
+            {cmd.recording && cmd.recording.left !== null && (
+              <div className="w-full flex flex-col gap-1">
+                <div className="h-1.5 w-full bg-[#141414] rounded-full overflow-hidden">
+                  <div className="h-full bg-[#ffcc00]" style={{ width: `${(cmd.recording.left / S.cmdWindowMs) * 100}%` }}/>
+                </div>
+                <span className="text-[11px] font-bold text-[#ffcc00] text-center">녹음 중… {(cmd.recording.left / 1000).toFixed(1)}초 남음 · {cmd.recording.notes.length}/{CMD_PATTERN_MAX}음</span>
+              </div>
             )}
+            {!cmd.recording && recMsg && <span className="text-[11px] font-bold text-[#4afc9d]">{recMsg}</span>}
           </div>
 
           <div className="flex gap-2">
@@ -701,7 +719,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
               <button onClick={() => { noteTracker.cancelRecording(); haptic(8); }}
                 className="flex-1 py-2.5 rounded-full t-chip text-gray-300 text-xs font-bold">녹음 취소</button>
             ) : (
-              <button onClick={async () => { if (await ensureMic()) { noteTracker.startRecording(); haptic(15); } }}
+              <button onClick={async () => { if (await ensureMic()) { setRecMsg(null); noteTracker.startRecording(S.cmdWindowMs); haptic(15); } }}
                 className="flex-1 py-2.5 rounded-full bg-[#ffcc00]/10 border border-[#ffcc00]/40 text-[#ffcc00] text-xs font-bold">● 패턴 녹음</button>
             )}
             <button onClick={() => { updateSettings({ cmdPattern: DEFAULT_CMD_PATTERN }); haptic(8); }}
@@ -710,7 +728,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
 
           <SliderRow label="제한 시간" value={S.cmdWindowMs} display={`${(S.cmdWindowMs / 1000).toFixed(1)}초`} min={1500} max={5000} step={500}
             onChange={v => updateSettings({ cmdWindowMs: v })}
-            hint="패턴 전체를 이 시간 안에 연주해야 합니다. 각 음은 0.15초 이상 유지. 같은 패턴을 다시 연주하면 정지."/>
+            hint={`녹음: 첫 음부터 이 시간 동안 연주한 음(${CMD_PATTERN_MIN}~${CMD_PATTERN_MAX}개)이 패턴이 됩니다. 실행할 때도 이 시간 안에 연주해야 합니다. 각 음은 0.15초 이상 유지. 같은 패턴을 다시 연주하면 정지.`}/>
 
           {isStarted && (
             <div className="flex items-center gap-1.5 flex-wrap">
