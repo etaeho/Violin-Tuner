@@ -154,6 +154,7 @@ const DEFAULT_SETTINGS = {
   minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
   maxFreq: 3500,     // 감지 최고 Hz
   uiMode: 'tape',    // 화면 모드(테마): 'tape' | 'vintage'  → theme.jsx UI_MODES
+  tunerLayout: 'tape', // 튜너 화면 구성: 'tape'(테이프만) | 'center'(음 표시만) | 'both'  → tuner.jsx TUNER_LAYOUTS
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
   cmdWindowMs: 3000, // 패턴을 이 시간 안에 연주해야 인정
@@ -163,6 +164,7 @@ const loadSettings = () => {
   try {
     const v = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
     if (!['tape', 'vintage'].includes(v.uiMode)) v.uiMode = 'tape';   // 예전 'modern' 등 → 기본값
+    if (!['tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'tape';
     return v;
   }
   catch (_) { return { ...DEFAULT_SETTINGS }; }
