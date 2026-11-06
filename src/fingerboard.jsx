@@ -7,7 +7,7 @@
 // 3. Fingerboard Component
 // ==========================================
 const Fingerboard = ({ tuner, metro }) => {
-  const [selectedKey, setSelectedKey] = useState('C Major (0)');
+  const [selectedKey, setSelectedKey] = usePersistentState('fingerboard.key', 'C Major (0)', v => !!KEY_SIGNATURES[v]);
   const currentScale = KEY_SIGNATURES[selectedKey];
   const detectedStr = (tuner.isStarted&&tuner.pitch>0) ? tuner.currentNote.name+tuner.currentNote.symbol : null;
   const detectedOctave = tuner.isStarted ? tuner.currentNote.octave : null;

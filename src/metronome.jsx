@@ -7,12 +7,12 @@
 // Metronome Hook
 // ==========================================
 const useMetronomeLogic = () => {
-  const [bpm, setBpm] = useState(60);
+  const [bpm, setBpm] = usePersistentState('metro.bpm', 60, v => v >= 30 && v <= 250);
   const [isPlayingMetro, setIsPlayingMetro] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
-  const [timeSig, setTimeSig] = useState({ num:4, den:4 });
-  const [beatSounds, setBeatSounds] = useState([2,1,1,1]);
-  const [beatSubdivisions, setBeatSubdivisions] = useState([1,1,1,1]);
+  const [timeSig, setTimeSig] = usePersistentState('metro.timeSig', { num:4, den:4 }, v => v?.num >= 1 && v.num <= 16 && [2,4,8,16].includes(v.den));
+  const [beatSounds, setBeatSounds] = usePersistentState('metro.beatSounds', [2,1,1,1], v => Array.isArray(v) && v.length >= 1);
+  const [beatSubdivisions, setBeatSubdivisions] = usePersistentState('metro.beatSubdivisions', [1,1,1,1], v => Array.isArray(v) && v.length >= 1);
   const [visualFlash, setVisualFlash] = useState(false);
   const isPlayingRef     = useRef(false);
   const bpmRef           = useRef(bpm);

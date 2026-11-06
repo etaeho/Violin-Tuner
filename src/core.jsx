@@ -168,6 +168,20 @@ const loadSettings = () => {
   catch (_) { return { ...DEFAULT_SETTINGS }; }
 };
 const saveSettings = (v) => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(v)); } catch (_) {} };
+// 값이 바뀔 때마다 localStorage에 저장되고, 다음 실행 때 그대로 불러오는 useState
+// validate(v) 가 false 면 기본값 사용 (예전 형식/깨진 값 방지)
+const usePersistentState = (key, initial, validate = () => true) => {
+  const [v, setV] = useState(() => {
+    try {
+      const raw = localStorage.getItem('vt.' + key);
+      if (raw !== null) { const parsed = JSON.parse(raw); if (validate(parsed)) return parsed; }
+    } catch (_) {}
+    return initial;
+  });
+  useEffect(() => { try { localStorage.setItem('vt.' + key, JSON.stringify(v)); } catch (_) {} }, [key, v]);
+  return [v, setV];
+};
+
 const rmsToDb = (r) => (r > 0 ? 20 * Math.log10(r) : -100);
 const centsBetween = (a, b) => 1200 * Math.log2(a / b);
 

@@ -8,8 +8,8 @@ const useTunerLogic = () => {
   const [pitch, setPitch] = useState(0);
   const [cents, setCents] = useState(0);
   const [stringCents, setStringCents] = useState(0);
-  const [a4Freq, setA4Freq] = useState(442);
-  const [tolerance, setTolerance] = useState(10);
+  const [a4Freq, setA4Freq] = usePersistentState('a4Freq', 442, v => v >= 430 && v <= 450);
+  const [tolerance, setTolerance] = usePersistentState('tolerance', 10, v => v >= 2 && v <= 30);
   const [currentNote, setCurrentNote] = useState({ name:'A', octave:4, symbol:'' });
   const [closestString, setClosestString] = useState(VIOLIN_STRINGS[2]);
   const [error, setError] = useState(null);
@@ -22,7 +22,7 @@ const useTunerLogic = () => {
   const oscillatorRef  = useRef(null);
   const gainNodeRef    = useRef(null);
   const freqHistoryRef = useRef([]);
-  const a4FreqRef      = useRef(442);
+  const a4FreqRef      = useRef(a4Freq);
   const streamRef      = useRef(null);
   const settingsRef    = useRef(loadSettings());
   const [settings, setSettingsState] = useState(settingsRef.current);
