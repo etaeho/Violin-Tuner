@@ -3,7 +3,19 @@
 바이올린 튜너 · 메트로놈 · 지판 앱. 사용자는 **모바일에서 바이브 코딩**으로 개발하고, 폰에서 바로 APK를 받아 테스트한다.
 
 ## 구조
-- `index.html` — 앱 본체 (React 18 + Tailwind CDN + Babel standalone, 단일 파일). **기능 수정은 거의 항상 여기.**
+- `index.html` — 껍데기(head, 로딩화면, 스크립트 로드 순서). 앱 코드는 없음.
+- `src/` — 앱 코드 (React 18 + Babel standalone, 빌드 없이 브라우저에서 JSX 변환). **로드 순서 중요**:
+  1. `core.jsx` — 공통 상수(음이름·현·조표), 설정(DEFAULT_SETTINGS, localStorage), 피치 검출(detectPitch)
+  2. `theme.jsx` — 화면 모드(UI_MODES), ThemeContext/useVintage, 공용 UI(DrumDigits, Screw, BrassPlate)
+  3. `tuner.jsx` — 튜너 탭: useTunerLogic, StringBars, NoteTape, SettingsSheet, Tuner
+  4. `metronome.jsx` — 메트로놈 탭
+  5. `fingerboard.jsx` — 지판 탭
+  6. `app.jsx` — 탭 전환, 테마 적용, 마운트
+  - 파일 간 공유는 전역 top-level `const`로 한다 (import/export 없음). 새 파일을 만들면 index.html, sw.js PRECACHE에 추가.
+- `src/theme.css` — 테마 색 변수. `<html data-theme="tape|vintage">`.
+  **컴포넌트에서 배경/테두리 색을 직접 쓰지 말고 `t-panel`, `t-chip`, `t-inset`, `t-board`, `t-card`, `t-sheet`, `t-nav`, `t-app` 클래스 사용.**
+  모양 자체가 다른 부분만 `useVintage()`로 분기. 새 테마 = theme.css 변수 블록 + UI_MODES 항목 + core.jsx loadSettings 허용 목록.
+- `vendor/` — React/ReactDOM/Lucide/Babel 고정 버전. Tailwind만 CDN.
 - `manifest.json`, `sw.js`, `icons/` — PWA 리소스
 - `app/` — 안드로이드 네이티브 껍데기 (Kotlin, WebView). 빌드 시 위 웹 파일들을 assets로 복사해서
   `https://appassets.androidplatform.net/index.html` 로 띄움. 마이크 권한(RECORD_AUDIO)을 WebView에 연결.

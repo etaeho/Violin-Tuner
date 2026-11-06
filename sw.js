@@ -1,11 +1,18 @@
 // 버전 올리면 예전 캐시 삭제됨
-const CACHE = 'violin-tuner-v2';
+const CACHE = 'violin-tuner-v3';
 
 const PRECACHE = [
   './',
   'index.html',
   'manifest.json',
   'icons/icon.svg',
+  'src/theme.css',
+  'src/core.jsx',
+  'src/theme.jsx',
+  'src/tuner.jsx',
+  'src/metronome.jsx',
+  'src/fingerboard.jsx',
+  'src/app.jsx',
   'vendor/react.production.min.js',
   'vendor/react-dom.production.min.js',
   'vendor/lucide-react.min.js',
