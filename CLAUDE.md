@@ -21,7 +21,7 @@
 - `manifest.json`, `sw.js`, `icons/` — PWA 리소스
 - `app/` — 안드로이드 네이티브 껍데기 (Kotlin, WebView). 빌드 시 위 웹 파일들을 assets로 복사해서
   `https://appassets.androidplatform.net/index.html` 로 띄움. 마이크 권한(RECORD_AUDIO)을 WebView에 연결.
-- `docs/` — 기획·조사 문서. `research.md`(타 앱 장단점 조사), `drone-mode-plan.md`(드론 모드 구성안)
+- `docs/` — 기획·조사 문서. `research.md`(타 앱 장단점 조사), `drone-mode-plan.md`(드론 모드 구성안), `practice-log-plan.md`(연습 기록 구상안)
 - **사용자가 바꾸는 값은 다음 실행 때 유지돼야 함**: 설정 시트 값은 `DEFAULT_SETTINGS`(core.jsx), 그 외 상태(템포·A4·조표 등)는 `usePersistentState('키', 기본값, 검증함수)` 사용 (localStorage `vt.` 접두사)
 - `Verson_*`, `verson_*`, `tuner_tab_*`, `tempo_tab_*` — 예전 버전 백업. 수정하지 말 것.
 
