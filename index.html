@@ -338,7 +338,7 @@
       holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
       minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
       maxFreq: 3500,     // 감지 최고 Hz
-      mapMode: 'full',   // 피치 맵: 'full' 전체 음역 | 'focus' 현재 음 확대
+      uiMode: 'modern',  // 화면 모드: 'modern' | 'tape' | 'vintage'
     };
     const SETTINGS_KEY = 'vt.tunerSettings.v1';
     const loadSettings = () => {
@@ -415,7 +415,6 @@
       const settingsRef    = useRef(loadSettings());
       const [settings, setSettingsState] = useState(settingsRef.current);
       const levelRef       = useRef({ db: -100, clarity: 0, freq: -1, gate: false, accepted: false });
-      const historyRef     = useRef([]);   // 피치 맵용 [{t, freq|null, cents}]
       const gateOpenRef    = useRef(false);
       const candidateRef   = useRef({ freq: 0, count: 0 });
       const lastGoodRef    = useRef(0);
@@ -428,7 +427,7 @@
         saveSettings(next);
         setSettingsState(next);
       };
-      const resetSettings = () => updateSettings({ ...DEFAULT_SETTINGS, mapMode: settingsRef.current.mapMode });
+      const resetSettings = () => updateSettings({ ...DEFAULT_SETTINGS, uiMode: settingsRef.current.uiMode });
 
       useEffect(() => {
         ensureMic();
@@ -534,7 +533,6 @@
             const noteIndex = (noteNum % 12 + 12) % 12;
             const octave = Math.floor(noteNum / 12) - 1;
             const fullNote = NOTE_NAMES[noteIndex];
-            historyRef.current.push({ t: now, freq, cents: chromaticCentsOff });
             setPitch(freq.toFixed(1));
             setCents(chromaticCentsOff);
             setStringCents(strCentsOff);
@@ -550,15 +548,12 @@
         }
 
         if (!accepted) {
-          historyRef.current.push({ t: now, freq: null });
           if (lastGoodRef.current && now - lastGoodRef.current > S.holdMs) {
             lastGoodRef.current = 0;
             freqHistoryRef.current = [];
             setPitch(0); setCents(0); setStringCents(0);
           }
         }
-        const h = historyRef.current;
-        while (h.length && now - h[0].t > 6000) h.shift();
         levelRef.current = { db, clarity, freq: raw, gate: gateOpenRef.current, accepted };
         animationRef.current = requestAnimationFrame(update);
       }, []);
@@ -622,7 +617,7 @@
         streamRef.current?.getTracks().forEach(t=>t.stop());
         streamRef.current=null;
         analyserRef.current=null;
-        historyRef.current=[]; freqHistoryRef.current=[];
+        freqHistoryRef.current=[];
         gateOpenRef.current=false; candidateRef.current={ freq:0, count:0 }; lastGoodRef.current=0;
         levelRef.current={ db:-100, clarity:0, freq:-1, gate:false, accepted:false };
         setIsStarted(false); setPitch(0); setCents(0); setStringCents(0);
@@ -672,7 +667,7 @@
         isStarted, pitch, cents, stringCents, a4Freq, tolerance,
         currentNote, closestString, error, playingTone,
         startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
-        settings, updateSettings, resetSettings, levelRef, historyRef, ensureMic, calibrateNoise
+        settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise
       };
     };
 
@@ -680,151 +675,279 @@
     // 1. Tuner Component
     // ==========================================
     // ==========================================
-    // 피치 맵: 세로축 = 음높이(위로 갈수록 높은 음), 가로축 = 시간(최근 5초)
+    // 현별 막대: 위 막대 = 높음(#), 아래 막대 = 낮음(♭)
+    // 비선형(제곱근) 눈금 → 0 근처는 세밀하게, 멀리는 ±350센트까지 넓게
     // ==========================================
-    const MAP_WINDOW_MS = 5000;
-    const FULL_RANGE = { lo: -16, hi: 26 };   // A4 기준 반음: F#3 ~ B6
-    const FOCUS_SPAN = 7;                      // 집중 모드: 현재 음 ±7반음
     const OPEN_STRING_COLORS = { G:'#f97316', D:'#eab308', A:'#4afc9d', E:'#38bdf8' };
+    const BAR_MAX_CENTS = 350;
+    const BAR_TICKS = [10, 50, 100, 200];
+    const BAR_H = 'clamp(52px, 13vh, 120px)';
+    const barPct = (c) => Math.min(100, Math.sqrt(Math.min(Math.abs(c), BAR_MAX_CENTS) / BAR_MAX_CENTS) * 100);
 
-    const PitchMap = ({ tuner }) => {
-      const { historyRef, a4Freq, tolerance, isStarted, settings, updateSettings, closestString } = tuner;
-      const canvasRef = useRef(null);
-      const wrapRef = useRef(null);
-      const propsRef = useRef({});
-      const centerRef = useRef(0);
-      propsRef.current = { a4Freq, tolerance, isStarted, mode: settings.mapMode, closest: closestString?.name };
+    const BarScale = ({ dir, vintage }) => (
+      <div className="relative w-7" style={{ height: BAR_H }}>
+        {BAR_TICKS.map(t => (
+          <span key={t} className={`absolute right-0 text-[7px] font-black font-mono leading-none ${vintage?'text-[#f4e3b5]/70':'text-gray-600'}`}
+            style={dir === 'up' ? { bottom: `calc(${barPct(t)}% - 3px)` } : { top: `calc(${barPct(t)}% - 3px)` }}>
+            {dir === 'up' ? '+' : '−'}{t}
+          </span>
+        ))}
+      </div>
+    );
 
-      useEffect(() => {
-        const canvas = canvasRef.current, wrap = wrapRef.current;
-        const ctx = canvas.getContext('2d');
-        let raf, W = 0, H = 0;
-        const resize = () => {
-          const dpr = window.devicePixelRatio || 1;
-          W = wrap.clientWidth; H = wrap.clientHeight;
-          canvas.width = W * dpr; canvas.height = H * dpr;
-          canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        };
-        resize();
-        const ro = new ResizeObserver(resize); ro.observe(wrap);
-
-        const LEFT = 30, PAD_T = 10, PAD_B = 10;
-        const draw = () => {
-          const { a4Freq, tolerance, isStarted, mode, closest } = propsRef.current;
-          const now = performance.now();
-          const hist = historyRef.current;
-          let lastFreq = null;
-          for (let i = hist.length - 1; i >= 0 && now - hist[i].t < 1500; i--) if (hist[i].freq) { lastFreq = hist[i].freq; break; }
-          const curSemi = lastFreq ? 12 * Math.log2(lastFreq / a4Freq) : null;
-
-          let lo, hi;
-          if (mode === 'focus') {
-            if (curSemi !== null) centerRef.current += (curSemi - centerRef.current) * 0.08;
-            lo = centerRef.current - FOCUS_SPAN; hi = centerRef.current + FOCUS_SPAN;
-          } else { lo = FULL_RANGE.lo; hi = FULL_RANGE.hi; }
-          const plotH = H - PAD_T - PAD_B;
-          const y = (semi) => PAD_T + plotH - ((semi - lo) / (hi - lo)) * plotH;
-          const x = (t) => LEFT + (W - LEFT - 14) * (1 - (now - t) / MAP_WINDOW_MS);
-
-          ctx.clearRect(0, 0, W, H);
-          // 반음 격자
-          ctx.font = '700 9px ui-monospace, monospace';
-          ctx.textBaseline = 'middle';
-          for (let st = Math.ceil(lo); st <= Math.floor(hi); st++) {
-            const yy = y(st);
-            const idx = ((st + 9) % 12 + 12) % 12;          // 0 = C
-            const name = NOTE_NAMES[idx];
-            const oct = Math.floor((st + 57) / 12);
-            const isC = idx === 0;
-            ctx.strokeStyle = isC ? '#262626' : (name.includes('#') ? '#0d0d0d' : '#161616');
-            ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(LEFT, yy); ctx.lineTo(W, yy); ctx.stroke();
-            const nearOpen = VIOLIN_STRINGS.some(v => Math.abs(v.semitone - st) <= (mode === 'focus' ? 0 : 2));
-            if (!nearOpen && (mode === 'focus' ? !name.includes('#') : isC)) {
-              ctx.fillStyle = '#4b5563';
-              ctx.textAlign = 'right';
-              ctx.fillText(name + oct, LEFT - 5, yy);
-            }
-          }
-          // 개방현 가이드
-          VIOLIN_STRINGS.forEach(s => {
-            if (s.semitone < lo || s.semitone > hi) return;
-            const yy = y(s.semitone), col = OPEN_STRING_COLORS[s.note];
-            const active = isStarted && closest === s.name && lastFreq;
-            ctx.strokeStyle = col; ctx.globalAlpha = active ? 0.9 : 0.35;
-            ctx.setLineDash([4, 4]); ctx.lineWidth = active ? 1.5 : 1;
-            ctx.beginPath(); ctx.moveTo(LEFT, yy); ctx.lineTo(W, yy); ctx.stroke();
-            ctx.setLineDash([]); ctx.globalAlpha = 1;
-            ctx.fillStyle = col;
-            ctx.beginPath(); ctx.roundRect(2, yy - 7, 24, 14, 7); ctx.fill();
-            ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.font = '900 9px ui-sans-serif, system-ui';
-            ctx.fillText(s.note + s.octave, 14, yy + 0.5);
-            ctx.font = '700 9px ui-monospace, monospace';
-          });
-          // 현재 음 허용범위(±tolerance cents) 밴드
-          if (curSemi !== null) {
-            const target = Math.round(curSemi);
-            const y1 = y(target + tolerance / 100), y2 = y(target - tolerance / 100);
-            ctx.fillStyle = 'rgba(74,252,157,0.10)';
-            ctx.fillRect(LEFT, y1, W - LEFT, Math.max(1, y2 - y1));
-          }
-          // 음정 궤적
-          let prev = null;
-          for (let i = 0; i < hist.length; i++) {
-            const pt = hist[i];
-            if (!pt.freq) { prev = null; continue; }
-            const semi = 12 * Math.log2(pt.freq / a4Freq);
-            if (semi < lo - 1 || semi > hi + 1) { prev = null; continue; }
-            const ac = Math.abs(pt.cents);
-            const col = ac <= tolerance ? '#4afc9d' : ac <= tolerance + 15 ? '#ffcc00' : '#ff4d4d';
-            const px = x(pt.t), py = y(semi);
-            const age = (now - pt.t) / MAP_WINDOW_MS;
-            ctx.globalAlpha = Math.max(0.15, 1 - age * 0.85);
-            if (prev && pt.t - prev.t < 120) {
-              ctx.strokeStyle = col; ctx.lineWidth = 2;
-              ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(px, py); ctx.stroke();
-            } else {
-              ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, 1.6, 0, Math.PI * 2); ctx.fill();
-            }
-            prev = { x: px, y: py, t: pt.t };
-          }
-          ctx.globalAlpha = 1;
-          // 현재 위치 마커
-          const lastPt = hist[hist.length - 1];
-          if (lastPt && lastPt.freq && now - lastPt.t < 200) {
-            const semi = 12 * Math.log2(lastPt.freq / a4Freq);
-            const ac = Math.abs(lastPt.cents);
-            const col = ac <= tolerance ? '#4afc9d' : ac <= tolerance + 15 ? '#ffcc00' : '#ff4d4d';
-            const py = Math.min(H - 4, Math.max(4, y(semi))), px = W - 14;
-            ctx.shadowColor = col; ctx.shadowBlur = 14;
-            ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-          }
-          raf = requestAnimationFrame(draw);
-        };
-        draw();
-        return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-      }, []);
-
-      const focus = settings.mapMode === 'focus';
+    const StringBar = ({ dir, show, pos, color, tolerance }) => {
+      const up = dir === 'up';
+      const anchor = up ? 'bottom' : 'top';
       return (
-        <div className="relative w-full max-w-sm h-[26vh] min-h-[150px] max-h-[240px] shrink-0 mt-2 rounded-3xl bg-[#060606] border border-white/5 shadow-[inset_0_2px_20px_rgba(0,0,0,1)] overflow-hidden">
-          <div ref={wrapRef} className="absolute inset-0"><canvas ref={canvasRef}/></div>
-          <div className="absolute top-2 left-9 flex items-center gap-1 pointer-events-none">
-            <span className="text-[8px] font-black tracking-[0.25em] text-gray-600">PITCH MAP</span>
-            <span className="text-[8px] font-black text-gray-700">· 높음 ▲ / 낮음 ▼</span>
-          </div>
-          <button onClick={() => { updateSettings({ mapMode: focus ? 'full' : 'focus' }); haptic(8); }}
-            className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 border border-gray-800 rounded-full px-2 py-1 text-[9px] font-black text-gray-400 active:scale-95">
-            {focus ? <ZoomOut size={11}/> : <ZoomIn size={11}/>}
-            {focus ? '전체' : '집중'}
-          </button>
-          {!isStarted && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-gray-700 bg-black/60 px-3 py-1 rounded-full">마이크 연결 중… (권한을 허용해주세요)</span>
-            </div>
+        <div className="relative w-[4px] bg-[#141414] rounded-full" style={{ height: BAR_H }}>
+          {/* 허용 범위(초록) */}
+          <div className="absolute left-1/2 -translate-x-1/2 w-[6px] rounded-full bg-[#4afc9d]/25"
+            style={{ [anchor]: 0, height: `${barPct(tolerance)}%` }}/>
+          {BAR_TICKS.map(t => (
+            <div key={t} className={`absolute left-1/2 -translate-x-1/2 h-[1px] ${t === 100 ? 'w-4 bg-gray-600' : 'w-2.5 bg-gray-800'}`}
+              style={{ [anchor]: `${barPct(t)}%` }}/>
+          ))}
+          {show && (
+            <>
+              <div className={`absolute left-1/2 -translate-x-1/2 w-full transition-all duration-75 z-10 ${up ? 'rounded-t-sm' : 'rounded-b-sm'}`}
+                style={{ [anchor]: 0, height: `${pos}%`, backgroundColor: color, boxShadow: `0 0 10px ${color}` }}/>
+              <div className="absolute left-1/2 -translate-x-1/2 w-5 h-[3px] transition-all duration-75 rounded-full z-20"
+                style={{ [anchor]: `calc(${pos}% - 1.5px)`, backgroundColor: color, boxShadow: `0 0 8px ${color}` }}/>
+            </>
           )}
+        </div>
+      );
+    };
+
+    const StringBars = ({ tuner, vintage }) => {
+      const { isStarted, pitch, stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;
+      return (
+        <div className="flex justify-between items-center w-full max-w-sm pr-2 shrink-0 my-2">
+          <div className="flex flex-col items-center">
+            <span className="text-[9px] font-black mb-1 text-red-500/70">♯</span>
+            <BarScale dir="up" vintage={vintage}/>
+            <div className="h-12 my-0.5"/>
+            <BarScale dir="down" vintage={vintage}/>
+            <span className="text-[9px] font-black mt-1 text-blue-500/70">♭</span>
+          </div>
+          {VIOLIN_STRINGS.map(s => {
+            const isClosest = isStarted && pitch>0 && closestString.name===s.name;
+            const isPlaying = playingTone===s.name;
+            const isPerfect = isClosest && Math.abs(stringCents)<=tolerance;
+            const abs = Math.abs(stringCents);
+            const activeColor = abs<=tolerance ? '#4afc9d' : abs<=tolerance+30 ? '#ffcc00' : '#ff4d4d';
+            const showSharp = isClosest && !isPerfect && stringCents>0;
+            const showFlat  = isClosest && !isPerfect && stringCents<0;
+            const pos = barPct(stringCents);
+            let circleClasses = vintage ? 'bg-[#2a1a0d] border-[#c9a14a]/50 text-[#f4e3b5]' : 'bg-[#1a1a1a] border-gray-600 text-gray-300';
+            if (isPlaying)      circleClasses='bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)] z-10';
+            else if (isPerfect) circleClasses='bg-[#4afc9d] border-[#4afc9d] text-black scale-110 shadow-[0_0_20px_rgba(74,252,157,0.4)] z-10';
+            else if (isClosest) circleClasses=(vintage?'bg-[#2a1a0d] text-white':'bg-[#1a1a1a] text-white')+' border-white scale-105 z-10';
+            return (
+              <div key={s.name} className={`flex flex-col items-center justify-center transition-all duration-300 w-12 ${isClosest||isPlaying?'opacity-100':'opacity-70'}`}>
+                <span className={`text-[10px] font-black mb-1 h-3 leading-3 font-mono ${showSharp?'text-red-400':isPerfect?'text-[#4afc9d]':'text-gray-600'}`}>
+                  {showSharp ? `+${stringCents}` : s.id}
+                </span>
+                <StringBar dir="up" show={showSharp} pos={pos} color={activeColor} tolerance={tolerance}/>
+                <div className="relative my-0.5">
+                  <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-base transition-all duration-200 font-black ${circleClasses}`}>
+                    {s.note}
+                    <span className="text-[8px] absolute top-1.5 right-2.5 opacity-70">{s.octave}</span>
+                  </div>
+                  <button onClick={()=>toggleTone(s.name,s.semitone)}
+                    className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border flex items-center justify-center transition-all z-20 ${isPlaying?'bg-yellow-500 border-yellow-400 text-black':'bg-[#151515] border-gray-700 text-gray-500'}`}>
+                    {isPlaying ? <VolumeX size={10}/> : <Volume2 size={10}/>}
+                  </button>
+                </div>
+                <StringBar dir="down" show={showFlat} pos={pos} color={activeColor} tolerance={tolerance}/>
+                <span className={`text-[10px] font-black mt-1 h-3 leading-3 font-mono ${showFlat?'text-blue-400':'text-transparent'}`}>
+                  {showFlat ? stringCents : '0'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 하단 음 테이프: 음이름이 적힌 테이프가 좌우로 흐르고 가운데 바늘이 고정
+    // 왼쪽 = 낮은 음, 오른쪽 = 높은 음. 바늘이 음 이름 오른쪽이면 높음(♯)
+    // ==========================================
+    const TAPE_SP = 112;   // 반음 간격(px) → 10센트 ≈ 11px
+
+    const DrumDigits = ({ text, vintage }) => (
+      <div className="flex items-end gap-[3px]">
+        {text.split('').map((ch, i) => ch === '.' ? (
+          <span key={i} className={`text-lg font-black leading-none pb-1 ${vintage?'text-[#3b2a1a]':'text-gray-500'}`}>.</span>
+        ) : (
+          <span key={i} className="w-[22px] h-8 rounded-[4px] flex items-center justify-center font-mono text-lg font-black"
+            style={vintage
+              ? { background:'linear-gradient(180deg,#bdbdbd,#fff 30%,#fff 70%,#a8a8a8)', color:'#111', border:'1px solid #3b2a1a', boxShadow:'inset 0 2px 3px rgba(0,0,0,.35)' }
+              : { background:'linear-gradient(180deg,#000,#1c1c1c 35%,#1c1c1c 65%,#000)', color:'#e5e5e5', border:'1px solid #262626' }}>
+            {ch}
+          </span>
+        ))}
+        <span className={`ml-1 text-xs font-black pb-1 ${vintage?'text-[#3b2a1a]':'text-gray-500'}`}>Hz</span>
+      </div>
+    );
+
+    const Screw = ({ className }) => (
+      <span className={`absolute w-3 h-3 rounded-full ${className}`}
+        style={{ background:'radial-gradient(circle at 35% 35%,#fff6d0,#b8902f 55%,#6b4a12)', boxShadow:'0 1px 2px rgba(0,0,0,.6)' }}>
+        <span className="absolute inset-x-[2px] top-1/2 h-[1.5px] -translate-y-1/2 rotate-45 bg-[#5a3d0c]/80"/>
+      </span>
+    );
+
+    const NoteTape = ({ tuner, vintage }) => {
+      const { isStarted, pitch, a4Freq, cents, tolerance } = tuner;
+      const active = isStarted && pitch > 0;
+      const semiRef = useRef(0);
+      if (active) semiRef.current = 12 * Math.log2(pitch / a4Freq);
+      const semi = semiRef.current;
+      const base = Math.round(semi);
+      const keys = [];
+      for (let k = base - 3; k <= base + 3; k++) keys.push(k);
+      const inTune = active && Math.abs(cents) <= tolerance;
+      const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
+      const ink = vintage ? '#3b2a1a' : '#e5e5e5';
+
+      const tape = (
+        <div className="relative w-full h-[92px] overflow-hidden rounded-lg"
+          style={vintage
+            ? { background:'#1d1d1d', border:'3px solid #6b4a12', boxShadow:'inset 0 3px 8px rgba(0,0,0,.8)' }
+            : { background:'#050505', border:'1px solid rgba(255,255,255,.06)', boxShadow:'inset 0 2px 15px rgba(0,0,0,1)' }}>
+          {/* 눈금 줄 (위) */}
+          <div className="absolute inset-x-0 top-0 h-7" style={{ background: vintage ? 'linear-gradient(#3a3a3a,#1f1f1f)' : '#0b0b0b' }}/>
+          {/* 허용 범위 밴드 (바늘 주위 고정) */}
+          <div className="absolute top-0 h-7 left-1/2 -translate-x-1/2 transition-all"
+            style={{ width: `${(tolerance * 2 / 100) * TAPE_SP}px`, background: inTune ? 'rgba(74,252,157,.55)' : (vintage ? 'rgba(90,170,80,.55)' : 'rgba(74,252,157,.18)') }}/>
+          {/* 음 이름 종이 띠 (아래) */}
+          <div className="absolute inset-x-0 top-7 bottom-0"
+            style={{ background: vintage ? 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)' : 'linear-gradient(180deg,#0e0e0e,#141414 50%,#0b0b0b)' }}/>
+          {keys.map(k => {
+            const idx = ((k + 9) % 12 + 12) % 12;
+            const name = NOTE_NAMES[idx];
+            const oct = Math.floor((k + 57) / 12);
+            const x = (k - semi) * TAPE_SP;
+            const isCur = active && k === base;
+            return (
+              <div key={k} className="absolute top-0 bottom-0 transition-transform duration-100 ease-out"
+                style={{ left: '50%', width: TAPE_SP, marginLeft: -TAPE_SP / 2, transform: `translateX(${x}px)` }}>
+                {/* 10센트 눈금 */}
+                {Array.from({ length: 10 }, (_, j) => (
+                  <div key={j} className="absolute top-0"
+                    style={{ left: `${j * 10}%`, width: 1, height: j === 5 ? 18 : j % 5 === 0 ? 14 : 8,
+                      background: vintage ? '#e8e8e8' : '#3f3f46', opacity: j === 0 ? 0 : 1 }}/>
+                ))}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[2px] h-6" style={{ background: vintage ? '#fff' : '#a1a1aa' }}/>
+                {/* 음 이름 */}
+                <div className="absolute left-0 right-0 top-7 bottom-0 flex items-center justify-center">
+                  <span className="font-black leading-none" style={{
+                    fontFamily: vintage ? 'Georgia, "Times New Roman", serif' : undefined,
+                    fontSize: 34, color: vintage ? ink : (isCur ? (inTune ? '#4afc9d' : '#fff') : '#52525b'),
+                    textShadow: vintage ? '0 1px 0 rgba(255,255,255,.6)' : 'none' }}>
+                    {name[0]}<sup className="text-lg align-top">{name[1] === '#' ? '♯' : ''}</sup>
+                    <sub className="text-[11px] opacity-50 align-baseline ml-0.5">{oct}</sub>
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+          {/* 양쪽 그림자(원통 느낌) */}
+          <div className="absolute inset-0 pointer-events-none" style={{ background: vintage
+            ? 'linear-gradient(90deg,rgba(0,0,0,.75),transparent 22%,transparent 78%,rgba(0,0,0,.75))'
+            : 'linear-gradient(90deg,#000,transparent 25%,transparent 75%,#000)' }}/>
+          {/* 바늘 */}
+          <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[3px] z-10"
+            style={{ background: inTune ? '#4afc9d' : '#e11d2a', boxShadow: `0 0 8px ${inTune ? '#4afc9d' : '#e11d2a'}`, opacity: active ? 1 : 0.35 }}/>
+          <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 z-10"
+            style={{ background: vintage ? '#c9a14a' : '#52525b' }}/>
+          <span className="absolute top-1 left-2 text-[9px] font-black z-10" style={{ color: vintage ? '#bbb' : '#52525b' }}>♭ LOW</span>
+          <span className="absolute top-1 right-2 text-[9px] font-black z-10" style={{ color: vintage ? '#bbb' : '#52525b' }}>HIGH ♯</span>
+        </div>
+      );
+
+      const centsText = active ? (cents > 0 ? `+${cents}` : `${cents}`) : '0';
+      const centsColor = !active ? (vintage ? '#7a6340' : '#27272a') : inTune ? (vintage ? '#1f7a2e' : '#4afc9d') : cents > 0 ? '#ef4444' : '#3b82f6';
+      const footer = (
+        <div className="flex items-center justify-center gap-4 mt-2">
+          <DrumDigits text={hz} vintage={vintage}/>
+          <div className="flex items-baseline gap-0.5 min-w-[56px]">
+            <span className="text-xl font-black font-mono" style={{ color: centsColor }}>{centsText}</span>
+            <span className="text-[10px] font-black" style={{ color: vintage ? '#5a4322' : '#52525b' }}>¢</span>
+          </div>
+        </div>
+      );
+
+      if (!vintage) {
+        return <div className="w-full max-w-sm shrink-0 mt-2 pb-1">{tape}{footer}</div>;
+      }
+      return (
+        <div className="relative w-full max-w-sm shrink-0 mt-2 mb-1 px-5 pt-4 pb-3 rounded-[28px]"
+          style={{ background:'linear-gradient(180deg,#f3dc93,#d4ad55 30%,#b88a35 55%,#e6c879 85%,#c79b45)',
+                   border:'2px solid #6b4a12', boxShadow:'0 10px 30px rgba(0,0,0,.6), inset 0 2px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(0,0,0,.25)' }}>
+          <Screw className="top-2 left-2"/><Screw className="top-2 right-2"/>
+          <Screw className="bottom-2 left-2"/><Screw className="bottom-2 right-2"/>
+          {tape}{footer}
+        </div>
+      );
+    };
+
+    const CentsMeter = ({ tuner }) => {
+      const { isStarted, pitch, cents, tolerance } = tuner;
+      return (
+        <div className="w-full max-w-sm h-28 shrink-0 flex flex-col justify-end gap-3 pb-1 mt-2">
+          <div className="flex justify-center items-center gap-4 bg-[#050505] py-2.5 rounded-3xl border border-white/5 shadow-[inset_0_2px_15px_rgba(0,0,0,1)]">
+            <div className={`text-4xl font-black font-mono tracking-tighter transition-all duration-300 ${isStarted&&pitch>0?(Math.abs(cents)<=tolerance?'text-[#4afc9d]':cents>0?'text-red-500':'text-blue-500'):'text-[#111]'}`}>
+              {isStarted&&pitch>0?(cents>0?`+${cents}`:cents):'0'}
+            </div>
+            <div className="flex flex-col border-l border-gray-800 pl-3">
+              <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest italic">Cents</span>
+              <span className="text-[10px] text-gray-700 font-bold uppercase tracking-widest">Offset</span>
+            </div>
+          </div>
+          <div className="flex justify-between items-end gap-1 px-1 h-6">
+            {CENT_STEPS.map(step => {
+              const isTarget = isStarted&&pitch>0&&Math.abs(cents-step)<=5;
+              return (
+                <div key={step} className="flex flex-col items-center flex-1">
+                  <div className={`w-full transition-all duration-200 rounded-sm ${isTarget?'h-6 bg-white shadow-[0_0_15px_white]':'h-1.5 bg-gray-900'}`}
+                    style={step===0&&!isTarget?{backgroundColor:'#333'}:{}}/>
+                  <span className={`text-[7px] mt-1.5 font-black ${isTarget?'text-white':'text-gray-800'}`}>{step===0?'0':step}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    // 화면 모드 정의 (설정에서 선택)
+    const UI_MODES = [
+      { id:'modern',  name:'모던',   desc:'센트 막대 미터' },
+      { id:'tape',    name:'테이프', desc:'흐르는 음 테이프' },
+      { id:'vintage', name:'빈티지', desc:'황동·원목 아날로그' },
+    ];
+    const WOOD_BG = 'repeating-linear-gradient(92deg, rgba(0,0,0,.10) 0 2px, transparent 2px 7px, rgba(255,255,255,.03) 7px 9px, transparent 9px 15px), linear-gradient(180deg,#6e4220,#4a2a12 60%,#3a200d)';
+
+    const ModePreview = ({ id }) => {
+      if (id === 'modern') return (
+        <div className="w-full h-full bg-black flex flex-col justify-end gap-1 p-1.5">
+          <div className="h-3 rounded bg-[#111] flex items-center justify-center text-[6px] font-black text-[#4afc9d]">+3</div>
+          <div className="flex gap-[2px]">{[0,1,2,3,4,5,6].map(i => <div key={i} className={`flex-1 rounded-sm ${i===3?'h-2 bg-white':'h-1 bg-gray-800'}`}/>)}</div>
+        </div>
+      );
+      const v = id === 'vintage';
+      return (
+        <div className="w-full h-full flex items-end p-1" style={{ background: v ? WOOD_BG : '#000' }}>
+          <div className="w-full rounded p-[3px]" style={{ background: v ? 'linear-gradient(#f3dc93,#b88a35)' : 'transparent' }}>
+            <div className="relative h-5 rounded-sm overflow-hidden flex items-end justify-around pb-[1px]"
+              style={{ background: v ? '#f6f1e4' : '#111', borderTop: `5px solid ${v ? '#2a2a2a' : '#0b0b0b'}` }}>
+              {['G','A','B'].map(n => <span key={n} className="text-[8px] font-black leading-none" style={{ color: v ? '#3b2a1a' : (n==='A'?'#fff':'#555'), fontFamily: v ? 'Georgia,serif' : undefined }}>{n}</span>)}
+              <div className="absolute inset-y-0 left-1/2 w-[1.5px] bg-red-600"/>
+            </div>
+          </div>
         </div>
       );
     };
@@ -895,10 +1018,28 @@
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-[#4afc9d]"/>
-                <span className="text-base font-black">튜너 감도 설정</span>
+                <span className="text-base font-black">설정</span>
               </div>
               <button onClick={onClose} className="p-2 rounded-full bg-[#1a1a1a] border border-gray-800 text-gray-400"><X size={14}/></button>
             </div>
+
+            <Section title="화면 모드">
+              <div className="grid grid-cols-3 gap-2">
+                {UI_MODES.map(m => {
+                  const on = S.uiMode === m.id;
+                  return (
+                    <button key={m.id} onClick={() => { updateSettings({ uiMode: m.id }); haptic(10); }}
+                      className={`flex flex-col rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${on?'border-[#4afc9d] shadow-[0_0_12px_rgba(74,252,157,0.3)]':'border-gray-800'}`}>
+                      <div className="h-14 w-full"><ModePreview id={m.id}/></div>
+                      <div className={`py-1.5 flex flex-col items-center ${on?'bg-[#4afc9d]/10':'bg-[#141414]'}`}>
+                        <span className={`text-xs font-black ${on?'text-[#4afc9d]':'text-gray-300'}`}>{m.name}</span>
+                        <span className="text-[9px] text-gray-500">{m.desc}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </Section>
 
             <Section title="① 입력 테스트 · 노이즈 게이트">
               {!isStarted ? (
@@ -993,6 +1134,8 @@
         ensureMic, handleReset, cycleA4Freq, cycleTolerance, toggleTone
       } = tuner;
       const [showSettings, setShowSettings] = useState(false);
+      const mode = tuner.settings.uiMode;
+      const vintage = mode === 'vintage';
 
       const getStatusColor = () => {
         if (!isStarted || pitch===0) return '#1a1a1a';
@@ -1021,7 +1164,7 @@
             <div className="flex gap-2">
               <button onClick={() => { setShowSettings(true); haptic(8); }}
                 className="flex items-center gap-1.5 bg-[#1a1a1a] border border-gray-800 px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md text-gray-300">
-                <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 감도
+                <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 설정
               </button>
               <button onClick={handleReset}
                 className="text-gray-400 active:rotate-180 transition-all duration-500 bg-[#1a1a1a] p-2 rounded-full border border-gray-800 shadow-md">
@@ -1030,50 +1173,12 @@
             </div>
           </div>
 
-          {/* Pitch map */}
-          <PitchMap tuner={tuner}/>
-
-          {/* Violin strings (compact) */}
-          <div className="flex justify-between items-center w-full max-w-sm px-3 h-16 shrink-0 my-2">
-            {VIOLIN_STRINGS.map(s => {
-              const isClosest = isStarted && pitch>0 && closestString.name===s.name;
-              const isPlaying = playingTone===s.name;
-              const isPerfect = isClosest && Math.abs(stringCents)<=tolerance;
-              const col = OPEN_STRING_COLORS[s.note];
-              let circleClasses='bg-[#141414] border-gray-700 text-gray-300';
-              if (isPlaying)      circleClasses='bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)]';
-              else if (isPerfect) circleClasses='bg-[#4afc9d] border-[#4afc9d] text-black scale-110 shadow-[0_0_20px_rgba(74,252,157,0.4)]';
-              else if (isClosest) circleClasses='bg-[#141414] border-white text-white scale-105';
-              return (
-                <div key={s.name} className={`flex items-center gap-1.5 transition-all duration-300 ${isClosest||isPlaying?'opacity-100':'opacity-60'}`}>
-                  <div className="relative">
-                    <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center text-sm transition-all duration-200 font-black ${circleClasses}`}
-                      style={!isPerfect&&!isPlaying&&!isClosest?{borderColor:col+'66'}:{}}>
-                      {s.note}
-                      <span className="text-[8px] absolute bottom-1 right-2 opacity-80">{s.octave}</span>
-                    </div>
-                    <button onClick={()=>toggleTone(s.name,s.semitone)}
-                      className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border flex items-center justify-center transition-all z-20 ${isPlaying?'bg-yellow-500 border-yellow-400 text-black':'bg-[#151515] border-gray-700 text-gray-500'}`}>
-                      {isPlaying ? <VolumeX size={10}/> : <Volume2 size={10}/>}
-                    </button>
-                  </div>
-                  <div className="w-6 flex flex-col items-center text-[9px] font-black font-mono leading-tight">
-                    {isClosest && !isPerfect ? (
-                      <>
-                        <span className={stringCents>0?'text-red-500':'text-gray-800'}>▲</span>
-                        <span className="text-gray-300">{stringCents>0?`+${stringCents}`:stringCents}</span>
-                        <span className={stringCents<0?'text-blue-500':'text-gray-800'}>▼</span>
-                      </>
-                    ) : isPerfect ? <span className="text-[#4afc9d]">OK</span> : <span className="text-gray-800">{s.id}</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Violin strings */}
+          <StringBars tuner={tuner} vintage={vintage}/>
 
           {/* Main display */}
           <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0 max-w-sm relative mt-1">
-            <div className="w-full h-full max-h-[230px] rounded-[2.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative py-4">
+            <div className={`w-full h-full max-h-[230px] rounded-[2.5rem] border shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative py-4 ${vintage?'bg-[#1a0f07]/85 border-[#c9a14a]/40':'bg-[#080808] border-white/5'}`}>
               {/* Mic status */}
               <div className="absolute top-4 left-4 flex flex-col items-center gap-1 z-10">
                 <button onClick={isStarted ? undefined : ensureMic} disabled={isStarted}
@@ -1118,30 +1223,8 @@
             </div>
           </div>
 
-          {/* Cents meter */}
-          <div className="w-full max-w-sm h-28 shrink-0 flex flex-col justify-end gap-3 pb-1 mt-2">
-            <div className="flex justify-center items-center gap-4 bg-[#050505] py-2.5 rounded-3xl border border-white/5 shadow-[inset_0_2px_15px_rgba(0,0,0,1)]">
-              <div className={`text-4xl font-black font-mono tracking-tighter transition-all duration-300 ${isStarted&&pitch>0?(Math.abs(cents)<=tolerance?'text-[#4afc9d]':cents>0?'text-red-500':'text-blue-500'):'text-[#111]'}`}>
-                {isStarted&&pitch>0?(cents>0?`+${cents}`:cents):'0'}
-              </div>
-              <div className="flex flex-col border-l border-gray-800 pl-3">
-                <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest italic">Cents</span>
-                <span className="text-[10px] text-gray-700 font-bold uppercase tracking-widest">Offset</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-end gap-1 px-1 h-6">
-              {CENT_STEPS.map(step => {
-                const isTarget = isStarted&&pitch>0&&Math.abs(cents-step)<=5;
-                return (
-                  <div key={step} className="flex flex-col items-center flex-1">
-                    <div className={`w-full transition-all duration-200 rounded-sm ${isTarget?'h-6 bg-white shadow-[0_0_15px_white]':'h-1.5 bg-gray-900'}`}
-                      style={step===0&&!isTarget?{backgroundColor:'#333'}:{}}/>
-                    <span className={`text-[7px] mt-1.5 font-black ${isTarget?'text-white':'text-gray-800'}`}>{step===0?'0':step}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          {/* Bottom: 모드별 */}
+          {mode === 'modern' ? <CentsMeter tuner={tuner}/> : <NoteTape tuner={tuner} vintage={vintage}/>}
 
           {showSettings && <SettingsSheet tuner={tuner} onClose={() => setShowSettings(false)}/>}
 
@@ -1631,6 +1714,7 @@
         <div
           className="fixed inset-0 bg-black text-white flex flex-col items-center font-sans select-none overflow-hidden"
           style={{
+            background: activeTab === 'tuner' && tuner.settings.uiMode === 'vintage' ? WOOD_BG : '#000',
             /* Respect device safe areas so content never hides behind notch/home-indicator */
             paddingLeft:  'env(safe-area-inset-left, 0px)',
             paddingRight: 'env(safe-area-inset-right, 0px)',
