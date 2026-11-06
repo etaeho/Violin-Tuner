@@ -193,7 +193,7 @@
     const {
       Play, Square, Settings, Volume2, VolumeX, AlertCircle,
       Music, Activity, Minus, Plus, ChevronUp, ChevronDown, RotateCcw,
-      LayoutGrid
+      LayoutGrid, SlidersHorizontal, X, Mic, ZoomIn, ZoomOut, AudioWaveform
     } = LucideReact;
 
     /* 햅틱 피드백 헬퍼 */
@@ -327,6 +327,70 @@
     // ==========================================
     // Tuner Hook
     // ==========================================
+    // ==========================================
+    // 튜너 감도 설정 (localStorage 저장)
+    // ==========================================
+    const DEFAULT_SETTINGS = {
+      gateDb: -40,       // 이 레벨(dB) 미만 소리는 무시 (노이즈 게이트)
+      clarity: 0.90,     // 주기성 신뢰도 0~1. 잡음은 낮고 악기 소리는 높음
+      stableFrames: 3,   // 같은 음이 N프레임 연속이어야 표시
+      smoothing: 6,      // 평균낼 프레임 수 (클수록 부드럽고 느림)
+      holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
+      minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
+      maxFreq: 3500,     // 감지 최고 Hz
+      mapMode: 'full',   // 피치 맵: 'full' 전체 음역 | 'focus' 현재 음 확대
+    };
+    const SETTINGS_KEY = 'vt.tunerSettings.v1';
+    const loadSettings = () => {
+      try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; }
+      catch (_) { return { ...DEFAULT_SETTINGS }; }
+    };
+    const saveSettings = (v) => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(v)); } catch (_) {} };
+    const rmsToDb = (r) => (r > 0 ? 20 * Math.log10(r) : -100);
+    const centsBetween = (a, b) => 1200 * Math.log2(a / b);
+
+    /* McLeod 피치 검출(NSDF). 바이올린 음역의 lag만 계산해서 가볍다.
+       반환: { freq(-1=없음), clarity(0~1), rms } */
+    const detectPitch = (buf, sr, minFreq, maxFreq) => {
+      const N = buf.length;
+      let sum = 0;
+      for (let i = 0; i < N; i++) sum += buf[i] * buf[i];
+      const rms = Math.sqrt(sum / N);
+      if (rms < 1e-5) return { freq: -1, clarity: 0, rms };
+      const minLag = Math.max(2, Math.floor(sr / maxFreq));
+      const maxLag = Math.min(Math.floor(N / 2), Math.ceil(sr / minFreq));
+      const nsdf = new Float32Array(maxLag + 2);
+      for (let tau = 0; tau <= maxLag + 1; tau++) {
+        let acf = 0, m = 0;
+        for (let j = 0; j < N - tau; j++) { const a = buf[j], b = buf[j + tau]; acf += a * b; m += a * a + b * b; }
+        nsdf[tau] = m > 0 ? (2 * acf) / m : 0;
+      }
+      // 0 근처의 첫 양수 구간은 건너뛴다
+      let tau = 1;
+      while (tau < maxLag && nsdf[tau] > 0) tau++;
+      if (tau < minLag) tau = minLag;
+      const peaks = [];
+      let best = -1, bestTau = -1;
+      for (; tau <= maxLag; tau++) {
+        if (nsdf[tau] > 0) {
+          if (nsdf[tau] > best) { best = nsdf[tau]; bestTau = tau; }
+        } else if (bestTau > 0) {
+          peaks.push(bestTau); best = -1; bestTau = -1;
+        }
+      }
+      if (bestTau > 0) peaks.push(bestTau);
+      if (!peaks.length) return { freq: -1, clarity: 0, rms };
+      let maxPeak = 0;
+      peaks.forEach(t => { if (nsdf[t] > maxPeak) maxPeak = nsdf[t]; });
+      const chosen = peaks.find(t => nsdf[t] >= 0.9 * maxPeak);
+      // 포물선 보간
+      const y1 = nsdf[chosen - 1], y2 = nsdf[chosen], y3 = nsdf[chosen + 1];
+      const a = (y1 + y3 - 2 * y2) / 2, b = (y3 - y1) / 2;
+      let T0 = chosen, clarity = y2;
+      if (a < 0) { T0 = chosen - b / (2 * a); clarity = y2 - (b * b) / (4 * a); }
+      return { freq: sr / T0, clarity: Math.min(1, clarity), rms };
+    };
+
     const useTunerLogic = () => {
       const [isStarted, setIsStarted] = useState(false);
       const [pitch, setPitch] = useState(0);
@@ -348,6 +412,22 @@
       const freqHistoryRef = useRef([]);
       const a4FreqRef      = useRef(442);
       const streamRef      = useRef(null);
+      const settingsRef    = useRef(loadSettings());
+      const [settings, setSettingsState] = useState(settingsRef.current);
+      const levelRef       = useRef({ db: -100, clarity: 0, freq: -1, gate: false, accepted: false });
+      const historyRef     = useRef([]);   // 피치 맵용 [{t, freq|null, cents}]
+      const gateOpenRef    = useRef(false);
+      const candidateRef   = useRef({ freq: 0, count: 0 });
+      const lastGoodRef    = useRef(0);
+      const calibRef       = useRef(null);
+
+      const updateSettings = (patch) => {
+        const next = { ...settingsRef.current, ...patch };
+        settingsRef.current = next;
+        saveSettings(next);
+        setSettingsState(next);
+      };
+      const resetSettings = () => updateSettings({ ...DEFAULT_SETTINGS, mapMode: settingsRef.current.mapMode });
 
       useEffect(() => () => { stopTuner(); stopTone(); }, []);
 
@@ -393,75 +473,83 @@
         setPlayingTone(null);
       };
 
-      const autoCorrelate = (buffer, sampleRate) => {
-        let SIZE = buffer.length;
-        let rms = 0;
-        for (let i=0;i<SIZE;i++) rms += buffer[i]*buffer[i];
-        rms = Math.sqrt(rms/SIZE);
-        if (rms < 0.025) return -1;
-        let r1=0, r2=SIZE-1, thres=0.2;
-        for (let i=0;i<SIZE/2;i++) if (Math.abs(buffer[i])<thres) { r1=i; break; }
-        for (let i=1;i<SIZE/2;i++) if (Math.abs(buffer[SIZE-i])<thres) { r2=SIZE-i; break; }
-        const buf=buffer.slice(r1,r2);
-        SIZE=buf.length;
-        let c=new Array(SIZE).fill(0);
-        for (let i=0;i<SIZE;i++) for (let j=0;j<SIZE-i;j++) c[i]+=buf[j]*buf[j+i];
-        let d=0; while(c[d]>c[d+1]) d++;
-        let maxval=-1, maxpos=-1;
-        for (let i=d;i<SIZE;i++) { if (c[i]>maxval) { maxval=c[i]; maxpos=i; } }
-        let T0=maxpos;
-        if (maxpos>0 && maxpos<SIZE-1) {
-          const y1=c[maxpos-1], y2=c[maxpos], y3=c[maxpos+1];
-          const a=(y1+y3-2*y2)/2, b=(y3-y1)/2;
-          if (a!==0) T0=maxpos-b/(2*a);
-        }
-        return sampleRate/T0;
-      };
-
       const update = useCallback(() => {
         if (!analyserRef.current) return;
+        const S = settingsRef.current;
+        const now = performance.now();
         analyserRef.current.getFloatTimeDomainData(bufferRef.current);
-        const rawFreq = autoCorrelate(bufferRef.current, audioContextRef.current.sampleRate);
-        if (rawFreq !== -1 && rawFreq > 50 && rawFreq < 3000) {
-          const lastFreq = freqHistoryRef.current[freqHistoryRef.current.length-1];
-          if (lastFreq && Math.abs(lastFreq-rawFreq)/lastFreq > 0.1) freqHistoryRef.current=[];
-          freqHistoryRef.current.push(rawFreq);
-          if (freqHistoryRef.current.length > 5) freqHistoryRef.current.shift();
-          const freq = freqHistoryRef.current.reduce((a,b)=>a+b,0)/freqHistoryRef.current.length;
-          const currentA4 = a4FreqRef.current;
-          const semitonesFromA4Exact = 12*Math.log2(freq/currentA4);
-          const noteNum = Math.round(semitonesFromA4Exact)+69;
-          const chromaticTargetFreq = currentA4*Math.pow(2,Math.round(semitonesFromA4Exact)/12);
-          const chromaticCentsOff = Math.floor(1200*Math.log2(freq/chromaticTargetFreq));
-          let minDiff=Infinity, closestStr=VIOLIN_STRINGS[2];
-          VIOLIN_STRINGS.forEach(s => {
-            const diff=Math.abs(semitonesFromA4Exact-s.semitone);
-            if (diff<minDiff) { minDiff=diff; closestStr=s; }
-          });
-          const stringTargetFreq = currentA4*Math.pow(2,closestStr.semitone/12);
-          const strCentsOff = Math.floor(1200*Math.log2(freq/stringTargetFreq));
-          const noteIndex = (noteNum%12+12)%12;
-          const octave = Math.floor(noteNum/12)-1;
-          const fullNote = NOTE_NAMES[noteIndex];
-          setPitch(freq.toFixed(1));
-          setCents(chromaticCentsOff);
-          setStringCents(strCentsOff);
-          setClosestString(closestStr);
-          setCurrentNote({
-            name: fullNote.replace('#',''),
-            symbol: fullNote.includes('#') ? '#' : '',
-            octave
-          });
+        const { freq: raw, clarity, rms } = detectPitch(bufferRef.current, audioContextRef.current.sampleRate, S.minFreq, S.maxFreq);
+        const db = rmsToDb(rms);
+        if (calibRef.current) calibRef.current.push(db);
+
+        // 노이즈 게이트 (3dB 히스테리시스: 열릴 땐 임계값, 닫힐 땐 -3dB)
+        gateOpenRef.current = gateOpenRef.current ? db > S.gateDb - 3 : db > S.gateDb;
+
+        let accepted = false;
+        if (gateOpenRef.current && raw > 0 && clarity >= S.clarity) {
+          const c = candidateRef.current;
+          if (c.freq && Math.abs(centsBetween(raw, c.freq)) < 50) c.count++;
+          else c.count = 1;
+          c.freq = raw;
+
+          if (c.count >= S.stableFrames) {
+            accepted = true;
+            const hist = freqHistoryRef.current;
+            const last = hist[hist.length - 1];
+            if (last && Math.abs(centsBetween(raw, last)) > 50) hist.length = 0;
+            hist.push(raw);
+            while (hist.length > S.smoothing) hist.shift();
+            const freq = hist.reduce((a, b) => a + b, 0) / hist.length;
+            lastGoodRef.current = now;
+
+            const currentA4 = a4FreqRef.current;
+            const semitonesFromA4Exact = 12 * Math.log2(freq / currentA4);
+            const noteNum = Math.round(semitonesFromA4Exact) + 69;
+            const chromaticTargetFreq = currentA4 * Math.pow(2, Math.round(semitonesFromA4Exact) / 12);
+            const chromaticCentsOff = Math.round(centsBetween(freq, chromaticTargetFreq));
+            let minDiff = Infinity, closestStr = VIOLIN_STRINGS[2];
+            VIOLIN_STRINGS.forEach(st => {
+              const diff = Math.abs(semitonesFromA4Exact - st.semitone);
+              if (diff < minDiff) { minDiff = diff; closestStr = st; }
+            });
+            const stringTargetFreq = currentA4 * Math.pow(2, closestStr.semitone / 12);
+            const strCentsOff = Math.round(centsBetween(freq, stringTargetFreq));
+            const noteIndex = (noteNum % 12 + 12) % 12;
+            const octave = Math.floor(noteNum / 12) - 1;
+            const fullNote = NOTE_NAMES[noteIndex];
+            historyRef.current.push({ t: now, freq, cents: chromaticCentsOff });
+            setPitch(freq.toFixed(1));
+            setCents(chromaticCentsOff);
+            setStringCents(strCentsOff);
+            setClosestString(closestStr);
+            setCurrentNote({
+              name: fullNote.replace('#', ''),
+              symbol: fullNote.includes('#') ? '#' : '',
+              octave
+            });
+          }
         } else {
-          freqHistoryRef.current=[];
+          candidateRef.current.count = 0;
         }
+
+        if (!accepted) {
+          historyRef.current.push({ t: now, freq: null });
+          if (lastGoodRef.current && now - lastGoodRef.current > S.holdMs) {
+            lastGoodRef.current = 0;
+            freqHistoryRef.current = [];
+            setPitch(0); setCents(0); setStringCents(0);
+          }
+        }
+        const h = historyRef.current;
+        while (h.length && now - h[0].t > 6000) h.shift();
+        levelRef.current = { db, clarity, freq: raw, gate: gateOpenRef.current, accepted };
         animationRef.current = requestAnimationFrame(update);
       }, []);
 
-      const startTuner = async () => {
+      // 마이크 켜기 (이미 켜져 있으면 그대로)
+      const ensureMic = async () => {
+        if (streamRef.current) return true;
         setError(null);
-        if (isStarted) { stopTuner(); return; }
-        haptic(20);
         try {
           await initAudioContext();
           if (!navigator.mediaDevices?.getUserMedia)
@@ -477,6 +565,7 @@
           audioContextRef.current.createMediaStreamSource(stream).connect(analyserRef.current);
           setIsStarted(true);
           update();
+          return true;
         } catch (err) {
           if (err.name==='NotAllowedError'||err.name==='NotFoundError'||err.message.includes('Permission dismissed')) {
             setError("마이크 권한이 거부되었습니다.\n브라우저 설정에서 마이크를 허용해주세요.");
@@ -484,13 +573,39 @@
             setError("마이크를 사용할 수 없습니다: "+err.message);
           }
           setIsStarted(false);
+          return false;
         }
+      };
+
+      const startTuner = async () => {
+        if (streamRef.current) { stopTuner(); return; }
+        haptic(20);
+        await ensureMic();
+      };
+
+      // 주변 소음 측정 → 소음 상위 5% 레벨 + 8dB 를 게이트로 설정
+      const calibrateNoise = async (ms = 3000) => {
+        if (!(await ensureMic())) return null;
+        calibRef.current = [];
+        await new Promise(r => setTimeout(r, ms));
+        const samples = (calibRef.current || []).sort((a, b) => a - b);
+        calibRef.current = null;
+        if (!samples.length) return null;
+        const noise = samples[Math.floor(samples.length * 0.95)];
+        const gate = Math.round(Math.min(-10, Math.max(-80, noise + 8)));
+        updateSettings({ gateDb: gate });
+        haptic(20);
+        return { noise: Math.round(noise), gate };
       };
 
       const stopTuner = () => {
         if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current=null; }
         streamRef.current?.getTracks().forEach(t=>t.stop());
         streamRef.current=null;
+        analyserRef.current=null;
+        historyRef.current=[]; freqHistoryRef.current=[];
+        gateOpenRef.current=false; candidateRef.current={ freq:0, count:0 }; lastGoodRef.current=0;
+        levelRef.current={ db:-100, clarity:0, freq:-1, gate:false, accepted:false };
         setIsStarted(false); setPitch(0); setCents(0); setStringCents(0);
       };
 
@@ -537,19 +652,328 @@
       return {
         isStarted, pitch, cents, stringCents, a4Freq, tolerance,
         currentNote, closestString, error, playingTone,
-        startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance
+        startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
+        settings, updateSettings, resetSettings, levelRef, historyRef, ensureMic, calibrateNoise
       };
     };
 
     // ==========================================
     // 1. Tuner Component
     // ==========================================
+    // ==========================================
+    // 피치 맵: 세로축 = 음높이(위로 갈수록 높은 음), 가로축 = 시간(최근 5초)
+    // ==========================================
+    const MAP_WINDOW_MS = 5000;
+    const FULL_RANGE = { lo: -16, hi: 26 };   // A4 기준 반음: F#3 ~ B6
+    const FOCUS_SPAN = 7;                      // 집중 모드: 현재 음 ±7반음
+    const OPEN_STRING_COLORS = { G:'#f97316', D:'#eab308', A:'#4afc9d', E:'#38bdf8' };
+
+    const PitchMap = ({ tuner }) => {
+      const { historyRef, a4Freq, tolerance, isStarted, settings, updateSettings, closestString } = tuner;
+      const canvasRef = useRef(null);
+      const wrapRef = useRef(null);
+      const propsRef = useRef({});
+      const centerRef = useRef(0);
+      propsRef.current = { a4Freq, tolerance, isStarted, mode: settings.mapMode, closest: closestString?.name };
+
+      useEffect(() => {
+        const canvas = canvasRef.current, wrap = wrapRef.current;
+        const ctx = canvas.getContext('2d');
+        let raf, W = 0, H = 0;
+        const resize = () => {
+          const dpr = window.devicePixelRatio || 1;
+          W = wrap.clientWidth; H = wrap.clientHeight;
+          canvas.width = W * dpr; canvas.height = H * dpr;
+          canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        };
+        resize();
+        const ro = new ResizeObserver(resize); ro.observe(wrap);
+
+        const LEFT = 30, PAD_T = 10, PAD_B = 10;
+        const draw = () => {
+          const { a4Freq, tolerance, isStarted, mode, closest } = propsRef.current;
+          const now = performance.now();
+          const hist = historyRef.current;
+          let lastFreq = null;
+          for (let i = hist.length - 1; i >= 0 && now - hist[i].t < 1500; i--) if (hist[i].freq) { lastFreq = hist[i].freq; break; }
+          const curSemi = lastFreq ? 12 * Math.log2(lastFreq / a4Freq) : null;
+
+          let lo, hi;
+          if (mode === 'focus') {
+            if (curSemi !== null) centerRef.current += (curSemi - centerRef.current) * 0.08;
+            lo = centerRef.current - FOCUS_SPAN; hi = centerRef.current + FOCUS_SPAN;
+          } else { lo = FULL_RANGE.lo; hi = FULL_RANGE.hi; }
+          const plotH = H - PAD_T - PAD_B;
+          const y = (semi) => PAD_T + plotH - ((semi - lo) / (hi - lo)) * plotH;
+          const x = (t) => LEFT + (W - LEFT - 14) * (1 - (now - t) / MAP_WINDOW_MS);
+
+          ctx.clearRect(0, 0, W, H);
+          // 반음 격자
+          ctx.font = '700 9px ui-monospace, monospace';
+          ctx.textBaseline = 'middle';
+          for (let st = Math.ceil(lo); st <= Math.floor(hi); st++) {
+            const yy = y(st);
+            const idx = ((st + 9) % 12 + 12) % 12;          // 0 = C
+            const name = NOTE_NAMES[idx];
+            const oct = Math.floor((st + 57) / 12);
+            const isC = idx === 0;
+            ctx.strokeStyle = isC ? '#262626' : (name.includes('#') ? '#0d0d0d' : '#161616');
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(LEFT, yy); ctx.lineTo(W, yy); ctx.stroke();
+            const nearOpen = VIOLIN_STRINGS.some(v => Math.abs(v.semitone - st) <= (mode === 'focus' ? 0 : 2));
+            if (!nearOpen && (mode === 'focus' ? !name.includes('#') : isC)) {
+              ctx.fillStyle = '#4b5563';
+              ctx.textAlign = 'right';
+              ctx.fillText(name + oct, LEFT - 5, yy);
+            }
+          }
+          // 개방현 가이드
+          VIOLIN_STRINGS.forEach(s => {
+            if (s.semitone < lo || s.semitone > hi) return;
+            const yy = y(s.semitone), col = OPEN_STRING_COLORS[s.note];
+            const active = isStarted && closest === s.name && lastFreq;
+            ctx.strokeStyle = col; ctx.globalAlpha = active ? 0.9 : 0.35;
+            ctx.setLineDash([4, 4]); ctx.lineWidth = active ? 1.5 : 1;
+            ctx.beginPath(); ctx.moveTo(LEFT, yy); ctx.lineTo(W, yy); ctx.stroke();
+            ctx.setLineDash([]); ctx.globalAlpha = 1;
+            ctx.fillStyle = col;
+            ctx.beginPath(); ctx.roundRect(2, yy - 7, 24, 14, 7); ctx.fill();
+            ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.font = '900 9px ui-sans-serif, system-ui';
+            ctx.fillText(s.note + s.octave, 14, yy + 0.5);
+            ctx.font = '700 9px ui-monospace, monospace';
+          });
+          // 현재 음 허용범위(±tolerance cents) 밴드
+          if (curSemi !== null) {
+            const target = Math.round(curSemi);
+            const y1 = y(target + tolerance / 100), y2 = y(target - tolerance / 100);
+            ctx.fillStyle = 'rgba(74,252,157,0.10)';
+            ctx.fillRect(LEFT, y1, W - LEFT, Math.max(1, y2 - y1));
+          }
+          // 음정 궤적
+          let prev = null;
+          for (let i = 0; i < hist.length; i++) {
+            const pt = hist[i];
+            if (!pt.freq) { prev = null; continue; }
+            const semi = 12 * Math.log2(pt.freq / a4Freq);
+            if (semi < lo - 1 || semi > hi + 1) { prev = null; continue; }
+            const ac = Math.abs(pt.cents);
+            const col = ac <= tolerance ? '#4afc9d' : ac <= tolerance + 15 ? '#ffcc00' : '#ff4d4d';
+            const px = x(pt.t), py = y(semi);
+            const age = (now - pt.t) / MAP_WINDOW_MS;
+            ctx.globalAlpha = Math.max(0.15, 1 - age * 0.85);
+            if (prev && pt.t - prev.t < 120) {
+              ctx.strokeStyle = col; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(prev.x, prev.y); ctx.lineTo(px, py); ctx.stroke();
+            } else {
+              ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, 1.6, 0, Math.PI * 2); ctx.fill();
+            }
+            prev = { x: px, y: py, t: pt.t };
+          }
+          ctx.globalAlpha = 1;
+          // 현재 위치 마커
+          const lastPt = hist[hist.length - 1];
+          if (lastPt && lastPt.freq && now - lastPt.t < 200) {
+            const semi = 12 * Math.log2(lastPt.freq / a4Freq);
+            const ac = Math.abs(lastPt.cents);
+            const col = ac <= tolerance ? '#4afc9d' : ac <= tolerance + 15 ? '#ffcc00' : '#ff4d4d';
+            const py = Math.min(H - 4, Math.max(4, y(semi))), px = W - 14;
+            ctx.shadowColor = col; ctx.shadowBlur = 14;
+            ctx.fillStyle = col; ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+          raf = requestAnimationFrame(draw);
+        };
+        draw();
+        return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+      }, []);
+
+      const focus = settings.mapMode === 'focus';
+      return (
+        <div className="relative w-full max-w-sm h-[26vh] min-h-[150px] max-h-[240px] shrink-0 mt-2 rounded-3xl bg-[#060606] border border-white/5 shadow-[inset_0_2px_20px_rgba(0,0,0,1)] overflow-hidden">
+          <div ref={wrapRef} className="absolute inset-0"><canvas ref={canvasRef}/></div>
+          <div className="absolute top-2 left-9 flex items-center gap-1 pointer-events-none">
+            <span className="text-[8px] font-black tracking-[0.25em] text-gray-600">PITCH MAP</span>
+            <span className="text-[8px] font-black text-gray-700">· 높음 ▲ / 낮음 ▼</span>
+          </div>
+          <button onClick={() => { updateSettings({ mapMode: focus ? 'full' : 'focus' }); haptic(8); }}
+            className="absolute top-2 right-2 flex items-center gap-1 bg-black/70 border border-gray-800 rounded-full px-2 py-1 text-[9px] font-black text-gray-400 active:scale-95">
+            {focus ? <ZoomOut size={11}/> : <ZoomIn size={11}/>}
+            {focus ? '전체' : '집중'}
+          </button>
+          {!isStarted && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <span className="text-[10px] font-bold text-gray-700 bg-black/60 px-3 py-1 rounded-full">START를 누르면 음정이 그려집니다</span>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    // ==========================================
+    // 감도 설정 시트
+    // ==========================================
+    const SliderRow = ({ label, value, display, min, max, step, onChange, hint }) => (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex justify-between items-baseline">
+          <span className="text-xs font-bold text-gray-300">{label}</span>
+          <span className="text-sm font-mono font-black text-white">{display ?? value}</span>
+        </div>
+        <input type="range" min={min} max={max} step={step} value={value}
+          onChange={e => onChange(Number(e.target.value))} className="w-full"/>
+        {hint && <span className="text-[10px] text-gray-600 leading-snug">{hint}</span>}
+      </div>
+    );
+
+    const LevelMeter = ({ value, min, max, marker, active, format }) => {
+      const pct = (v) => Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100));
+      return (
+        <div className="relative h-3 w-full bg-[#141414] rounded-full overflow-hidden border border-white/5">
+          <div className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-75"
+            style={{ width: pct(value) + '%', background: active ? '#4afc9d' : '#4b5563', boxShadow: active ? '0 0 10px #4afc9d' : 'none' }}/>
+          <div className="absolute inset-y-[-2px] w-[2px] bg-white" style={{ left: `calc(${pct(marker)}% - 1px)` }}/>
+        </div>
+      );
+    };
+
+    const Section = ({ title, children }) => (
+      <div className="flex flex-col gap-4 bg-[#0f0f0f] border border-white/5 rounded-2xl p-4">
+        <span className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase">{title}</span>
+        {children}
+      </div>
+    );
+
+    const SettingsSheet = ({ tuner, onClose }) => {
+      const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise } = tuner;
+      const [lv, setLv] = useState(levelRef.current);
+      const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
+
+      useEffect(() => {
+        let raf, last = 0;
+        const tick = (t) => {
+          if (t - last > 50) { setLv({ ...levelRef.current }); last = t; }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+      }, []);
+
+      const runCalib = async () => {
+        const total = 3000, started = Date.now();
+        setCalib({ running: true, left: 3 });
+        const iv = setInterval(() => setCalib({ running: true, left: Math.max(0, Math.ceil((total - (Date.now() - started)) / 1000)) }), 200);
+        const res = await calibrateNoise(total);
+        clearInterval(iv);
+        setCalib(res || null);
+      };
+
+      const db = Math.max(-80, lv.db);
+      return (
+        <div className="absolute inset-0 z-50 flex flex-col justify-end bg-black/70 backdrop-blur-sm" onClick={onClose}>
+          <div className="w-full max-h-[92%] overflow-y-auto bg-[#080808] border-t border-gray-800 rounded-t-[2rem] px-4 pt-3 pb-6 flex flex-col gap-3 shadow-[0_-20px_60px_rgba(0,0,0,0.9)]"
+            onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-700 rounded-full self-center mb-1"/>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal size={16} className="text-[#4afc9d]"/>
+                <span className="text-base font-black">튜너 감도 설정</span>
+              </div>
+              <button onClick={onClose} className="p-2 rounded-full bg-[#1a1a1a] border border-gray-800 text-gray-400"><X size={14}/></button>
+            </div>
+
+            <Section title="① 입력 테스트 · 노이즈 게이트">
+              {!isStarted ? (
+                <button onClick={ensureMic}
+                  className="flex items-center justify-center gap-2 py-3 rounded-full bg-[#4afc9d]/10 border border-[#4afc9d]/30 text-[#4afc9d] text-sm font-bold">
+                  <Mic size={15}/> 마이크 켜고 테스트
+                </button>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between text-[10px] font-bold">
+                      <span className="text-gray-500">입력 레벨</span>
+                      <span className="font-mono text-gray-300">{db.toFixed(0)} dB</span>
+                    </div>
+                    <LevelMeter value={db} min={-80} max={0} marker={S.gateDb} active={lv.gate}/>
+                    <div className="flex gap-1.5 mt-1 flex-wrap">
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${lv.gate ? 'bg-[#4afc9d]/15 text-[#4afc9d]' : 'bg-gray-800 text-gray-500'}`}>
+                        게이트 {lv.gate ? '열림' : '닫힘'}
+                      </span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${lv.accepted ? 'bg-[#4afc9d]/15 text-[#4afc9d]' : 'bg-gray-800 text-gray-500'}`}>
+                        {lv.accepted ? `감지 ✓ ${lv.freq.toFixed(1)}Hz` : '감지 안 함'}
+                      </span>
+                    </div>
+                  </div>
+                  <button onClick={runCalib} disabled={calib?.running}
+                    className="flex items-center justify-center gap-2 py-3 rounded-full bg-[#1a1a1a] border border-gray-700 text-white text-sm font-bold active:scale-95 disabled:opacity-60">
+                    <AudioWaveform size={15} className="text-[#4afc9d]"/>
+                    {calib?.running ? `조용히 해주세요… ${calib.left}초` : '주변 소음 자동 측정 (3초)'}
+                  </button>
+                  {calib && !calib.running && (
+                    <span className="text-[11px] text-[#4afc9d] text-center font-bold">
+                      소음 {calib.noise} dB → 임계값 {calib.gate} dB 로 설정됨
+                    </span>
+                  )}
+                </>
+              )}
+              <SliderRow label="소음 차단 임계값" value={S.gateDb} display={`${S.gateDb} dB`} min={-80} max={-10} step={1}
+                onChange={v => updateSettings({ gateDb: v })}
+                hint="흰 선보다 큰 소리만 분석합니다. 잡음에 반응하면 오른쪽으로, 약한 소리를 못 잡으면 왼쪽으로."/>
+            </Section>
+
+            <Section title="② 음정 신뢰도">
+              {isStarted && (
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between text-[10px] font-bold">
+                    <span className="text-gray-500">현재 신뢰도</span>
+                    <span className="font-mono text-gray-300">{lv.clarity.toFixed(2)}</span>
+                  </div>
+                  <LevelMeter value={lv.clarity} min={0.5} max={1} marker={S.clarity} active={lv.clarity >= S.clarity && lv.gate}/>
+                </div>
+              )}
+              <SliderRow label="최소 신뢰도" value={S.clarity} display={S.clarity.toFixed(2)} min={0.7} max={0.98} step={0.01}
+                onChange={v => updateSettings({ clarity: v })}
+                hint="소리가 얼마나 '음정다운지'. 잡음·말소리는 낮고 현 소리는 0.9 이상. 높일수록 잡음에 강해집니다."/>
+            </Section>
+
+            <Section title="③ 안정화">
+              <SliderRow label="확정 프레임" value={S.stableFrames} display={`${S.stableFrames}프레임 · ${Math.round(S.stableFrames * 16.7)}ms`} min={1} max={10} step={1}
+                onChange={v => updateSettings({ stableFrames: v })}
+                hint="같은 음이 이만큼 연속돼야 표시. 순간 잡음으로 튀는 걸 막습니다."/>
+              <SliderRow label="평균 프레임" value={S.smoothing} display={`${S.smoothing}`} min={1} max={15} step={1}
+                onChange={v => updateSettings({ smoothing: v })}
+                hint="클수록 바늘이 부드럽게, 작을수록 빠르게 움직입니다."/>
+              <SliderRow label="표시 유지 시간" value={S.holdMs} display={`${S.holdMs}ms`} min={0} max={1500} step={50}
+                onChange={v => updateSettings({ holdMs: v })}
+                hint="소리가 끊긴 뒤 마지막 음을 보여주는 시간."/>
+            </Section>
+
+            <Section title="④ 감지 범위">
+              <SliderRow label="최저 주파수" value={S.minFreq} display={`${S.minFreq} Hz`} min={60} max={300} step={5}
+                onChange={v => updateSettings({ minFreq: v })}
+                hint="바이올린 최저음 G3 = 196Hz. 180Hz면 저음 웅웅거림을 걸러냅니다."/>
+              <SliderRow label="최고 주파수" value={S.maxFreq} display={`${S.maxFreq} Hz`} min={1000} max={5000} step={100}
+                onChange={v => updateSettings({ maxFreq: v })}/>
+            </Section>
+
+            <div className="flex gap-3 mt-1">
+              <button onClick={() => { resetSettings(); setCalib(null); haptic(10); }}
+                className="flex-1 py-3 rounded-full bg-[#1a1a1a] border border-gray-700 text-gray-300 text-sm font-bold">기본값</button>
+              <button onClick={onClose}
+                className="flex-1 py-3 rounded-full bg-[#4afc9d] text-black text-sm font-black">완료</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     const Tuner = ({ tuner }) => {
       const {
         isStarted, pitch, cents, stringCents, a4Freq, tolerance,
         currentNote, closestString, error, playingTone,
         startTuner, handleReset, cycleA4Freq, cycleTolerance, toggleTone
       } = tuner;
+      const [showSettings, setShowSettings] = useState(false);
 
       const getStatusColor = () => {
         if (!isStarted || pitch===0) return '#1a1a1a';
@@ -565,7 +989,6 @@
             <div className="flex gap-2">
               <button onClick={cycleA4Freq}
                 className="flex items-center gap-1.5 bg-[#1a1a1a] border border-gray-800 px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md">
-                <Settings size={13} className="text-gray-500"/>
                 <span className="text-gray-400">A4=</span>
                 <span className="text-white font-mono text-sm w-7 text-left">{a4Freq}</span>
               </button>
@@ -576,47 +999,37 @@
                 <span className="text-white font-mono text-sm w-7 text-left">±{tolerance}</span>
               </button>
             </div>
-            <button onClick={handleReset}
-              className="text-gray-400 active:rotate-180 transition-all duration-500 bg-[#1a1a1a] p-2 rounded-full border border-gray-800 shadow-md">
-              <RotateCcw size={14}/>
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowSettings(true); haptic(8); }}
+                className="flex items-center gap-1.5 bg-[#1a1a1a] border border-gray-800 px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md text-gray-300">
+                <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 감도
+              </button>
+              <button onClick={handleReset}
+                className="text-gray-400 active:rotate-180 transition-all duration-500 bg-[#1a1a1a] p-2 rounded-full border border-gray-800 shadow-md">
+                <RotateCcw size={14}/>
+              </button>
+            </div>
           </div>
 
-          {/* Violin strings display */}
-          <div className="flex justify-between items-center w-full max-w-sm px-2 h-36 shrink-0 my-2">
+          {/* Pitch map */}
+          <PitchMap tuner={tuner}/>
+
+          {/* Violin strings (compact) */}
+          <div className="flex justify-between items-center w-full max-w-sm px-3 h-16 shrink-0 my-2">
             {VIOLIN_STRINGS.map(s => {
               const isClosest = isStarted && pitch>0 && closestString.name===s.name;
               const isPlaying = playingTone===s.name;
               const isPerfect = isClosest && Math.abs(stringCents)<=tolerance;
-              const absStringCents = Math.abs(stringCents);
-              let activeColor = '#ff4d4d';
-              if (absStringCents<=tolerance) activeColor='#4afc9d';
-              else if (absStringCents<=tolerance+30) activeColor='#ffcc00';
-              const showSharp = isClosest && !isPerfect && stringCents>0;
-              const showFlat  = isClosest && !isPerfect && stringCents<0;
-              const sharpPos = showSharp ? Math.min(100,(stringCents/50)*100) : 0;
-              const flatPos  = showFlat  ? Math.min(100,(-stringCents/50)*100) : 0;
-              let circleClasses='bg-[#1a1a1a] border-gray-600 text-gray-300';
-              if (isPlaying)      circleClasses='bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)] z-10';
-              else if (isPerfect) circleClasses='bg-[#4afc9d] border-[#4afc9d] text-black scale-110 shadow-[0_0_20px_rgba(74,252,157,0.4)] z-10';
-              else if (isClosest) circleClasses='bg-[#1a1a1a] border-gray-400 text-white scale-105 z-10';
+              const col = OPEN_STRING_COLORS[s.note];
+              let circleClasses='bg-[#141414] border-gray-700 text-gray-300';
+              if (isPlaying)      circleClasses='bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)]';
+              else if (isPerfect) circleClasses='bg-[#4afc9d] border-[#4afc9d] text-black scale-110 shadow-[0_0_20px_rgba(74,252,157,0.4)]';
+              else if (isClosest) circleClasses='bg-[#141414] border-white text-white scale-105';
               return (
-                <div key={s.name} className={`flex flex-col items-center justify-center transition-all duration-300 w-12 ${isClosest||isPlaying?'opacity-100':'opacity-70'}`}>
-                  <span className={`text-[10px] font-black mb-1 ${isPerfect?'text-[#4afc9d]':isClosest?'text-yellow-500':'text-gray-400'}`}>{s.id}</span>
-                  <div className="relative h-10 w-[3px] bg-gray-900 rounded-full mb-1">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700"/>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700"/>
-                    {showSharp && (
-                      <>
-                        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full transition-all duration-75 z-10 rounded-t-sm"
-                          style={{height:`${sharpPos}%`,backgroundColor:activeColor,boxShadow:`0 0 10px ${activeColor}`}}/>
-                        <div className="absolute left-1/2 -translate-x-1/2 w-5 h-[3px] transition-all duration-75 rounded-full z-20"
-                          style={{bottom:`calc(${sharpPos}% - 1.5px)`,backgroundColor:activeColor,boxShadow:`0 0 8px ${activeColor}`}}/>
-                      </>
-                    )}
-                  </div>
-                  <div className="relative my-0.5">
-                    <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center text-sm transition-all duration-200 font-black ${circleClasses}`}>
+                <div key={s.name} className={`flex items-center gap-1.5 transition-all duration-300 ${isClosest||isPlaying?'opacity-100':'opacity-60'}`}>
+                  <div className="relative">
+                    <div className={`w-11 h-11 rounded-full border-2 flex items-center justify-center text-sm transition-all duration-200 font-black ${circleClasses}`}
+                      style={!isPerfect&&!isPlaying&&!isClosest?{borderColor:col+'66'}:{}}>
                       {s.note}
                       <span className="text-[8px] absolute bottom-1 right-2 opacity-80">{s.octave}</span>
                     </div>
@@ -625,17 +1038,14 @@
                       {isPlaying ? <VolumeX size={10}/> : <Volume2 size={10}/>}
                     </button>
                   </div>
-                  <div className="relative h-10 w-[3px] bg-gray-900 rounded-full mt-1">
-                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700"/>
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 w-4 h-[1px] bg-gray-700"/>
-                    {showFlat && (
+                  <div className="w-6 flex flex-col items-center text-[9px] font-black font-mono leading-tight">
+                    {isClosest && !isPerfect ? (
                       <>
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full transition-all duration-75 z-10 rounded-b-sm"
-                          style={{height:`${flatPos}%`,backgroundColor:activeColor,boxShadow:`0 0 10px ${activeColor}`}}/>
-                        <div className="absolute left-1/2 -translate-x-1/2 w-5 h-[3px] transition-all duration-75 rounded-full z-20"
-                          style={{top:`calc(${flatPos}% - 1.5px)`,backgroundColor:activeColor,boxShadow:`0 0 8px ${activeColor}`}}/>
+                        <span className={stringCents>0?'text-red-500':'text-gray-800'}>▲</span>
+                        <span className="text-gray-300">{stringCents>0?`+${stringCents}`:stringCents}</span>
+                        <span className={stringCents<0?'text-blue-500':'text-gray-800'}>▼</span>
                       </>
-                    )}
+                    ) : isPerfect ? <span className="text-[#4afc9d]">OK</span> : <span className="text-gray-800">{s.id}</span>}
                   </div>
                 </div>
               );
@@ -644,7 +1054,7 @@
 
           {/* Main display */}
           <div className="flex-1 flex flex-col items-center justify-center w-full min-h-0 max-w-sm relative mt-1">
-            <div className="w-full h-full max-h-[260px] rounded-[2.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative py-4">
+            <div className="w-full h-full max-h-[230px] rounded-[2.5rem] bg-[#080808] border border-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative py-4">
               {/* Start button */}
               <div className="absolute top-4 left-4 flex flex-col items-center gap-1 z-10">
                 <button onClick={startTuner}
@@ -665,9 +1075,9 @@
                 </span>
               </div>
               {/* Note display */}
-              <div className="flex flex-col items-center justify-center mt-8">
+              <div className="flex flex-col items-center justify-center mt-6">
                 <div className="flex items-start">
-                  <span className="text-[100px] font-black leading-none tracking-tighter"
+                  <span className="text-[84px] font-black leading-none tracking-tighter"
                     style={{color:(isStarted&&pitch>0)||playingTone?'#fff':'#111'}}>
                     {playingTone ? playingTone.replace(/[0-9]/,'') : (isStarted&&pitch>0?currentNote.name:'A')}
                   </span>
@@ -711,6 +1121,8 @@
               })}
             </div>
           </div>
+
+          {showSettings && <SettingsSheet tuner={tuner} onClose={() => setShowSettings(false)}/>}
 
           {/* Error modal */}
           {error && (
