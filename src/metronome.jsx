@@ -105,6 +105,12 @@ const useMetronomeLogic = () => {
 
   const scheduleNote = (beatNumber, subBeatNumber, time) => {
     const delay=(time-metroAudioCtxRef.current.currentTime)*1000;
+    {
+      // 튜너가 이 순간 분석을 건너뛸 수 있게 클릭 시각 공유 (출력 지연 포함)
+      const ctx = metroAudioCtxRef.current;
+      const soundOn = subBeatNumber !== 0 || beatSoundsRef.current[beatNumber] > 0;
+      if (soundOn) METRO_CLICKS.times.push(performance.now() + delay + ((ctx.outputLatency || ctx.baseLatency || 0) * 1000));
+    }
     if (subBeatNumber===0) {
       setTimeout(()=>{
         if (!isPlayingRef.current) return;
@@ -390,6 +396,81 @@ const Metronome = ({ metro }) => {
           {isPlayingMetro ? <Square size={18} fill="currentColor"/> : <Play size={18} fill="currentColor"/>}
           {isPlayingMetro ? '정지' : '시작'}
         </button>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 미니 메트로놈 — 튜너 탭에 들어가는 템포 패널 (같은 metro 상태 공유)
+// ==========================================
+const MiniMetronome = ({ metro }) => {
+  const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
+          toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
+  const vintage = useVintage();
+  const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
+  const text = vintage ? '#f4e3b5' : '#fff';
+  const dim = vintage ? 'rgba(244,227,181,.55)' : '#6b7280';
+  const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
+  const dense = beatSounds.length > 8;
+  return (
+    <div className="w-full max-w-sm t-panel rounded-3xl px-3 py-2.5 shrink-0 flex flex-col gap-2">
+      {/* 박 표시 + 박자표 */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {beatSounds.map((snd, i) => {
+            const fired = isPlayingMetro && i === currentBeat && visualFlash === 'main';
+            const col = pal[snd];
+            return (
+              <span key={i} className={`${dense ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} rounded-full transition-all duration-75`}
+                style={snd === 0
+                  ? { border: `1.5px solid ${pal[0]}` }
+                  : { background: col, opacity: fired ? 1 : 0.3, transform: fired ? 'scale(1.35)' : 'none',
+                      boxShadow: fired ? `0 0 ${10 * pal.glow}px ${col}` : 'none' }}/>
+            );
+          })}
+        </div>
+        <span className="text-[10px] font-black tracking-widest shrink-0" style={{ color: dim, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+          {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm).toUpperCase()}
+        </span>
+      </div>
+      {/* BPM 조절 + 시작 */}
+      <div className="flex items-center gap-2">
+        <button {...press(-1)} className="w-10 h-10 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0">
+          <Minus size={16} className="pointer-events-none" style={{ color: dim }}/>
+        </button>
+        <div className="flex-1 flex items-baseline justify-center gap-1">
+          <span className="text-3xl font-black font-mono leading-none" style={{ color: text, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
+          <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
+        </div>
+        <button {...press(1)} className="w-10 h-10 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0">
+          <Plus size={16} className="pointer-events-none" style={{ color: dim }}/>
+        </button>
+        <button onClick={toggleMetronome}
+          className="w-16 h-10 rounded-2xl flex items-center justify-center shrink-0 active:scale-95 transition-all"
+          style={vintage
+            ? { background: isPlayingMetro ? 'linear-gradient(#5a3a16,#3a230c)' : 'linear-gradient(180deg,#f3dc93,#d4ad55 40%,#b88a35)',
+                color: isPlayingMetro ? '#f6dd94' : '#3b2a1a', border: '2px solid #6b4a12' }
+            : { background: isPlayingMetro ? 'rgba(255,204,0,.12)' : 'rgba(74,252,157,.12)',
+                color: isPlayingMetro ? '#ffcc00' : '#4afc9d', border: `2px solid ${isPlayingMetro ? 'rgba(255,204,0,.35)' : 'rgba(74,252,157,.35)'}` }}>
+          {isPlayingMetro ? <Square size={15} fill="currentColor"/> : <Play size={15} fill="currentColor"/>}
+        </button>
+      </div>
+      {/* TAP + 프리셋 */}
+      <div className="flex items-center gap-1.5">
+        <button onClick={tapTempo} className="px-3 py-1 rounded-full t-chip text-[11px] font-black active:scale-95" style={{ color: vintage ? '#f6dd94' : '#fff' }}>TAP</button>
+        {TEMPO_PRESETS.map(v => {
+          const on = bpm === v;
+          return (
+            <button key={v} onClick={() => { setBpm(v); haptic(8); }}
+              className="flex-1 py-1 rounded-full text-[10px] font-black font-mono active:scale-95"
+              style={on
+                ? { background: vintage ? 'linear-gradient(#f3dc93,#b88a35)' : '#4afc9d', color: vintage ? '#3b2a1a' : '#000' }
+                : { color: dim, border: `1px solid ${vintage ? 'rgba(201,161,74,.3)' : '#1f2937'}` }}>
+              {v}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -92,7 +92,7 @@ const App = () => {
           paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <div className={activeTab==='tuner'       ? 'flex flex-col w-full h-full' : 'hidden'}><Tuner       tuner={tuner}/></div>
+        <div className={activeTab==='tuner'       ? 'flex flex-col w-full h-full' : 'hidden'}><Tuner       tuner={tuner} metro={metro}/></div>
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro}/></div>
         <div className={activeTab==='drone'       ? 'flex flex-col w-full h-full' : 'hidden'}><Drone       drone={drone} metro={metro}/></div>

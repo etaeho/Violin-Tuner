@@ -154,7 +154,8 @@ const DEFAULT_SETTINGS = {
   minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
   maxFreq: 3500,     // 감지 최고 Hz
   uiMode: 'tape',    // 화면 모드(테마): 'tape' | 'vintage'  → theme.jsx UI_MODES
-  tunerLayout: 'tape', // 튜너 화면 구성: 'tape'(테이프만) | 'center'(음 표시만) | 'both'  → tuner.jsx TUNER_LAYOUTS
+  tunerLayout: 'tapeTempo', // 튜너 화면 구성: 'tapeTempo'(테이프+템포) | 'tape' | 'center' | 'both'  → tuner.jsx TUNER_LAYOUTS
+  layoutRev: 2,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
   cmdWindowMs: 3000, // 패턴을 이 시간 안에 연주해야 인정
@@ -162,9 +163,11 @@ const DEFAULT_SETTINGS = {
 const SETTINGS_KEY = 'vt.tunerSettings.v1';
 const loadSettings = () => {
   try {
-    const v = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    const v = { ...DEFAULT_SETTINGS, ...stored };
     if (!['tape', 'vintage'].includes(v.uiMode)) v.uiMode = 'tape';   // 예전 'modern' 등 → 기본값
-    if (!['tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'tape';
+    if (stored.layoutRev !== 2) { v.tunerLayout = 'tapeTempo'; v.layoutRev = 2; }   // 저장값 기준으로 판단
+    if (!['tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'tapeTempo';
     return v;
   }
   catch (_) { return { ...DEFAULT_SETTINGS }; }
@@ -182,6 +185,17 @@ const usePersistentState = (key, initial, validate = () => true) => {
   });
   useEffect(() => { try { localStorage.setItem('vt.' + key, JSON.stringify(v)); } catch (_) {} }, [key, v]);
   return [v, setV];
+};
+
+// 메트로놈 딸깍 소리 시각(performance.now 기준) — metronome.jsx가 기록, 튜너가 그 순간 분석을 건너뜀
+const METRO_CLICKS = { times: [] };
+const CLICK_GATE_BEFORE = 20, CLICK_GATE_AFTER = 120;  // ms (마이크 지연 포함 여유)
+const isNearMetroClick = (now) => {
+  const t = METRO_CLICKS.times;
+  while (t.length && t[0] < now - 1000) t.shift();
+  // 클릭 간격이 250ms보다 촘촘하면(빠른 세분박) 건너뛰지 않음 → 분석이 계속 끊기지 않게 신뢰도 필터에 맡김
+  for (let i = 1; i < t.length; i++) if (t[i] - t[i - 1] < 250) return false;
+  return t.some(c => now >= c - CLICK_GATE_BEFORE && now <= c + CLICK_GATE_AFTER);
 };
 
 const rmsToDb = (r) => (r > 0 ? 20 * Math.log10(r) : -100);

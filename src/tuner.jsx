@@ -111,6 +111,10 @@ const useTunerLogic = () => {
     if (!analyserRef.current) return;
     const S = settingsRef.current;
     const now = performance.now();
+    if (isNearMetroClick(now)) {          // 메트로놈 딸깍 소리 구간 → 이번 프레임은 분석 안 함 (상태 유지)
+      animationRef.current = requestAnimationFrame(update);
+      return;
+    }
     analyserRef.current.getFloatTimeDomainData(bufferRef.current);
     const { freq: raw, clarity, rms } = detectPitch(bufferRef.current, audioContextRef.current.sampleRate, S.minFreq, S.maxFreq);
     const db = rmsToDb(rms);
@@ -306,22 +310,25 @@ const OPEN_STRING_COLORS = { G:'#f97316', D:'#eab308', A:'#4afc9d', E:'#38bdf8' 
 const BAR_MAX_CENTS = 350;
 const BAR_TICKS = [10, 50, 100, 200];
 const BAR_H = 'clamp(52px, 13vh, 120px)';
-// fill=true 면 남는 세로 공간을 막대가 채움 (가운데 패널이나 테이프를 숨긴 레이아웃)
-const barBox = (fill) => (fill ? { flex: '1 1 0', minHeight: 56 } : { height: BAR_H });
+// 막대 크기: 'normal'(고정) | 'fill'(남는 세로 공간 채움) | 'compact'(작게, 템포 패널과 함께)
+const BAR_H_COMPACT = 'clamp(40px, 9vh, 76px)';   // 테이프(약 92px)와 비슷한 크기
+const barBox = (size) => (size === 'fill' ? { flex: '1 1 0', minHeight: 56 } : { height: size === 'compact' ? BAR_H_COMPACT : BAR_H });
+const barTicks = (size) => (size === 'compact' ? [10, 50, 100] : BAR_TICKS);
 
 // 튜너 화면 구성 (설정 → 화면 모드)
 const TUNER_LAYOUTS = [
+  { id: 'tapeTempo', name: '테이프 + 템포', desc: '작은 막대 + 미니 메트로놈 + 테이프' },
   { id: 'tape',   name: '테이프만',   desc: '막대 크게 + 하단 테이프' },
   { id: 'center', name: '음 표시만', desc: '막대 크게 + 큰 음이름' },
   { id: 'both',   name: '모두',      desc: '음 표시 + 테이프' },
 ];
 const barPct = (c) => Math.min(100, Math.sqrt(Math.min(Math.abs(c), BAR_MAX_CENTS) / BAR_MAX_CENTS) * 100);
 
-const BarScale = ({ dir, fill }) => {
+const BarScale = ({ dir, size }) => {
   const vintage = useVintage();
   return (
-  <div className="relative w-7" style={barBox(fill)}>
-    {BAR_TICKS.map(t => (
+  <div className="relative w-7" style={barBox(size)}>
+    {barTicks(size).map(t => (
       <span key={t} className={`absolute right-0 text-[7px] font-black font-mono leading-none ${vintage?'text-[#f4e3b5]/70':'text-gray-600'}`}
         style={dir === 'up' ? { bottom: `calc(${barPct(t)}% - 3px)` } : { top: `calc(${barPct(t)}% - 3px)` }}>
         {dir === 'up' ? '+' : '−'}{t}
@@ -331,15 +338,15 @@ const BarScale = ({ dir, fill }) => {
 );
 };
 
-const StringBar = ({ dir, show, pos, color, tolerance, fill }) => {
+const StringBar = ({ dir, show, pos, color, tolerance, size }) => {
   const up = dir === 'up';
   const anchor = up ? 'bottom' : 'top';
   return (
-    <div className="relative w-[6px] bg-[#141414] rounded-full" style={barBox(fill)}>
+    <div className="relative w-[6px] bg-[#141414] rounded-full" style={barBox(size)}>
       {/* 허용 범위(초록) */}
       <div className="absolute left-1/2 -translate-x-1/2 w-[10px] rounded-full bg-[#4afc9d]/25"
         style={{ [anchor]: 0, height: `${barPct(tolerance)}%` }}/>
-      {BAR_TICKS.map(t => (
+      {barTicks(size).map(t => (
         <div key={t} className={`absolute left-1/2 -translate-x-1/2 h-[1px] ${t === 100 ? 'w-4 bg-gray-600' : 'w-2.5 bg-gray-800'}`}
           style={{ [anchor]: `${barPct(t)}%` }}/>
       ))}
@@ -355,16 +362,17 @@ const StringBar = ({ dir, show, pos, color, tolerance, fill }) => {
   );
 };
 
-const StringBars = ({ tuner, fill }) => {
+const StringBars = ({ tuner, size = 'normal' }) => {
+  const fill = size === 'fill';
   const vintage = useVintage();
   const { isStarted, pitch, stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;
   return (
     <div className={`flex justify-between w-full max-w-sm pr-2 my-2 ${fill ? 'flex-1 min-h-0 items-stretch' : 'shrink-0 items-center'}`}>
       <div className="flex flex-col items-center">
         <span className="text-[9px] font-black mb-1 text-red-500/70">♯</span>
-        <BarScale dir="up" fill={fill}/>
+        <BarScale dir="up" size={size}/>
         <div className="h-12 my-0.5"/>
-        <BarScale dir="down" fill={fill}/>
+        <BarScale dir="down" size={size}/>
         <span className="text-[9px] font-black mt-1 text-blue-500/70">♭</span>
       </div>
       {VIOLIN_STRINGS.map(s => {
@@ -385,7 +393,7 @@ const StringBars = ({ tuner, fill }) => {
             <span className={`text-[10px] font-black mb-1 h-3 leading-3 font-mono ${showSharp?'text-red-400':isPerfect?'text-[#4afc9d]':'text-gray-600'}`}>
               {showSharp ? `+${stringCents}` : s.id}
             </span>
-            <StringBar dir="up" show={showSharp} pos={pos} color={activeColor} tolerance={tolerance} fill={fill}/>
+            <StringBar dir="up" show={showSharp} pos={pos} color={activeColor} tolerance={tolerance} size={size}/>
             {/* 원 전체(+여백)가 터치 영역 → 기준음 재생/정지 */}
             <button onClick={()=>toggleTone(s.name,s.semitone)} aria-label={`${s.name} 기준음`}
               className="relative my-0.5 p-1.5 -m-1.5 rounded-full active:scale-95 transition-transform">
@@ -397,7 +405,7 @@ const StringBars = ({ tuner, fill }) => {
                 {isPlaying ? <VolumeX size={10}/> : <Volume2 size={10}/>}
               </span>
             </button>
-            <StringBar dir="down" show={showFlat} pos={pos} color={activeColor} tolerance={tolerance} fill={fill}/>
+            <StringBar dir="down" show={showFlat} pos={pos} color={activeColor} tolerance={tolerance} size={size}/>
             <span className={`text-[10px] font-black mt-1 h-3 leading-3 font-mono ${showFlat?'text-blue-400':'text-transparent'}`}>
               {showFlat ? stringCents : '0'}
             </span>
@@ -620,7 +628,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
         </Section>
 
         <Section title="튜너 화면 구성">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {TUNER_LAYOUTS.map(l => {
               const on = S.tunerLayout === l.id;
               return (
@@ -628,10 +636,11 @@ const SettingsSheet = ({ tuner, onClose }) => {
                   className={`flex flex-col items-center gap-1.5 rounded-xl p-2 border-2 transition-all active:scale-95 ${on ? 'border-[#4afc9d] bg-[#4afc9d]/10' : 'border-gray-800'}`}>
                   {/* 미니 배치도 */}
                   <div className="w-full h-16 rounded-md bg-black/60 flex flex-col gap-[3px] p-1.5">
-                    <div className="flex justify-around" style={{ flex: l.id === 'both' ? '0 0 30%' : '1 1 0' }}>
+                    <div className="flex justify-around" style={{ flex: l.id === 'both' || l.id === 'tapeTempo' ? '0 0 26%' : '1 1 0' }}>
                       {[0,1,2,3].map(i => <div key={i} className="w-[3px] h-full rounded-full bg-gray-500"/>)}
                     </div>
-                    {l.id !== 'tape' && <div className="rounded-sm bg-gray-700 flex items-center justify-center text-[8px] font-black text-white" style={{ flex: '0 0 30%' }}>A</div>}
+                    {l.id === 'tapeTempo' && <div className="rounded-sm bg-gray-800 flex items-center justify-center gap-[2px]" style={{ flex: '1 1 0' }}>{[0,1,2,3].map(i => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i ? 'bg-[#4afc9d]/50' : 'bg-[#ffcc00]'}`}/>)}</div>}
+                    {(l.id === 'center' || l.id === 'both') && <div className="rounded-sm bg-gray-700 flex items-center justify-center text-[8px] font-black text-white" style={{ flex: '0 0 30%' }}>A</div>}
                     {l.id !== 'center' && <div className="rounded-sm bg-gray-800 border-t-2 border-red-500/70" style={{ flex: '0 0 22%' }}/>}
                   </div>
                   <span className={`text-xs font-black ${on ? 'text-[#4afc9d]' : 'text-gray-300'}`}>{l.name}</span>
@@ -798,7 +807,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
   );
 };
 
-const Tuner = ({ tuner }) => {
+const Tuner = ({ tuner, metro }) => {
   const {
     isStarted, pitch, cents, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
@@ -806,9 +815,11 @@ const Tuner = ({ tuner }) => {
   } = tuner;
   const [showSettings, setShowSettings] = useState(false);
   const layout = tuner.settings.tunerLayout;
-  const showCenter = layout !== 'tape';
+  const withTempo = layout === 'tapeTempo';
+  const showCenter = layout === 'center' || layout === 'both';
   const showTape = layout !== 'center';
-  const fillBars = layout !== 'both';
+  const fillBars = layout === 'tape' || layout === 'center';
+  const barSize = withTempo ? 'compact' : fillBars ? 'fill' : 'normal';
 
   const getStatusColor = () => {
     if (!isStarted || pitch===0) return '#1a1a1a';
@@ -847,7 +858,14 @@ const Tuner = ({ tuner }) => {
       </div>
 
       {/* Violin strings */}
-      <StringBars tuner={tuner} fill={fillBars}/>
+      <StringBars tuner={tuner} size={barSize}/>
+
+      {/* 미니 템포 (테이프 + 템포 구성) — 2번 탭과 같은 메트로놈 */}
+      {withTempo && (
+        <div className="w-full flex-1 min-h-0 flex items-center justify-center">
+          <MiniMetronome metro={metro}/>
+        </div>
+      )}
 
       {/* Main display (설정 → 튜너 화면 구성에서 숨길 수 있음) */}
       {showCenter && (

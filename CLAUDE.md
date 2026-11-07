@@ -9,7 +9,7 @@
   1-1. `commands.jsx` — 연주 명령: 음 패턴(기본 G3→E5→G3) 감지 → 메트로놈 켜기/끄기 (app.jsx에서 onCommand 연결)
   2. `theme.jsx` — 화면 모드(UI_MODES), ThemeContext/useVintage, 공용 UI(DrumDigits, Screw, BrassPlate)
   3. `tuner.jsx` — 튜너 탭: useTunerLogic, StringBars, NoteTape, SettingsSheet, Tuner
-  4. `metronome.jsx` — 메트로놈 탭
+  4. `metronome.jsx` — 메트로놈 탭 + `MiniMetronome`(튜너 탭 '테이프 + 템포' 구성에서 같은 metro 상태 공유). 클릭 시각을 `METRO_CLICKS`(core.jsx)에 기록 → 튜너가 그 순간 분석을 건너뜀
   5. `fingerboard.jsx` — 지판 탭
   5-1. `drone.jsx` — 드론 탭: useDroneLogic(오디오), 근음 휠, 화음·음색. 재생 중엔 연주 명령 차단(droneActive). 계획: docs/drone-mode-plan.md
   5-2. `practice.jsx` — 기록 탭: 연습 시간 자동 측정(튜너 확정 음 → practiceSinkRef), 목표 링, 12주 달력, 7일 그래프. 하루 요약을 `vt.log.days`에 저장. 계획: docs/practice-log-plan.md
