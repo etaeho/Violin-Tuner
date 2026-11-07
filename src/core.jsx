@@ -154,8 +154,8 @@ const DEFAULT_SETTINGS = {
   minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
   maxFreq: 3500,     // 감지 최고 Hz
   uiMode: 'tape',    // 화면 모드(테마): 'tape' | 'vintage'  → theme.jsx UI_MODES
-  tunerLayout: 'tapeTempo', // 튜너 화면 구성: 'tapeTempo'(테이프+템포) | 'tape' | 'center' | 'both'  → tuner.jsx TUNER_LAYOUTS
-  layoutRev: 2,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  tunerLayout: 'vtapeTempo', // 튜너 화면 구성: 'vtapeTempo'(현별 세로 테이프+템포) | 'tapeTempo' | 'tape' | 'center' | 'both'  → tuner.jsx TUNER_LAYOUTS
+  layoutRev: 3,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
   cmdWindowMs: 3000, // 패턴을 이 시간 안에 연주해야 인정
@@ -166,8 +166,8 @@ const loadSettings = () => {
     const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     const v = { ...DEFAULT_SETTINGS, ...stored };
     if (!['tape', 'vintage'].includes(v.uiMode)) v.uiMode = 'tape';   // 예전 'modern' 등 → 기본값
-    if (stored.layoutRev !== 2) { v.tunerLayout = 'tapeTempo'; v.layoutRev = 2; }   // 저장값 기준으로 판단
-    if (!['tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'tapeTempo';
+    if (stored.layoutRev !== 3) { v.tunerLayout = 'vtapeTempo'; v.layoutRev = 3; }   // 저장값 기준으로 판단
+    if (!['vtapeTempo', 'tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'vtapeTempo';
     return v;
   }
   catch (_) { return { ...DEFAULT_SETTINGS }; }

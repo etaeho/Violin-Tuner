@@ -319,6 +319,7 @@ const barTicks = (size) => (size === 'compact' ? [10, 50, 100] : BAR_TICKS);
 
 // 튜너 화면 구성 (설정 → 화면 모드)
 const TUNER_LAYOUTS = [
+  { id: 'vtapeTempo', name: '세로 테이프 + 템포', desc: '현마다 세로 테이프 + 미니 메트로놈' },
   { id: 'tapeTempo', name: '테이프 + 템포', desc: '막대 + 테이프 + 미니 메트로놈' },
   { id: 'tape',   name: '테이프만',   desc: '막대 크게 + 하단 테이프' },
   { id: 'center', name: '음 표시만', desc: '막대 크게 + 큰 음이름' },
@@ -416,6 +417,121 @@ const StringBars = ({ tuner, size = 'normal' }) => {
       })}
     </div>
   );
+};
+
+// ==========================================
+// 현별 세로 테이프 (A안): 각 현 칸이 위아래로 흐르는 테이프. 위 = 높은 음
+// 가장 가까운 현의 테이프만 지금 음정을 따라 움직이고, 나머지는 개방현 음에 멈춰 있음.
+// 가운데 가로 바늘에 음 이름이 오면 맞음 → 아래 원이 초록
+// ==========================================
+const VTAPE_SP = 56;   // 반음 간격(px) → 10센트 ≈ 5.6px
+
+const VTape = ({ center, active, perfect, tolerance, vintage }) => {
+  const base = Math.round(center);
+  const keys = [];
+  for (let k = base - 4; k <= base + 4; k++) keys.push(k);
+  const needle = !active ? (vintage ? 'rgba(201,161,74,.45)' : '#3f3f46') : perfect ? '#4afc9d' : '#ef4444';
+  return (
+    <div className="relative w-full flex-1 min-h-[120px] max-h-[420px] overflow-hidden rounded-xl"
+      style={vintage
+        ? { background: 'linear-gradient(90deg,#c9c0a8,#f6f1e4 30%,#f6f1e4 70%,#c9c0a8)', border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' }
+        : { background: '#070707', border: '1px solid rgba(255,255,255,.06)' }}>
+      {/* 허용 범위 띠 (바늘 주위 고정) */}
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2"
+        style={{ height: Math.max(2, (tolerance * 2 / 100) * VTAPE_SP), background: perfect ? 'rgba(74,252,157,.35)' : (vintage ? 'rgba(90,170,80,.35)' : 'rgba(74,252,157,.12)') }}/>
+      {keys.map(k => {
+        const idx = ((k + 9) % 12 + 12) % 12, name = NOTE_NAMES[idx], oct = Math.floor((k + 57) / 12);
+        const isCur = active && k === base;
+        return (
+          <div key={k} className="absolute inset-x-0 top-1/2 transition-transform duration-100 ease-out"
+            style={{ height: VTAPE_SP, marginTop: -VTAPE_SP / 2, transform: `translateY(${(center - k) * VTAPE_SP}px)` }}>
+            {/* 10센트 눈금 (왼쪽) */}
+            {Array.from({ length: 10 }, (_, j) => (
+              <div key={j} className="absolute left-0" style={{ top: `${j * 10}%`, height: 1,
+                width: j === 5 ? 14 : j === 0 ? 0 : 6, background: vintage ? '#3b2a1a' : '#3f3f46', opacity: j === 5 ? 0.9 : 0.6 }}/>
+            ))}
+            <div className="absolute inset-y-0 left-4 right-1 flex items-center justify-center">
+              <span className="font-black leading-none" style={{
+                fontSize: 15, fontFamily: vintage ? 'Georgia,serif' : undefined,
+                color: vintage ? (isCur ? '#1f2a14' : 'rgba(59,42,26,.55)') : isCur ? (perfect ? '#4afc9d' : '#fff') : active ? '#52525b' : '#2f2f35' }}>
+                {name[0]}<span className="text-[10px] align-top">{name[1] === '#' ? '♯' : ''}</span><span className="text-[9px] opacity-60">{oct}</span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      {/* 위아래 흐림 */}
+      <div className="absolute inset-0 pointer-events-none" style={{ background: vintage
+        ? 'linear-gradient(180deg,rgba(40,25,10,.55),transparent 22%,transparent 78%,rgba(40,25,10,.55))'
+        : 'linear-gradient(180deg,#000,transparent 25%,transparent 75%,#000)' }}/>
+      {/* 바늘 */}
+      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2.5px] z-10"
+        style={{ background: needle, boxShadow: active ? `0 0 8px ${needle}` : 'none' }}/>
+    </div>
+  );
+};
+
+const StringVTapes = ({ tuner }) => {
+  const vintage = useVintage();
+  const { isStarted, pitch, a4Freq, stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;
+  const live = isStarted && pitch > 0;
+  const semi = live ? 12 * Math.log2(pitch / a4Freq) : null;
+  return (
+    <div className="flex justify-between w-full max-w-sm flex-1 min-h-0 my-2 gap-2.5 px-1">
+      {VIOLIN_STRINGS.map(s => {
+        const isClosest = live && closestString.name === s.name;
+        const isPlaying = playingTone === s.name;
+        const perfect = isClosest && Math.abs(stringCents) <= tolerance;
+        const centsColor = perfect ? '#4afc9d' : stringCents > 0 ? '#ef4444' : '#3b82f6';
+        let circle = vintage ? 'bg-[#2a1a0d] border-[#c9a14a]/50 text-[#f4e3b5]' : 'bg-[#141414] border-gray-600 text-gray-300';
+        if (isPlaying) circle = 'bg-[#8b5a2b] border-[#e9c46a] text-white scale-110 shadow-[0_0_20px_rgba(233,196,106,0.4)]';
+        else if (perfect) circle = 'bg-[#4afc9d] border-[#4afc9d] text-black scale-110 shadow-[0_0_20px_rgba(74,252,157,0.5)]';
+        else if (isClosest) circle = (vintage ? 'bg-[#2a1a0d]' : 'bg-[#141414]') + ' border-white text-white scale-105';
+        return (
+          <div key={s.name} className={`flex-1 flex flex-col items-center min-h-0 gap-1.5 transition-opacity ${isClosest || isPlaying || !live ? 'opacity-100' : 'opacity-60'}`}>
+            <span className="h-4 text-[11px] font-black font-mono leading-4" style={{ color: isClosest ? centsColor : 'transparent' }}>
+              {isClosest ? (perfect ? 'OK' : `${stringCents > 0 ? '+' : ''}${stringCents}¢`) : '·'}
+            </span>
+            <VTape center={isClosest ? semi : isPlaying ? s.semitone : s.semitone} active={isClosest} perfect={perfect} tolerance={tolerance} vintage={vintage}/>
+            <button onClick={() => toggleTone(s.name, s.semitone)} aria-label={`${s.name} 기준음`}
+              className="relative p-1 rounded-full active:scale-95 transition-transform shrink-0">
+              <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-base font-black transition-all duration-200 ${circle}`}>
+                {s.note}<span className="text-[8px] absolute top-3 right-3.5 opacity-70">{s.octave}</span>
+              </div>
+              <span className={`absolute bottom-0 right-0 w-5 h-5 rounded-full border flex items-center justify-center pointer-events-none ${isPlaying ? 'bg-yellow-500 border-yellow-400 text-black' : 'bg-[#151515] border-gray-700 text-gray-500'}`}>
+                {isPlaying ? <VolumeX size={10}/> : <Volume2 size={10}/>}
+              </span>
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// 한 줄 표시: LIVE · Hz 숫자 카운터 · 센트 (세로 테이프 구성용)
+const TunerReadout = ({ tuner }) => {
+  const vintage = useVintage();
+  const { isStarted, pitch, cents, tolerance, ensureMic } = tuner;
+  const live = isStarted && pitch > 0;
+  const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
+  const col = !live ? (vintage ? 'rgba(244,227,181,.35)' : '#27272a') : Math.abs(cents) <= tolerance ? '#4afc9d' : cents > 0 ? '#ef4444' : '#3b82f6';
+  const body = (
+    <div className="flex items-center justify-center gap-4">
+      <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest"
+        style={{ color: isStarted ? (vintage ? '#1f7a2e' : '#4afc9d') : '#ef4444' }}>
+        <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>
+        {isStarted ? 'LIVE' : 'MIC OFF'}
+      </button>
+      <DrumDigits text={hz}/>
+      <span className="text-xl font-black font-mono min-w-[56px]" style={{ color: vintage && live && Math.abs(cents) <= tolerance ? '#1f7a2e' : col }}>
+        {live ? (cents > 0 ? `+${cents}` : cents) : '0'}<span className="text-[10px]">¢</span>
+      </span>
+    </div>
+  );
+  return vintage
+    ? <BrassPlate className="w-full max-w-sm shrink-0 !py-2">{body}</BrassPlate>
+    : <div className="w-full max-w-sm shrink-0 t-inset rounded-2xl py-2">{body}</div>;
 };
 
 // ==========================================
@@ -638,9 +754,13 @@ const SettingsSheet = ({ tuner, onClose }) => {
                   className={`flex flex-col items-center gap-1.5 rounded-xl p-2 border-2 transition-all active:scale-95 ${on ? 'border-[#4afc9d] bg-[#4afc9d]/10' : 'border-gray-800'}`}>
                   {/* 미니 배치도 */}
                   <div className="w-full h-16 rounded-md bg-black/60 flex flex-col gap-[3px] p-1.5">
-                    <div className="flex justify-around" style={{ flex: l.id === 'both' || l.id === 'tapeTempo' ? '0 0 26%' : '1 1 0' }}>
+                    {l.id === 'vtapeTempo' && <div className="flex justify-around gap-1" style={{ flex: '1 1 0' }}>
+                      {[0,1,2,3].map(i => <div key={i} className="flex-1 rounded-sm bg-gray-800 relative"><div className={`absolute inset-x-0 top-1/2 h-[2px] ${i === 2 ? 'bg-[#4afc9d]' : 'bg-red-500/60'}`}/></div>)}
+                    </div>}
+                    {l.id === 'vtapeTempo' && <div className="rounded-sm bg-gray-800 flex items-center justify-center gap-[2px]" style={{ flex: '0 0 26%' }}>{[0,1,2,3].map(i => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i ? 'bg-[#4afc9d]/50' : 'bg-[#ffcc00]'}`}/>)}</div>}
+                    {l.id !== 'vtapeTempo' && <div className="flex justify-around" style={{ flex: l.id === 'both' || l.id === 'tapeTempo' ? '0 0 26%' : '1 1 0' }}>
                       {[0,1,2,3].map(i => <div key={i} className="w-[3px] h-full rounded-full bg-gray-500"/>)}
-                    </div>
+                    </div>}
                     {l.id === 'tapeTempo' && <div className="rounded-sm bg-gray-800 border-t-2 border-red-500/70" style={{ flex: '0 0 22%' }}/>}
                     {l.id === 'tapeTempo' && <div className="rounded-sm bg-gray-800 flex items-center justify-center gap-[2px]" style={{ flex: '1 1 0' }}>{[0,1,2,3].map(i => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i ? 'bg-[#4afc9d]/50' : 'bg-[#ffcc00]'}`}/>)}</div>}
                     {(l.id === 'center' || l.id === 'both') && <div className="rounded-sm bg-gray-700 flex items-center justify-center text-[8px] font-black text-white" style={{ flex: '0 0 30%' }}>A</div>}
@@ -818,6 +938,7 @@ const Tuner = ({ tuner, metro }) => {
   } = tuner;
   const [showSettings, setShowSettings] = useState(false);
   const layout = tuner.settings.tunerLayout;
+  const vtape = layout === 'vtapeTempo';
   const withTempo = layout === 'tapeTempo';
   const showCenter = layout === 'center' || layout === 'both';
   const showTape = layout !== 'center';
@@ -861,7 +982,16 @@ const Tuner = ({ tuner, metro }) => {
       </div>
 
       {/* Violin strings */}
-      <StringBars tuner={tuner} size={barSize}/>
+      {vtape ? (
+        <>
+          {/* 세로 테이프 + 템포: 현별 세로 테이프 → 숫자 표시 → 미니 템포 */}
+          <StringVTapes tuner={tuner}/>
+          <TunerReadout tuner={tuner}/>
+          <div className="w-full shrink-0 flex justify-center pt-2.5">
+            <MiniMetronome metro={metro}/>
+          </div>
+        </>
+      ) : <StringBars tuner={tuner} size={barSize}/>}
 
       {/* 테이프 + 템포 구성: 막대 → 음 테이프 → 미니 템포(맨 아래) — 2번 탭과 같은 메트로놈 */}
       {withTempo && (
@@ -930,7 +1060,7 @@ const Tuner = ({ tuner, metro }) => {
       )}
 
       {/* Bottom: 음 테이프 (테마에 따라 다크/황동) */}
-      {showTape && !withTempo && <NoteTape tuner={tuner} showMic={!showCenter}/>}
+      {showTape && !withTempo && !vtape && <NoteTape tuner={tuner} showMic={!showCenter}/>}
 
       {showSettings && <SettingsSheet tuner={tuner} onClose={() => setShowSettings(false)}/>}
 

@@ -182,6 +182,16 @@ const useMetronomeLogic = () => {
   };
   const handlePressEnd = () => { clearTimeout(pressTimeoutRef.current); clearInterval(pressIntervalRef.current); };
 
+  // 초기화: 60 BPM, 4/4, 기본 강세, 박 나누기 없음 (재생 중이면 계속 재생)
+  const resetMetronome = () => {
+    setBpm(60);
+    setTimeSig({ num:4, den:4 });
+    setBeatSounds([2,1,1,1]);
+    setBeatSubdivisions([1,1,1,1]);
+    restartMetroIfNeeded();
+    haptic(20);
+  };
+
   // 탭 템포: 최근 탭 간격 평균으로 BPM 설정 (2초 이상 쉬면 새로 시작)
   const tapTimesRef = useRef([]);
   const tapTempo = () => {
@@ -200,7 +210,7 @@ const useMetronomeLogic = () => {
   return {
     bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
-    handleBpmChange, handlePressStart, handlePressEnd, tapTempo
+    handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome
   };
 };
 
@@ -292,10 +302,15 @@ const Metronome = ({ metro }) => {
   const {
     bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
-    handleBpmChange, handlePressStart, handlePressEnd, tapTempo
+    handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome
   } = metro;
   const vintage = useVintage();
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
+  const [confirmReset, setConfirmReset] = useState(false);
+  const onReset = () => {
+    if (confirmReset) { resetMetronome(); setConfirmReset(false); }
+    else { setConfirmReset(true); haptic(8); setTimeout(() => setConfirmReset(false), 2500); }
+  };
   const [dialRef, dialSize] = useFitSquare(120, 300);
   const isDense = beatSounds.length > 8;
 
@@ -313,10 +328,19 @@ const Metronome = ({ metro }) => {
           <span className="text-xl font-black text-gray-600 italic">/</span>
           <Stepper value={timeSig.den} onUp={() => changeDenominator(1)} onDown={() => changeDenominator(-1)} accent/>
         </div>
-        <span className="text-[11px] font-black tracking-widest uppercase"
-          style={{ color: vintage ? '#f6dd94' : '#ffcc00', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-          {getTempoMarking(bpm)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-black tracking-widest uppercase"
+            style={{ color: vintage ? '#f6dd94' : '#ffcc00', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+            {getTempoMarking(bpm)}
+          </span>
+          {/* 초기화: 두 번 눌러야 실행 */}
+          <button onClick={onReset} aria-label="메트로놈 초기화"
+            className={`flex items-center gap-1 rounded-full t-chip transition-all active:scale-95 ${confirmReset ? 'px-2.5 py-1.5' : 'p-2'}`}
+            style={confirmReset ? { color: '#ef4444', borderColor: '#ef4444' } : { color: '#9ca3af' }}>
+            <RotateCcw size={14}/>
+            {confirmReset && <span className="text-[10px] font-black whitespace-nowrap">한 번 더</span>}
+          </button>
+        </div>
       </div>
 
       {/* 2. 박 설정 */}

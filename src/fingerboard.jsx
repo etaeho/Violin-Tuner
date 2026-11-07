@@ -12,6 +12,14 @@ const Fingerboard = ({ tuner, metro }) => {
   const detectedStr = (tuner.isStarted&&tuner.pitch>0) ? tuner.currentNote.name+tuner.currentNote.symbol : null;
   const detectedOctave = tuner.isStarted ? tuner.currentNote.octave : null;
   const displayStrings = [...FINGERBOARD_STRINGS_EXT].reverse();
+  const vintage = useVintage();
+  const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
+  // 지금 박 정보 (메트로놈 재생 중일 때만)
+  const playing = metro.isPlayingMetro;
+  const beatSnd = playing && metro.currentBeat >= 0 ? metro.beatSounds[metro.currentBeat] : 0;
+  const flash = playing ? metro.visualFlash : false;
+  const flashColor = flash === 'main' && beatSnd ? pal[beatSnd] : flash === 'sub' ? pal.sub : null;
+  const isDownbeat = flash === 'main' && metro.currentBeat === 0;
 
   return (
     <div className="w-full h-full flex flex-col tab-enter gap-2">
@@ -36,29 +44,45 @@ const Fingerboard = ({ tuner, metro }) => {
             </div>
           )}
           {tuner.isStarted && <div className="w-[1px] h-3 bg-gray-700"/>}
-          {(() => {
-            let cls='bg-gray-800 text-gray-400 border border-gray-700';
-            if (metro.isPlayingMetro) {
-              const bt=metro.currentBeat>=0?metro.beatSounds[metro.currentBeat]:0;
-              if (metro.visualFlash==='main') {
-                if (bt===2) cls='bg-[#ffcc00] text-black shadow-[0_0_15px_#ffcc00] scale-110 border-transparent';
-                else if (bt===3) cls='bg-[#f97316] text-black shadow-[0_0_12px_#f97316] scale-110 border-transparent';
-                else cls='bg-[#4afc9d] text-black shadow-[0_0_10px_#4afc9d] scale-105 border-transparent';
-              } else if (metro.visualFlash==='sub') cls='bg-[#0ea5e9] text-white shadow-[0_0_10px_#0ea5e9] scale-105 border-transparent';
-            }
-            return (
-              <button onClick={metro.toggleMetronome}
-                className={`flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-full transition-all duration-75 ${cls}`}>
-                <span className="text-[10px] font-black">{metro.bpm}</span>
-                {metro.isPlayingMetro ? <Square size={10} fill="currentColor"/> : <Play size={10} fill="currentColor" className="translate-x-[0.5px]"/>}
-              </button>
-            );
-          })()}
+          {/* 박 표시 + BPM/재생 버튼 */}
+          <button onClick={metro.toggleMetronome}
+            className="flex items-center gap-2 pl-2.5 pr-2 py-1.5 rounded-full t-chip transition-all active:scale-95"
+            style={flashColor ? { borderColor: flashColor, boxShadow: `0 0 ${12 * pal.glow + 4}px ${flashColor}` } : {}}>
+            <span className="flex items-center gap-1">
+              {metro.beatSounds.slice(0, 8).map((snd, i) => {
+                const cur = playing && i === metro.currentBeat;
+                const on = cur && flash === 'main';
+                return (
+                  <span key={i} className="rounded-full transition-all duration-75"
+                    style={{ width: on ? 10 : 7, height: on ? 10 : 7,
+                      background: snd ? pal[snd] : 'transparent', border: snd ? 'none' : `1.5px solid ${pal[0]}`,
+                      opacity: !playing ? 0.35 : cur ? 1 : 0.3, boxShadow: on && snd ? `0 0 8px ${pal[snd]}` : 'none' }}/>
+                );
+              })}
+            </span>
+            <span className="text-[11px] font-black font-mono" style={{ color: playing ? (vintage ? '#f6dd94' : '#ffcc00') : '#9ca3af' }}>{metro.bpm}</span>
+            {playing ? <Square size={10} fill="currentColor" className="text-gray-300"/> : <Play size={10} fill="currentColor" className="text-gray-400"/>}
+          </button>
         </div>
       </div>
 
       {/* Fingerboard */}
-      <div className="w-full flex-1 rounded-2xl t-board flex flex-col relative px-2 py-2 min-h-0 shadow-[0_10px_40px_rgba(0,0,0,0.8)]">
+      <div className="w-full flex-1 rounded-2xl t-board flex flex-col relative px-2 py-2 min-h-0 transition-shadow duration-75"
+        style={{ boxShadow: flashColor
+          ? `0 10px 40px rgba(0,0,0,.8), inset 0 0 0 ${isDownbeat ? 3 : 2}px ${flashColor}, 0 0 ${(isDownbeat ? 28 : 16) * pal.glow + 4}px ${flashColor}`
+          : '0 10px 40px rgba(0,0,0,.8)' }}>
+        {/* 박자 막대: 박마다 위쪽 띠가 켜짐 (첫 박은 더 굵게) */}
+        {playing && (
+          <div className="absolute left-3 right-3 top-0 flex gap-1 z-30 pointer-events-none">
+            {metro.beatSounds.map((snd, i) => {
+              const on = i === metro.currentBeat;
+              return <div key={i} className="flex-1 rounded-b-full transition-all duration-75"
+                style={{ height: on && flash === 'main' ? (i === 0 ? 9 : 6) : 4,
+                  background: snd ? pal[snd] : pal[0], opacity: on ? 1 : 0.18,
+                  boxShadow: on && flash === 'main' && snd ? `0 0 10px ${pal[snd]}` : 'none' }}/>;
+            })}
+          </div>
+        )}
         <div className="flex w-full items-center mb-1 z-20 shrink-0">
           {displayStrings.map(s=>(
             <div key={s.string} className="flex-1 flex justify-center">
