@@ -1,12 +1,14 @@
 // 기준음 재생 (톱니파 + 저역필터 → 현악기 비슷한 소리)
+import { outCtx } from './out';
+
 let ctx: AudioContext | null = null;
 let cur: { osc: OscillatorNode; gain: GainNode } | null = null;
+let guardUntil = 0;
 
-const audio = () => {
-  if (!ctx) ctx = new AudioContext();
-  if (ctx.state === 'suspended') ctx.resume();
-  return ctx;
-};
+const audio = () => (ctx = outCtx());
+
+/** 기준음이 나오는 중(+끈 뒤 0.6초)인지 — 스피커 소리를 연주로 착각하지 않게 */
+export const toneSounding = () => !!cur || performance.now() < guardUntil;
 
 export function playTone(freq: number) {
   stopTone();
@@ -30,4 +32,5 @@ export function stopTone() {
   cur.gain.gain.linearRampToValueAtTime(0, now + 0.08);
   cur.osc.stop(now + 0.12);
   cur = null;
+  guardUntil = performance.now() + 600;
 }

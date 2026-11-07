@@ -6,6 +6,7 @@ import { THEMES, useSettings, type ThemeId } from '@/store/settings';
 import { useTuner } from '@/store/tuner';
 import { useLive, calibrateNoise } from '@/store/live';
 import { haptic } from '@/ui/haptic';
+import { CommandsSection } from './CommandsSection';
 
 // 테마 미리보기: 각 테마 토큰으로 직접 칠함
 const PREVIEW: Record<ThemeId, { bg: string; card: string; ink: string; accent: string }> = {
@@ -91,6 +92,8 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           onChange={(v) => setSens({ minFreq: v })} hint="바이올린 최저음 G3 = 196Hz" />
         <button onClick={() => { resetSens(); setCalib(null); haptic(10); }} className="chip py-2 text-xs font-bold text-dim">감도 기본값으로</button>
       </Section>
+
+      <CommandsSection />
 
       <Section title="정보">
         <p className="text-xs text-dim leading-relaxed">

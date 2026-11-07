@@ -2,7 +2,15 @@
 import { create } from 'zustand';
 import { mic, type MicState } from '@/audio/engine';
 import { PitchTracker, type Level } from '@/audio/tracker';
+import { freqToNote } from '@/audio/detector';
+import { isNearClick } from '@/audio/metronome';
+import { toneSounding } from '@/audio/synth';
+import { drone } from '@/audio/drone';
 import { useTuner } from './tuner';
+import { useCommands, cmdTracker } from './commands';
+
+/** 확정된 음을 받아보는 곳 (연습 기록 등) — label: 'A4', cents: 평균율 기준 */
+export const noteSinks = new Set<(label: string, cents: number, now: number) => void>();
 
 interface Live {
   micState: MicState; micMsg?: string;
@@ -28,7 +36,16 @@ mic.onState = (micState, micMsg) => {
   useLive.setState({ micState, micMsg });
 };
 mic.onResult = (r) => {
-  const out = tracker.push(r, useTuner.getState().sens, performance.now());
+  const now = performance.now();
+  if (isNearClick(now)) { cmdTracker.bridge(now); return; }   // 메트로놈 딸깍 순간은 분석 건너뜀 (표시·음 이어짐 유지)
+  const out = tracker.push(r, useTuner.getState().sens, now);
+  cmdTracker.tick(now);
+  if (out.acceptedNow && out.freq) {
+    const n = freqToNote(out.freq, useTuner.getState().a4);
+    // 기준음·드론이 스피커로 나오는 동안은 연주 명령에 쓰지 않음 (스피커 소리 → 마이크 오작동 방지)
+    if (!toneSounding() && !drone.playing) cmdTracker.feed(n.label, now, useCommands.getState());
+    noteSinks.forEach((f) => f(n.label, n.cents, now));
+  }
   dbTaps.forEach((f) => f(out.level.db));
   const prev = useLive.getState();
   if (prev.freq !== out.freq || prev.level.accepted !== out.level.accepted || Math.abs(prev.level.db - out.level.db) > 0.5) {

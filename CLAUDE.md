@@ -12,8 +12,10 @@
   - `detector.ts` 음정 검출(NSDF) · `pitch-worklet.ts` **오디오 스레드**에서 2048샘플/1024마다 분석 → 메인으로 전달
   - `engine.ts` 마이크·AudioContext·워크렛 연결 (`mic` 싱글턴) · `tracker.ts` 게이트·신뢰도·확정·평균·유지 (순수 클래스)
   - `strings.ts` 현·조율 방식(평균율/순정 5도) · `synth.ts` 기준음
-- `web/src/store/` — zustand. `settings.ts`(테마·탭, `vt2.settings`), `tuner.ts`(A4·범위·조율·감도, `vt2.tuner`), `live.ts`(실시간 상태, 저장 안 함 — 엔진→트래커→상태 연결, 소음 측정). **사용자가 바꾸는 값은 저장되어야 함**
+  - `out.ts` 출력 AudioContext 공유 · `metronome.ts` 예약식 메트로놈 + 딸깍 시각(`isNearClick` → 튜너 분석 건너뜀) · `drone.ts` 순정 드론 · `intonation.ts` 드론 대비 순정 음정 · `commands.ts` 음 패턴 명령(`bridge`로 딸깍 구간 이어줌)
+- `web/src/store/` — zustand. `settings.ts`(테마·탭, `vt2.settings`), `tuner.ts`(A4·범위·조율·감도, `vt2.tuner`), `live.ts`(실시간 상태, 저장 안 함 — 엔진→트래커→상태 연결, 소음 측정, `noteSinks`로 확정 음 전달), `metro.ts`(`vt2.metro`), `drone.ts`(`vt2.drone`), `commands.ts`(`vt2.commands`), `ui.ts`(토스트). **사용자가 바꾸는 값은 저장되어야 함**
 - `web/src/features/tuning/` — TuningScreen(조절줄·현별 세로 테이프·숫자 표시), VTape, Ripple("울림")
+- `web/src/features/practice/` — PracticeScreen(모듈 켜기/끄기), Gauge(음정 게이지), MetroCard(박자·점진 템포·TAP·초기화), DroneCard · `features/CommandsSection.tsx`(설정: 연주 명령)
 - `web/tests/` — vitest. 음정 검출은 합성 음원으로 테스트 (`npm test`)
 - 명령: `cd web && npm install && npm run dev`(개발 서버) / `npm test` / `npm run build`(→ `web/dist`)
 
