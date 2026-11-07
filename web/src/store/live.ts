@@ -11,6 +11,8 @@ import { useCommands, cmdTracker } from './commands';
 
 /** 확정된 음을 받아보는 곳 (연습 기록 등) — label: 'A4', cents: 평균율 기준 */
 export const noteSinks = new Set<(label: string, cents: number, now: number) => void>();
+/** 메트로놈 딸깍으로 분석을 건너뛴 순간 (음이 이어지는 것으로 봄) */
+export const bridgeSinks = new Set<(now: number) => void>();
 
 interface Live {
   micState: MicState; micMsg?: string;
@@ -37,7 +39,7 @@ mic.onState = (micState, micMsg) => {
 };
 mic.onResult = (r) => {
   const now = performance.now();
-  if (isNearClick(now)) { cmdTracker.bridge(now); return; }   // 메트로놈 딸깍 순간은 분석 건너뜀 (표시·음 이어짐 유지)
+  if (isNearClick(now)) { cmdTracker.bridge(now); bridgeSinks.forEach((f) => f(now)); return; }   // 메트로놈 딸깍 순간은 분석 건너뜀 (표시·음 이어짐 유지)
   const out = tracker.push(r, useTuner.getState().sens, now);
   cmdTracker.tick(now);
   if (out.acceptedNow && out.freq) {

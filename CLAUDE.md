@@ -13,8 +13,11 @@
   - `engine.ts` 마이크·AudioContext·워크렛 연결 (`mic` 싱글턴) · `tracker.ts` 게이트·신뢰도·확정·평균·유지 (순수 클래스)
   - `strings.ts` 현·조율 방식(평균율/순정 5도) · `synth.ts` 기준음
   - `out.ts` 출력 AudioContext 공유 · `metronome.ts` 예약식 메트로놈 + 딸깍 시각(`isNearClick` → 튜너 분석 건너뜀) · `drone.ts` 순정 드론 · `intonation.ts` 드론 대비 순정 음정 · `commands.ts` 음 패턴 명령(`bridge`로 딸깍 구간 이어줌)
-- `web/src/store/` — zustand. `settings.ts`(테마·탭, `vt2.settings`), `tuner.ts`(A4·범위·조율·감도, `vt2.tuner`), `live.ts`(실시간 상태, 저장 안 함 — 엔진→트래커→상태 연결, 소음 측정, `noteSinks`로 확정 음 전달), `metro.ts`(`vt2.metro`), `drone.ts`(`vt2.drone`), `commands.ts`(`vt2.commands`), `ui.ts`(토스트). **사용자가 바꾸는 값은 저장되어야 함**
+- `web/src/store/` — zustand. `settings.ts`(테마·탭, `vt2.settings`), `tuner.ts`(A4·범위·조율·감도, `vt2.tuner`), `live.ts`(실시간 상태, 저장 안 함 — 엔진→트래커→상태 연결, 소음 측정, `noteSinks`로 확정 음 전달), `metro.ts`(`vt2.metro`), `drone.ts`(`vt2.drone`), `commands.ts`(`vt2.commands`), `log.ts`(`vt2.log` — 메모리에서 누적, 5초마다·앱 내릴 때 저장), `fingerboard.ts`(`vt2.fingerboard`), `ui.ts`(토스트). **사용자가 바꾸는 값은 저장되어야 함**
 - `web/src/features/tuning/` — TuningScreen(조절줄·현별 세로 테이프·숫자 표시), VTape, Ripple("울림")
+- `web/src/music/` — 순수 로직(테스트 필수): `keys.ts`(조표·철자·스케일) · `practiceLog.ts`(연습 시간·정확도 누적, 연속일, 자주 틀리는 음)
+- `web/src/features/log/LogScreen.tsx` — 오늘(목표 링·연속일·정확도), 12주 달력, 7일 막대+정확도 점, 30일 정확도 선, 자주 틀리는 음
+- `web/src/features/fingerboard/FingerboardScreen.tsx` — 조표별 지판(개방현~15칸), 연주 음 표시, 탭→기준음, 박마다 테두리 빛남, 히트맵(최근 30일 평균 센트), 스케일 연습
 - `web/src/features/practice/` — PracticeScreen(모듈 켜기/끄기), Gauge(음정 게이지), MetroCard(박자·점진 템포·TAP·초기화), DroneCard · `features/CommandsSection.tsx`(설정: 연주 명령)
 - `web/tests/` — vitest. 음정 검출은 합성 음원으로 테스트 (`npm test`)
 - 명령: `cd web && npm install && npm run dev`(개발 서버) / `npm test` / `npm run build`(→ `web/dist`)

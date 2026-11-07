@@ -16,6 +16,7 @@ import { useMetro } from '@/store/metro';
 import { useDrone } from '@/store/drone';
 import { useCommands, cmdTracker } from '@/store/commands';
 import { useUi } from '@/store/ui';
+import '@/store/log';   // 연습 기록 수집 시작
 
 const SCREENS = { tuning: TuningScreen, practice: PracticeScreen, fingerboard: FingerboardScreen, log: LogScreen };
 
