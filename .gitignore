@@ -7,3 +7,6 @@ local.properties
 .DS_Store
 captures/
 .kotlin/
+
+# v2 브랜치 작업 폴더 (이 브랜치에서는 사용 안 함)
+web/
