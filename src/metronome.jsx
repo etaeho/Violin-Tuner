@@ -272,7 +272,7 @@ const BeatDial = ({ metro, size, pal, vintage }) => {
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {vintage ? (
           <BrassPlate className="flex flex-col items-center !px-4 !py-2.5">
-            <DrumDigits text={String(bpm).padStart(3, '0')} unit="BPM"/>
+            <DrumDigits text={String(bpm).padStart(3, '0')} unit="BPM" size="lg"/>
             <span className="text-[9px] font-black text-[#3b2a1a] tracking-widest uppercase mt-1" style={{ fontFamily:'Georgia,serif' }}>{getTempoMarking(bpm)}</span>
           </BrassPlate>
         ) : (
@@ -478,7 +478,7 @@ const MiniMetronome = ({ metro }) => {
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
   const dense = beatSounds.length > 8;
   return (
-    <div className="w-full max-w-sm t-panel rounded-3xl px-3 py-2.5 shrink-0 flex flex-col gap-2">
+    <div className="w-full max-w-sm t-panel rounded-3xl px-3 py-3 shrink-0 flex flex-col gap-3">
       {/* 박 표시 + 박자표 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -486,7 +486,7 @@ const MiniMetronome = ({ metro }) => {
             const fired = isPlayingMetro && i === currentBeat && visualFlash === 'main';
             const col = pal[snd];
             return (
-              <span key={i} className={`${dense ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} rounded-full transition-all duration-75`}
+              <span key={i} className={`${dense ? 'w-3 h-3' : 'w-4 h-4'} rounded-full transition-all duration-75`}
                 style={snd === 0
                   ? { border: `1.5px solid ${pal[0]}` }
                   : { background: col, opacity: fired ? 1 : 0.3, transform: fired ? 'scale(1.35)' : 'none',
@@ -498,39 +498,45 @@ const MiniMetronome = ({ metro }) => {
           {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm).toUpperCase()}
         </span>
       </div>
-      {/* BPM 조절 + 시작 */}
+      {/* BPM (가운데) — 왼쪽 TAP·−, 오른쪽 +·시작 으로 좌우 대칭 */}
       <div className="flex items-center gap-2">
-        <button {...press(-1)} className="w-10 h-10 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0">
-          <Minus size={16} className="pointer-events-none" style={{ color: dim }}/>
+        <button onClick={tapTempo} className="w-12 h-12 rounded-2xl t-chip flex flex-col items-center justify-center active:scale-95 shrink-0">
+          <span className="text-xs font-black" style={{ color: vintage ? '#f6dd94' : 'var(--ink)' }}>TAP</span>
         </button>
-        <div className="flex-1 flex items-baseline justify-center gap-1">
-          <span className="text-3xl font-black font-mono leading-none" style={{ color: text, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
-          <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
+        <button {...press(-1)} className="w-11 h-11 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 내리기">
+          <Minus size={18} className="pointer-events-none" style={{ color: dim }}/>
+        </button>
+        <div className="flex-1 flex flex-col items-center justify-center min-w-0">
+          {vintage
+            ? <DrumDigits text={String(bpm).padStart(3, '0')} unit="BPM" size="lg"/>
+            : <div className="flex items-baseline gap-1">
+                <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: text }}>{bpm}</span>
+                <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
+              </div>}
         </div>
-        <button {...press(1)} className="w-10 h-10 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0">
-          <Plus size={16} className="pointer-events-none" style={{ color: dim }}/>
+        <button {...press(1)} className="w-11 h-11 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 올리기">
+          <Plus size={18} className="pointer-events-none" style={{ color: dim }}/>
         </button>
         <button onClick={toggleMetronome}
-          className="w-16 h-10 rounded-2xl flex items-center justify-center shrink-0 active:scale-95 transition-all"
+          className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 active:scale-95 transition-all"
           style={vintage
             ? { background: isPlayingMetro ? 'linear-gradient(#5a3a16,#3a230c)' : 'linear-gradient(180deg,#f3dc93,#d4ad55 40%,#b88a35)',
                 color: isPlayingMetro ? '#f6dd94' : '#3b2a1a', border: '2px solid #6b4a12' }
             : { background: isPlayingMetro ? 'rgba(255,204,0,.12)' : 'rgba(74,252,157,.12)',
                 color: isPlayingMetro ? '#ffcc00' : '#4afc9d', border: `2px solid ${isPlayingMetro ? 'rgba(255,204,0,.35)' : 'rgba(74,252,157,.35)'}` }}>
-          {isPlayingMetro ? <Square size={15} fill="currentColor"/> : <Play size={15} fill="currentColor"/>}
+          {isPlayingMetro ? <Square size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
         </button>
       </div>
-      {/* TAP + 프리셋 */}
+      {/* 프리셋 */}
       <div className="flex items-center gap-1.5">
-        <button onClick={tapTempo} className="px-3 py-1 rounded-full t-chip text-[11px] font-black active:scale-95" style={{ color: vintage ? '#f6dd94' : 'var(--ink)' }}>TAP</button>
         {TEMPO_PRESETS.map(v => {
           const on = bpm === v;
           return (
             <button key={v} onClick={() => { setBpm(v); haptic(8); }}
-              className="flex-1 py-1 rounded-full text-[10px] font-black font-mono active:scale-95"
+              className="flex-1 py-1.5 rounded-full text-[11px] font-black font-mono active:scale-95"
               style={on
                 ? { background: vintage ? 'linear-gradient(#f3dc93,#b88a35)' : '#4afc9d', color: vintage ? '#3b2a1a' : '#000' }
-                : { color: dim, border: `1px solid ${vintage ? 'rgba(201,161,74,.3)' : '#1f2937'}` }}>
+                : { color: dim, border: `1px solid ${vintage ? 'rgba(201,161,74,.3)' : 'var(--chip-border)'}` }}>
               {v}
             </button>
           );
