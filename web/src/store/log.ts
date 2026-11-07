@@ -1,6 +1,7 @@
 // 연습 기록 — 하루 요약을 저장('vt2.log'). 계산은 music/practiceLog.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safeStorage } from './storage';
 import { PracticeAccumulator, dateKey, emptyDay, practiceMs, prune, type DayStats } from '@/music/practiceLog';
 import { noteSinks, bridgeSinks } from './live';
 import { useSettings } from './settings';
@@ -26,7 +27,7 @@ export const useLog = create<LogState>()(
       setIdle: (idleSec) => set({ idleSec: Math.min(120, Math.max(3, idleSec)) }),
       reset: () => set({ days: {}, goalHit: null }),
     }),
-    { name: 'vt2.log', version: 1, partialize: (s) => ({ days: s.days, goalMin: s.goalMin, idleSec: s.idleSec, goalHit: s.goalHit }) },
+    { name: 'vt2.log', version: 1, storage: safeStorage, partialize: (s) => ({ days: s.days, goalMin: s.goalMin, idleSec: s.idleSec, goalHit: s.goalHit }) },
   ),
 );
 

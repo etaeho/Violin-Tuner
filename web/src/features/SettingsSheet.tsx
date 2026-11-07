@@ -7,6 +7,7 @@ import { useTuner } from '@/store/tuner';
 import { useLive, calibrateNoise } from '@/store/live';
 import { haptic } from '@/ui/haptic';
 import { CommandsSection } from './CommandsSection';
+import { BackupSection } from './BackupSection';
 
 // 테마 미리보기: 각 테마 토큰으로 직접 칠함
 const PREVIEW: Record<ThemeId, { bg: string; card: string; ink: string; accent: string }> = {
@@ -94,10 +95,12 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
       </Section>
 
       <CommandsSection />
+      <BackupSection />
 
       <Section title="정보">
         <p className="text-xs text-dim leading-relaxed">
-          Violin Tuner <b className="text-ink">v2 개발 버전</b> — 기존 앱(v1)과 따로 설치됩니다. 음정 분석은 오디오 전용 스레드에서 실행됩니다.
+          Violin Tuner <b className="text-ink">v2</b> — 음정 분석은 오디오 전용 스레드에서, 모든 기록은 이 폰 안에만 저장됩니다.
+          <button onClick={() => { useSettings.setState({ onboarded: false }); onClose(); }} className="block mt-2 text-accent font-bold">처음 안내 다시 보기</button>
         </p>
       </Section>
     </Sheet>

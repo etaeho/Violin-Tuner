@@ -7,6 +7,7 @@ import { PracticeScreen } from '@/features/practice/PracticeScreen';
 import { FingerboardScreen } from '@/features/fingerboard/FingerboardScreen';
 import { LogScreen } from '@/features/log/LogScreen';
 import { SettingsSheet } from '@/features/SettingsSheet';
+import { Onboarding } from '@/features/Onboarding';
 import { haptic } from '@/ui/haptic';
 import { mic } from '@/audio/engine';
 import { stopTone } from '@/audio/synth';
@@ -25,6 +26,7 @@ export default function App() {
   const tab = useSettings((s) => s.tab);
   const [showSettings, setShowSettings] = useState(false);
   const toast = useUi((s) => s.toast);
+  const onboarded = useSettings((s) => s.onboarded);
 
   // 테마 = <html data-theme> → themes.css 변수가 바뀜
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
@@ -33,11 +35,11 @@ export default function App() {
   useEffect(() => {
     const { minFreq, maxFreq } = useTuner.getState().sens;
     mic.setRange(minFreq, maxFreq);
-    mic.start();
+    if (useSettings.getState().onboarded) mic.start();    // 처음 실행이면 안내 화면에서 허용받은 뒤 시작
     const onVis = () => {
       if (document.visibilityState === 'hidden') {
         mic.stop(); stopTone(); useLive.getState().setPlaying(null); useMetro.getState().stop(); useDrone.getState().stop();
-      } else mic.start();
+      } else if (useSettings.getState().onboarded) mic.start();
     };
     // 연주 명령 → 박자 켜기/끄기 (켤 때는 연습 탭으로)
     cmdTracker.onCommand = () => {
@@ -75,6 +77,7 @@ export default function App() {
         </div>
       )}
       {showSettings && <SettingsSheet onClose={() => setShowSettings(false)} />}
+      {!onboarded && <Onboarding />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 // 앱 설정 (테마 등) — localStorage 'vt2.settings' 에 자동 저장
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safeStorage } from './storage';
 
 export type ThemeId = 'tape' | 'vintage' | 'light';
 export const THEMES: { id: ThemeId; name: string; desc: string }[] = [
@@ -17,6 +18,8 @@ interface SettingsState {
   theme: ThemeId;
   tab: TabId;
   modules: Record<ModuleId, boolean>;     // 연습 탭에서 켜 둔 모듈
+  onboarded: boolean;                      // 첫 실행 안내를 마쳤나
+  finishOnboarding: () => void;
   setTheme: (t: ThemeId) => void;
   setTab: (t: TabId) => void;
   toggleModule: (m: ModuleId) => void;
@@ -28,10 +31,12 @@ export const useSettings = create<SettingsState>()(
       theme: 'tape',
       tab: 'tuning',
       modules: { gauge: true, metro: true, drone: true },
+      onboarded: false,
+      finishOnboarding: () => set({ onboarded: true }),
       setTheme: (theme) => set({ theme }),
       setTab: (tab) => set({ tab }),
       toggleModule: (m) => set({ modules: { ...get().modules, [m]: !get().modules[m] } }),
     }),
-    { name: 'vt2.settings', version: 1 },
+    { name: 'vt2.settings', version: 1, storage: safeStorage },
   ),
 );

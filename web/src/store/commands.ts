@@ -1,6 +1,7 @@
 // 연주 명령 설정 — 저장('vt2.commands')
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safeStorage } from './storage';
 import { DEFAULT_PATTERN, NoteCommandTracker } from '@/audio/commands';
 
 interface CmdState {
@@ -11,7 +12,7 @@ interface CmdState {
 export const useCommands = create<CmdState>()(
   persist(
     (set) => ({ enabled: true, pattern: DEFAULT_PATTERN, windowMs: 3000, set: (p) => set(p) }),
-    { name: 'vt2.commands', version: 1, partialize: (s) => ({ enabled: s.enabled, pattern: s.pattern, windowMs: s.windowMs }) },
+    { name: 'vt2.commands', version: 1, storage: safeStorage, partialize: (s) => ({ enabled: s.enabled, pattern: s.pattern, windowMs: s.windowMs }) },
   ),
 );
 

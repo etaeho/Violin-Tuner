@@ -1,6 +1,7 @@
 // 메트로놈 상태 — 박자 설정은 저장('vt2.metro'), 재생/현재 박은 저장 안 함
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safeStorage } from './storage';
 import { metronome, defaultAccents, progressiveBpm, DEN_OPTIONS, type Accent } from '@/audio/metronome';
 import { haptic } from '@/ui/haptic';
 
@@ -56,7 +57,7 @@ export const useMetro = create<MetroState>()(
       },
     }),
     {
-      name: 'vt2.metro', version: 1,
+      name: 'vt2.metro', version: 1, storage: safeStorage,
       partialize: (s) => ({ bpm: s.bpm, num: s.num, den: s.den, accents: s.accents, subdivs: s.subdivs, prog: s.prog }),
     },
   ),

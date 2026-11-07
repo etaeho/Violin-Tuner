@@ -1,6 +1,7 @@
 // 지판 설정 — 저장('vt2.fingerboard')
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safeStorage } from './storage';
 
 interface FbState {
   key: string; heat: boolean;
@@ -9,6 +10,6 @@ interface FbState {
 export const useFingerboard = create<FbState>()(
   persist(
     (set, get) => ({ key: 'C', heat: false, setKey: (key) => set({ key }), toggleHeat: () => set({ heat: !get().heat }), setHeat: (heat) => set({ heat }) }),
-    { name: 'vt2.fingerboard', version: 1, partialize: (s) => ({ key: s.key, heat: s.heat }) },
+    { name: 'vt2.fingerboard', version: 1, storage: safeStorage, partialize: (s) => ({ key: s.key, heat: s.heat }) },
   ),
 );

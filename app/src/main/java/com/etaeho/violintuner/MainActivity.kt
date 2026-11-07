@@ -8,7 +8,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.net.Uri
 import android.webkit.ConsoleMessage
+import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
 import android.webkit.RenderProcessGoneDetail
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
@@ -56,6 +59,31 @@ class MainActivity : AppCompatActivity() {
             pendingPermission = null
             if (granted) req.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) else req.deny()
         }
+
+    // ── 백업: 웹에서 VTNative.saveFile(이름, 내용) → 저장 위치를 고르는 창 ──
+    private var pendingSaveText: String? = null
+    private val createDoc = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        val text = pendingSaveText
+        pendingSaveText = null
+        val ok = uri != null && text != null && runCatching {
+            contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) } != null
+        }.getOrDefault(false)
+        webView.evaluateJavascript("window.__vtSaved && window.__vtSaved($ok)", null)
+    }
+
+    inner class SaveBridge {
+        @JavascriptInterface
+        fun saveFile(name: String, text: String) {
+            runOnUiThread { pendingSaveText = text; createDoc.launch(name) }
+        }
+    }
+
+    // ── 가져오기: 웹의 <input type=file> → 파일 고르는 창 ──
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private val pickFile = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        fileCallback?.onReceiveValue(if (uri != null) arrayOf(uri) else null)
+        fileCallback = null
+    }
 
     // ── 강제 종료 진단: 원인을 파일로 남겼다가 다음 실행 때 보여준다 ──
     private val crashFile by lazy { File(filesDir, "crash.txt") }
@@ -114,6 +142,7 @@ class MainActivity : AppCompatActivity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.allowFileAccess = false
             setBackgroundColor(0xFF000000.toInt())
+            addJavascriptInterface(SaveBridge(), "VTNative")   // 우리 앱 화면(assets)만 띄우므로 안전
 
             webViewClient = object : WebViewClientCompat() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
@@ -135,6 +164,13 @@ class MainActivity : AppCompatActivity() {
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
                     runOnUiThread { handlePermission(request) }
+                }
+
+                override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
+                    fileCallback?.onReceiveValue(null)
+                    fileCallback = callback
+                    pickFile.launch("*/*")
+                    return true
                 }
 
                 // JS 에러/경고를 최근 20줄 보관 → 크래시 기록에 같이 남김

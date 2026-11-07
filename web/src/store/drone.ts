@@ -1,6 +1,7 @@
 // 드론 설정 — 저장('vt2.drone'), 재생 상태는 저장 안 함
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safeStorage } from './storage';
 import { drone, DRONE_INTERVALS, type DroneCfg, type IntervalId, type Timbre } from '@/audio/drone';
 import { useTuner } from './tuner';
 import { haptic } from '@/ui/haptic';
@@ -41,7 +42,7 @@ export const useDrone = create<DroneState>()(
         stop: () => { if (get().playing) { drone.stop(0.3); set({ playing: false }); } },
       };
     },
-    { name: 'vt2.drone', version: 1, partialize: (s) => ({ cfg: s.cfg }) },
+    { name: 'vt2.drone', version: 1, storage: safeStorage, partialize: (s) => ({ cfg: s.cfg }) },
   ),
 );
 

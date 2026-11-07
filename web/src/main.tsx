@@ -1,3 +1,4 @@
+import './migrate';   // 저장소보다 먼저: v1 값 이전
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

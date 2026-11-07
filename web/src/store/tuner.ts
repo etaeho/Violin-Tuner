@@ -1,6 +1,7 @@
 // 튜너 설정 — 저장됨 (localStorage 'vt2.tuner')
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { safeStorage } from './storage';
 import { DEFAULT_SENSITIVITY, type Sensitivity } from '@/audio/tracker';
 import type { TuningMode } from '@/audio/strings';
 import { mic } from '@/audio/engine';
@@ -32,7 +33,7 @@ export const useTuner = create<TunerSettings>()(
       resetSens: () => { mic.setRange(DEFAULT_SENSITIVITY.minFreq, DEFAULT_SENSITIVITY.maxFreq); set({ sens: DEFAULT_SENSITIVITY }); },
     }),
     {
-      name: 'vt2.tuner', version: 1,
+      name: 'vt2.tuner', version: 1, storage: safeStorage,
       merge: (persisted, current) => {
         const p = (persisted || {}) as Partial<TunerSettings>;
         return { ...current, ...p, sens: { ...DEFAULT_SENSITIVITY, ...(p.sens || {}) } };

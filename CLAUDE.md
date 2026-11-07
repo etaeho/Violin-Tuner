@@ -19,6 +19,10 @@
 - `web/src/features/log/LogScreen.tsx` — 오늘(목표 링·연속일·정확도), 12주 달력, 7일 막대+정확도 점, 30일 정확도 선, 자주 틀리는 음
 - `web/src/features/fingerboard/FingerboardScreen.tsx` — 조표별 지판(개방현~15칸), 연주 음 표시, 탭→기준음, 박마다 테두리 빛남, 히트맵(최근 30일 평균 센트), 스케일 연습
 - `web/src/features/practice/` — PracticeScreen(모듈 켜기/끄기), Gauge(음정 게이지), MetroCard(박자·점진 템포·TAP·초기화), DroneCard · `features/CommandsSection.tsx`(설정: 연주 명령)
+- `web/src/data/` — `backup.ts`(vt2.* 전부 JSON 내보내기/가져오기) · `migrateV1.ts`(v1 `vt.*` → v2 `vt2.*`, `src/migrate.ts`가 **main.tsx 첫 import로 저장소보다 먼저** 실행)
+- `web/src/store/storage.ts` — 모든 persist 저장소가 쓰는 `safeStorage`. 백업 가져오기 때 `lockPersistence()`로 잠가 옛 값이 덮어쓰지 않게 함 (**새 저장소도 반드시 `storage: safeStorage`**)
+- `web/src/features/Onboarding.tsx` — 첫 실행 안내(마이크 → 소음 측정 → 테마). 끝나기 전엔 마이크 자동 시작 안 함
+- 안드로이드 `MainActivity`: `VTNative.saveFile(이름, 내용)`(저장 위치 선택 창) + `<input type=file>` 파일 선택 창 지원
 - `web/tests/` — vitest. 음정 검출은 합성 음원으로 테스트 (`npm test`)
 - 명령: `cd web && npm install && npm run dev`(개발 서버) / `npm test` / `npm run build`(→ `web/dist`)
 
@@ -28,6 +32,11 @@
 3. 폰에서 https://github.com/etaeho/Violin-Tuner/releases/download/dev-v2/violin-tuner-v2.apk
    - 앱 ID `com.etaeho.violintuner.v2`, 이름 "Violin v2" → v1과 **따로** 설치됨
 4. 푸시 전 로컬 확인: `cd web && npm test && npm run build`
+
+## v1 교체 (사용자가 결정할 때만)
+- `app/build.gradle.kts`의 `applicationId`를 `com.etaeho.violintuner`로 되돌리고, 이름(strings.xml)을 "Violin Tuner"로
+- 그러면 v2 APK가 v1 위에 덮어쓰기 설치되고, 첫 실행 때 `migrateV1.ts`가 v1 설정·템포·드론·조표·연습 시간을 옮김
+- 릴리스 링크를 `dev`로 바꾸려면 워크플로의 태그(`dev-v2` → `dev`)도 변경
 
 ---
 
