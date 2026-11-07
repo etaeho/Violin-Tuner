@@ -1,6 +1,6 @@
 // ==========================================
 // practice — 기록 탭: 연습 시간 자동 측정, 하루 연습량, 목표, 12주 달력, 요일별 그래프
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 // 구상안: docs/practice-log-plan.md  (현재 1단계: 연습 시간)
 //
 // 측정 방식: 튜너가 음을 확정할 때마다 note() 호출 → 직전 음과의 간격이
@@ -16,6 +16,20 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const dateKey = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const emptyDay = () => ({ playMs: 0, tuneMs: 0, metroMs: 0, droneMs: 0, bpmMax: 0 });
+// 최근 n일 음별 정확도 합산 (지판 히트맵용)
+const mergePerNote = (days, n = 30) => {
+  const out = {};
+  for (let i = 0; i < n; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const day = days[dateKey(d)];
+    if (!day || !day.per) continue;
+    for (const [k, s] of Object.entries(day.per)) {
+      const o = (out[k] = out[k] || { n: 0, ok: 0, sum: 0, abs: 0 });
+      o.n += s.n; o.ok += s.ok; o.sum += s.sum; o.abs += s.abs;
+    }
+  }
+  return out;
+};
 const practiceMs = (d) => (d ? d.playMs + d.tuneMs : 0);    // 연습 시간 = 연주 + 튜닝
 
 const loadDays = () => {
@@ -48,6 +62,7 @@ const usePracticeLog = (ctxRef) => {
   const daysRef = useRef(null);
   if (!daysRef.current) daysRef.current = loadDays();
   const lastNoteRef = useRef(0);
+  const runRef = useRef(null);       // 지금 이어지는 음 (정확도 판정용)
   const dirtyRef = useRef(false);
   const idleRef = useRef(idleSec * 1000); idleRef.current = idleSec * 1000;
   const goalRef = useRef(goalMin); goalRef.current = goalMin;
@@ -66,11 +81,27 @@ const usePracticeLog = (ctxRef) => {
     const last = lastNoteRef.current;
     if (last && now - last < idleRef.current) { today()[bucket] += now - last; dirtyRef.current = true; }
     lastNoteRef.current = now;
+
+    // 음정 정확도: 0.15초 이상 이어진 음 하나마다 한 번 기록 (튜닝 중 개방현 제외)
+    // 간격 300ms까지는 같은 음으로 봄 (메트로놈 딸깍 순간 분석을 건너뛰어도 끊기지 않게)
+    const r = runRef.current;
+    const continuing = r && r.label === label && now - r.last < 300;
+    if (!continuing) runRef.current = { label, start: now, last: now, counted: false };
+    const run = runRef.current; run.last = now;
+    if (!run.counted && now - run.start >= 150 && bucket === 'playMs') {
+      run.counted = true;
+      const d = today(), ok = Math.abs(cents) <= (c.tolerance ?? 10);
+      d.notes = (d.notes || 0) + 1; d.ok = (d.ok || 0) + (ok ? 1 : 0); d.abs = (d.abs || 0) + Math.abs(cents);
+      const per = (d.per = d.per || {});
+      const st = (per[label] = per[label] || { n: 0, ok: 0, sum: 0, abs: 0 });
+      st.n++; st.sum += cents; st.abs += Math.abs(cents); if (ok) st.ok++;
+      dirtyRef.current = true;
+    }
   };
 
   const save = () => {
     if (!dirtyRef.current) return;
-    try { localStorage.setItem(LOG_KEY, JSON.stringify(daysRef.current)); } catch (_) {}
+    vtSave(LOG_KEY, JSON.stringify(daysRef.current));
     dirtyRef.current = false;
   };
 
@@ -87,7 +118,7 @@ const usePracticeLog = (ctxRef) => {
       const hitKey = 'vt.log.goalHit';
       let hit = null; try { hit = localStorage.getItem(hitKey); } catch (_) {}
       if (practiceMs(d) >= goalRef.current * 60000 && hit !== dateKey()) {
-        try { localStorage.setItem(hitKey, dateKey()); } catch (_) {}
+        vtSave(hitKey, dateKey());
         c.onGoal?.(goalRef.current);
       }
       setVer(v => v + 1);
@@ -123,8 +154,8 @@ const usePalette = () => {
   return vintage
     ? { vintage, accent: '#f6dd94', dim: 'rgba(244,227,181,.55)', text: '#f4e3b5', track: 'rgba(201,161,74,.18)',
         levels: ['rgba(201,161,74,.10)', '#6b4a12', '#9a7028', '#c9a14a', '#f6dd94'] }
-    : { vintage, accent: '#4afc9d', dim: '#6b7280', text: '#e5e7eb', track: '#141414',
-        levels: ['#141414', '#0f3d27', '#16794a', '#2fbf76', '#4afc9d'] };
+    : { vintage, accent: 'var(--accent)', dim: '#6b7280', text: 'var(--ink)', track: 'var(--inset-bg)',
+        levels: ['var(--inset-bg)', '#0f3d27', '#16794a', '#2fbf76', '#4afc9d'] };
 };
 
 const GoalRing = ({ ms, goalMin, size = 132 }) => {

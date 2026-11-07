@@ -1,6 +1,6 @@
 // ==========================================
 // tuner — 튜너 탭 (로직 + 화면 + 설정 시트)
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 // ==========================================
 
 const useTunerLogic = () => {
@@ -33,8 +33,10 @@ const useTunerLogic = () => {
   const calibRef       = useRef(null);
   const startingRef    = useRef(null);
   const trackerRef     = useRef(null);
-  const practiceSinkRef = useRef(null);  // 연습 기록(practice.jsx) — app.jsx에서 연결
+  const practiceSinkRef = useRef(null);
+  const [noteListeners] = useState(() => new Set());   // 확정된 음을 받아볼 곳 (지판 스케일 연습)  // 연습 기록(practice.jsx) — app.jsx에서 연결
   const toneGuardRef   = useRef(0);      // 이 시각까지 연주 명령 무시 (기준음 재생 중)
+  const toneSemiRef    = useRef(0);      // 재생 중인 기준음 높이 (A4 바꿀 때 따라가게)
   if (!trackerRef.current) trackerRef.current = createNoteTracker();
 
   const updateSettings = (patch) => {
@@ -46,10 +48,10 @@ const useTunerLogic = () => {
   const resetSettings = () => updateSettings({ ...DEFAULT_SETTINGS, uiMode: settingsRef.current.uiMode });
 
   useEffect(() => {
-    ensureMic();
+    if (settingsRef.current.onboarded) ensureMic();    // 처음이면 안내 화면에서 허용받은 뒤 시작
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') stopTuner();
-      else ensureMic();
+      else if (settingsRef.current.onboarded) ensureMic();
     };
     const resumeAudio = () => {
       if (audioContextRef.current?.state === 'suspended') audioContextRef.current.resume();
@@ -79,6 +81,7 @@ const useTunerLogic = () => {
     if (playingTone === id) { stopTone(); return; }
     stopTone();
     haptic(15);
+    toneSemiRef.current = semitonesFromA4;
     const targetFreq = a4FreqRef.current * Math.pow(2, semitonesFromA4 / 12);
     const osc = audioContextRef.current.createOscillator();
     osc.type = 'sawtooth';
@@ -167,6 +170,7 @@ const useTunerLogic = () => {
         if (now > toneGuardRef.current) {
           trackerRef.current.feed(fullNote + octave, now, S);              // 연주 명령 감지
           practiceSinkRef.current?.(fullNote + octave, chromaticCentsOff, now); // 연습 시간 기록
+          noteListeners.forEach(f => f(fullNote + octave, chromaticCentsOff, now)); // 지판 스케일 연습 등
         }
       }
     } else {
@@ -262,23 +266,7 @@ const useTunerLogic = () => {
       const next = prev >= 443 ? 440 : prev+1;
       a4FreqRef.current=next;
       if (playingTone && oscillatorRef.current && audioContextRef.current) {
-        let semitonesFromA4=0;
-        const stringObj = VIOLIN_STRINGS.find(s=>s.name===playingTone);
-        if (stringObj) {
-          semitonesFromA4=stringObj.semitone;
-        } else {
-          const playingStrName=playingTone.replace(/[0-9]+$/,'');
-          const pos=parseInt(playingTone.replace(/[^0-9]/g,''),10);
-          const baseInfo=[
-            {string:'E',baseIdx:4,baseOct:5},{string:'A',baseIdx:9,baseOct:4},
-            {string:'D',baseIdx:2,baseOct:4},{string:'G',baseIdx:7,baseOct:3}
-          ].find(i=>i.string===playingStrName);
-          if (baseInfo) {
-            const ni=(baseInfo.baseIdx+pos)%12;
-            const os=Math.floor((baseInfo.baseIdx+pos)/12);
-            semitonesFromA4=(baseInfo.baseOct+os)*12+ni-57;
-          }
-        }
+        const semitonesFromA4 = toneSemiRef.current;   // 재생 중인 기준음의 A4 기준 반음 (toggleTone에서 기록)
         oscillatorRef.current.frequency.setValueAtTime(
           next*Math.pow(2,semitonesFromA4/12), audioContextRef.current.currentTime
         );
@@ -295,7 +283,7 @@ const useTunerLogic = () => {
     currentNote, closestString, error, playingTone,
     startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
     settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise,
-    noteTracker: trackerRef.current, practiceSinkRef
+    noteTracker: trackerRef.current, practiceSinkRef, noteListeners
   };
 };
 
@@ -663,11 +651,77 @@ const LevelMeter = ({ value, min, max, marker, active, format }) => {
 };
 
 const Section = ({ title, children }) => (
-  <div className="flex flex-col gap-4 t-card rounded-2xl p-4">
-    <span className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase">{title}</span>
+  <section className="flex flex-col gap-3 t-inset rounded-2xl p-4">
+    <h3 className="text-[10px] font-black tracking-[0.2em] text-gray-500 uppercase">{title}</h3>
     {children}
-  </div>
+  </section>
 );
+
+// 백업: 'vt.' 저장값 전부를 JSON 파일 하나로 (안드로이드: 저장 위치 선택 창)
+const backupFileName = (d = new Date()) =>
+  `violin-tuner-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
+const buildBackup = () => {
+  const data = {};
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('vt.')) data[k] = localStorage.getItem(k); }
+  return { app: 'violin-tuner', version: 1, exportedAt: new Date().toISOString(), data };
+};
+const parseBackup = (text) => {
+  let b; try { b = JSON.parse(text); } catch (_) { throw new Error('JSON 파일이 아닙니다.'); }
+  if (!b || b.app !== 'violin-tuner' || b.version !== 1 || typeof b.data !== 'object') throw new Error('Violin Tuner 백업 파일이 아닙니다.');
+  for (const [k, v] of Object.entries(b.data)) if (!k.startsWith('vt.') || typeof v !== 'string') throw new Error(`잘못된 항목: ${k}`);
+  return b;
+};
+
+const BackupSection = () => {
+  const fileRef = useRef(null);
+  const [msg, setMsg] = useState(null);
+  const [pending, setPending] = useState(null);
+  const exportNow = () => {
+    haptic(10);
+    const json = JSON.stringify(buildBackup(), null, 1), name = backupFileName();
+    if (window.VTNative) {
+      window.__vtSaved = (ok) => setMsg(ok ? { ok: true, text: '백업 파일을 저장했습니다.' } : { ok: false, text: '저장을 취소했습니다.' });
+      window.VTNative.saveFile(name, json);
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' })); a.download = name; a.click();
+      setMsg({ ok: true, text: `${name} 다운로드` });
+    }
+  };
+  const onFile = async (f) => {
+    if (!f) return;
+    try { setPending(parseBackup(await f.text())); setMsg(null); } catch (e) { setMsg({ ok: false, text: e.message }); }
+    if (fileRef.current) fileRef.current.value = '';
+  };
+  const apply = () => {
+    VT_STORAGE.locked = true;     // 새로고침 직전 메모리의 옛 값이 덮어쓰지 않게
+    const old = [];
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('vt.')) old.push(k); }
+    old.forEach(k => localStorage.removeItem(k));
+    Object.entries(pending.data).forEach(([k, v]) => localStorage.setItem(k, v));
+    location.reload();
+  };
+  return (
+    <Section title="백업">
+      <div className="flex gap-2">
+        <button onClick={exportNow} className="flex-1 t-chip rounded-full py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 text-gray-300"><Download size={14} className="text-[#4afc9d]"/>내보내기</button>
+        <button onClick={() => fileRef.current?.click()} className="flex-1 t-chip rounded-full py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 text-gray-300"><Upload size={14} className="text-[#4afc9d]"/>가져오기</button>
+        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={e => onFile(e.target.files?.[0])}/>
+      </div>
+      {pending && (
+        <div className="t-card rounded-xl p-3 flex flex-col gap-2">
+          <p className="text-xs text-gray-300"><b>{new Date(pending.exportedAt).toLocaleString('ko-KR')}</b> 백업으로 <b className="text-[#ef4444]">지금 설정과 기록을 모두 바꿉니다.</b></p>
+          <div className="flex gap-2">
+            <button onClick={() => setPending(null)} className="flex-1 t-chip rounded-full py-2 text-xs font-bold text-gray-300">취소</button>
+            <button onClick={apply} className="flex-1 py-2 rounded-full bg-[#ef4444] text-white text-xs font-black">바꾸기</button>
+          </div>
+        </div>
+      )}
+      {msg && <p className={`text-[11px] font-bold ${msg.ok ? 'text-[#4afc9d]' : 'text-[#ef4444]'}`}>{msg.text}</p>}
+      <p className="text-[10px] text-gray-500 leading-snug">설정 · 템포 · 드론 · 연습 기록을 파일 하나로 저장합니다. 폰을 바꾸거나 앱을 다시 설치할 때 가져오세요.</p>
+    </Section>
+  );
+};
 
 const SettingsSheet = ({ tuner, onClose }) => {
   const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise, noteTracker } = tuner;
@@ -727,14 +781,14 @@ const SettingsSheet = ({ tuner, onClose }) => {
           <button onClick={onClose} className="p-2 rounded-full t-chip text-gray-400"><X size={14}/></button>
         </div>
 
-        <Section title="화면 모드">
-          <div className="grid grid-cols-2 gap-2">
+        <Section title="테마">
+          <div className="grid grid-cols-3 gap-2">
             {UI_MODES.map(m => {
               const on = S.uiMode === m.id;
               return (
                 <button key={m.id} onClick={() => { updateSettings({ uiMode: m.id }); haptic(10); }}
                   className={`flex flex-col rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${on?'border-[#4afc9d] shadow-[0_0_12px_rgba(74,252,157,0.3)]':'border-gray-800'}`}>
-                  <div className="h-14 w-full"><ModePreview id={m.id}/></div>
+                  <div className="h-16 w-full"><ModePreview id={m.id}/></div>
                   <div className={`py-1.5 flex flex-col items-center ${on?'bg-[#4afc9d]/10':'bg-[#141414]'}`}>
                     <span className={`text-xs font-black ${on?'text-[#4afc9d]':'text-gray-300'}`}>{m.name}</span>
                     <span className="text-[9px] text-gray-500">{m.desc}</span>
@@ -829,7 +883,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
             hint="소리가 얼마나 '음정다운지'. 잡음·말소리는 낮고 현 소리는 0.9 이상. 높일수록 잡음에 강해집니다."/>
         </Section>
 
-        <Section title="③ 안정화">
+        <Section title="③ 안정화 · 범위">
           <SliderRow label="확정 프레임" value={S.stableFrames} display={`${S.stableFrames}프레임 · ${Math.round(S.stableFrames * 16.7)}ms`} min={1} max={10} step={1}
             onChange={v => updateSettings({ stableFrames: v })}
             hint="같은 음이 이만큼 연속돼야 표시. 순간 잡음으로 튀는 걸 막습니다."/>
@@ -839,9 +893,6 @@ const SettingsSheet = ({ tuner, onClose }) => {
           <SliderRow label="표시 유지 시간" value={S.holdMs} display={`${S.holdMs}ms`} min={0} max={1500} step={50}
             onChange={v => updateSettings({ holdMs: v })}
             hint="소리가 끊긴 뒤 마지막 음을 보여주는 시간."/>
-        </Section>
-
-        <Section title="④ 감지 범위">
           <SliderRow label="최저 주파수" value={S.minFreq} display={`${S.minFreq} Hz`} min={60} max={300} step={5}
             onChange={v => updateSettings({ minFreq: v })}
             hint="바이올린 최저음 G3 = 196Hz. 180Hz면 저음 웅웅거림을 걸러냅니다."/>
@@ -849,7 +900,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
             onChange={v => updateSettings({ maxFreq: v })}/>
         </Section>
 
-        <Section title="⑤ 연주 명령 · 메트로놈">
+        <Section title="④ 연주 명령 · 박자 켜기/끄기">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-xs font-bold text-gray-300">음 패턴으로 메트로놈 켜기/끄기</span>
@@ -917,6 +968,15 @@ const SettingsSheet = ({ tuner, onClose }) => {
           <span className="text-[10px] text-gray-600 leading-snug">
             튜닝할 때 자주 켜는 인접 현(G→D, A→E)은 피하고, G→E→G처럼 현을 건너뛰는 패턴을 추천합니다.
           </span>
+        </Section>
+
+        <BackupSection/>
+
+        <Section title="정보">
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Violin Tuner — 모든 기록은 이 폰 안에만 저장됩니다.
+          </p>
+          <button onClick={() => { updateSettings({ onboarded: false }); onClose(); }} className="self-start text-xs font-bold text-[#4afc9d]">처음 안내 다시 보기</button>
         </Section>
 
         <div className="flex gap-3 mt-1">
@@ -1032,7 +1092,7 @@ const Tuner = ({ tuner, metro }) => {
           <div className="flex flex-col items-center justify-center mt-6">
             <div className="flex items-start">
               <span className="text-[84px] font-black leading-none tracking-tighter"
-                style={{color:(isStarted&&pitch>0)||playingTone?'#fff':'#111'}}>
+                style={{color:(isStarted&&pitch>0)||playingTone?'var(--ink)':'var(--ink-off)'}}>
                 {playingTone ? playingTone.replace(/[0-9]/,'') : (isStarted&&pitch>0?currentNote.name:'A')}
               </span>
               <div className="flex flex-col mt-2 ml-2">

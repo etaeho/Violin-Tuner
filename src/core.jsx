@@ -1,6 +1,6 @@
 // ==========================================
 // core — 공통 상수, 설정, 피치 검출
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 // ==========================================
 
 /* =====================================================
@@ -10,7 +10,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 const {
   Play, Square, Settings, Volume2, VolumeX, AlertCircle,
   Music, Activity, Minus, Plus, ChevronUp, ChevronDown, RotateCcw,
-  LayoutGrid, SlidersHorizontal, X, Mic, ZoomIn, ZoomOut, AudioWaveform, Waves, BarChart3, Flame, Trash2
+  LayoutGrid, SlidersHorizontal, X, Mic, ZoomIn, ZoomOut, AudioWaveform, Waves, BarChart3, Flame, Trash2, Download, Upload, Target
 } = LucideReact;
 
 /* 햅틱 피드백 헬퍼 */
@@ -156,6 +156,7 @@ const DEFAULT_SETTINGS = {
   uiMode: 'tape',    // 화면 모드(테마): 'tape' | 'vintage'  → theme.jsx UI_MODES
   tunerLayout: 'vtapeTempo', // 튜너 화면 구성: 'vtapeTempo'(현별 세로 테이프+템포) | 'tapeTempo' | 'tape' | 'center' | 'both'  → tuner.jsx TUNER_LAYOUTS
   layoutRev: 3,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
   cmdWindowMs: 3000, // 패턴을 이 시간 안에 연주해야 인정
@@ -165,14 +166,17 @@ const loadSettings = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     const v = { ...DEFAULT_SETTINGS, ...stored };
-    if (!['tape', 'vintage'].includes(v.uiMode)) v.uiMode = 'tape';   // 예전 'modern' 등 → 기본값
+    if (!['tape', 'vintage', 'light'].includes(v.uiMode)) v.uiMode = 'tape';   // 예전 'modern' 등 → 기본값
     if (stored.layoutRev !== 3) { v.tunerLayout = 'vtapeTempo'; v.layoutRev = 3; }   // 저장값 기준으로 판단
     if (!['vtapeTempo', 'tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'vtapeTempo';
     return v;
   }
   catch (_) { return { ...DEFAULT_SETTINGS }; }
 };
-const saveSettings = (v) => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(v)); } catch (_) {} };
+// 저장 잠금: 백업을 가져올 때 새로고침 직전에 메모리의 옛 값이 덮어쓰지 않게
+const VT_STORAGE = { locked: false };
+const vtSave = (k, v) => { if (VT_STORAGE.locked) return; try { localStorage.setItem(k, v); } catch (_) {} };
+const saveSettings = (v) => vtSave(SETTINGS_KEY, JSON.stringify(v));
 // 값이 바뀔 때마다 localStorage에 저장되고, 다음 실행 때 그대로 불러오는 useState
 // validate(v) 가 false 면 기본값 사용 (예전 형식/깨진 값 방지)
 const usePersistentState = (key, initial, validate = () => true) => {
@@ -183,7 +187,7 @@ const usePersistentState = (key, initial, validate = () => true) => {
     } catch (_) {}
     return initial;
   });
-  useEffect(() => { try { localStorage.setItem('vt.' + key, JSON.stringify(v)); } catch (_) {} }, [key, v]);
+  useEffect(() => { vtSave('vt.' + key, JSON.stringify(v)); }, [key, v]);
   return [v, setV];
 };
 

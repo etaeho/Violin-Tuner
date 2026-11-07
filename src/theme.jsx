@@ -1,14 +1,15 @@
 // ==========================================
 // theme — 화면 모드(테마)와 공용 UI 조각
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 //
 // 색/배경은 src/theme.css 의 t-* 클래스로 처리하고,
 // 테마별로 모양 자체가 달라지는 부분만 useVintage()로 분기한다.
 // ==========================================
 
 const UI_MODES = [
-  { id:'tape',    name:'테이프', desc:'다크 · 흐르는 음 테이프' },
-  { id:'vintage', name:'빈티지', desc:'황동 · 원목 아날로그' },
+  { id:'tape',    name:'테이프', desc:'다크 · 기본' },
+  { id:'vintage', name:'빈티지', desc:'황동 · 원목' },
+  { id:'light',   name:'라이트', desc:'밝은 화면 · 야외' },
 ];
 
 const ThemeContext = React.createContext('tape');
@@ -57,6 +58,16 @@ const BrassPlate = ({ children, className = '' }) => (
 
 // 설정 시트의 모드 선택 카드 미리보기
 const ModePreview = ({ id }) => {
+  if (id === 'light') return (
+    <div className="w-full h-full flex items-end p-1.5" style={{ background: '#f4f3ee' }}>
+      <div className="w-full rounded p-[3px] bg-white" style={{ border: '1px solid #e4e4e7' }}>
+        <div className="relative h-6 rounded-sm overflow-hidden flex items-end justify-around pb-[2px]" style={{ background: '#111', borderTop: '6px solid #0b0b0b' }}>
+          {['G','A','B'].map(n => <span key={n} className="text-[9px] font-black leading-none" style={{ color: n === 'A' ? '#4afc9d' : '#555' }}>{n}</span>)}
+          <div className="absolute inset-y-0 left-1/2 w-[1.5px] bg-red-600"/>
+        </div>
+      </div>
+    </div>
+  );
   const v = id === 'vintage';
   return (
     <div className="w-full h-full flex items-end p-1.5"

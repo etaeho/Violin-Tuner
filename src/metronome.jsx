@@ -1,6 +1,6 @@
 // ==========================================
 // metronome — 메트로놈 탭
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 // ==========================================
 
 // ==========================================
@@ -292,7 +292,7 @@ const Stepper = ({ value, onUp, onDown, accent }) => {
   return (
     <div className="flex items-center t-chip rounded-full px-1">
       <button onClick={onDown} className="p-1.5 text-gray-500 active:text-white"><ChevronDown size={16}/></button>
-      <span className="w-6 text-center text-lg font-black" style={{ color: accent ? (vintage ? '#f6dd94' : '#4afc9d') : '#fff' }}>{value}</span>
+      <span className="w-6 text-center text-lg font-black" style={{ color: accent ? (vintage ? '#f6dd94' : 'var(--accent)') : 'var(--ink)' }}>{value}</span>
       <button onClick={onUp} className="p-1.5 text-gray-500 active:text-white"><ChevronUp size={16}/></button>
     </div>
   );
@@ -407,7 +407,7 @@ const Metronome = ({ metro }) => {
       <div className="w-full flex gap-2.5 shrink-0">
         <button onClick={tapTempo}
           className="w-24 h-14 rounded-2xl t-chip flex flex-col items-center justify-center active:scale-95 transition-transform">
-          <span className="text-sm font-black" style={{ color: vintage ? '#f6dd94' : '#fff' }}>TAP</span>
+          <span className="text-sm font-black" style={{ color: vintage ? '#f6dd94' : 'var(--ink)' }}>TAP</span>
           <span className="text-[8px] font-bold text-gray-500">박자 두드리기</span>
         </button>
         <button onClick={toggleMetronome}
@@ -433,7 +433,7 @@ const MiniMetronome = ({ metro }) => {
           toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
   const vintage = useVintage();
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
-  const text = vintage ? '#f4e3b5' : '#fff';
+  const text = vintage ? '#f4e3b5' : 'var(--ink)';
   const dim = vintage ? 'rgba(244,227,181,.55)' : '#6b7280';
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
   const dense = beatSounds.length > 8;
@@ -482,7 +482,7 @@ const MiniMetronome = ({ metro }) => {
       </div>
       {/* TAP + 프리셋 */}
       <div className="flex items-center gap-1.5">
-        <button onClick={tapTempo} className="px-3 py-1 rounded-full t-chip text-[11px] font-black active:scale-95" style={{ color: vintage ? '#f6dd94' : '#fff' }}>TAP</button>
+        <button onClick={tapTempo} className="px-3 py-1 rounded-full t-chip text-[11px] font-black active:scale-95" style={{ color: vintage ? '#f6dd94' : 'var(--ink)' }}>TAP</button>
         {TEMPO_PRESETS.map(v => {
           const on = bpm === v;
           return (

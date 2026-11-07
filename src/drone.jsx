@@ -1,6 +1,6 @@
 // ==========================================
 // drone — 드론 탭: 근음(+5도·옥타브·3도)을 계속 울려 두고 그 위에서 음정 연습
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 // 구성안: docs/drone-mode-plan.md  (현재 1단계: 기본 드론)
 // ==========================================
 
@@ -188,7 +188,7 @@ const RootWheel = ({ drone, size }) => {
                 ? (vintage
                   ? { background: 'radial-gradient(circle at 35% 30%,#fff8dc,#d4ad55 55%,#6b4a12)', color: '#3b2a1a', border: '1px solid #6b4a12', boxShadow: '0 0 12px rgba(246,221,148,.5)' }
                   : { background: '#a78bfa', color: '#000', boxShadow: '0 0 16px rgba(167,139,250,.6)' })
-                : { background: 'var(--chip-bg)', border: '1px solid var(--chip-border)', color: vintage ? '#f4e3b5' : '#d1d5db' }),
+                : { background: 'var(--chip-bg)', border: '1px solid var(--chip-border)', color: 'var(--ink2)' }),
             }}>
             {n.replace('#', '♯')}
           </button>
@@ -203,7 +203,7 @@ const RootWheel = ({ drone, size }) => {
             ? { background: playing ? 'radial-gradient(circle at 40% 30%,#fff3c4,#d4ad55 60%,#8a6420)' : 'linear-gradient(180deg,#3a2410,#24150a)',
                 border: '3px solid #6b4a12', color: playing ? '#3b2a1a' : '#f6dd94',
                 boxShadow: playing ? '0 0 30px rgba(246,221,148,.45)' : 'inset 0 4px 12px rgba(0,0,0,.6)' }
-            : { background: playing ? 'rgba(167,139,250,.15)' : '#0b0b0b',
+            : { background: playing ? 'rgba(167,139,250,.15)' : 'var(--inset-bg)',
                 border: `3px solid ${playing ? '#a78bfa' : '#1f2937'}`, color: playing ? '#c4b5fd' : '#9ca3af',
                 boxShadow: playing ? '0 0 40px rgba(167,139,250,.35)' : 'none' }),
         }}>
@@ -254,7 +254,7 @@ const Drone = ({ drone, metro }) => {
         <div className="flex items-center gap-1.5 flex-wrap">
           {chord.map((n, i) => (
             <span key={i} className="px-2 py-1 rounded-lg text-xs font-black font-mono t-chip"
-              style={{ color: i === 0 ? accent : (vintage ? '#f4e3b5' : '#d1d5db') }}>{n}</span>
+              style={{ color: i === 0 ? accent : 'var(--ink2)' }}>{n}</span>
           ))}
         </div>
         <span className="text-[11px] font-mono font-bold" style={{ color: vintage ? 'rgba(244,227,181,.6)' : '#6b7280' }}>
@@ -274,7 +274,7 @@ const Drone = ({ drone, metro }) => {
           return (
             <button key={q.root} onClick={() => { update(q); haptic(8); }}
               className="flex-1 py-2 rounded-xl text-sm font-black t-chip active:scale-95 transition-transform"
-              style={on ? { color: accent, borderColor: accent } : { color: vintage ? '#f4e3b5' : '#d1d5db' }}>
+              style={on ? { color: accent, borderColor: accent } : { color: 'var(--ink2)' }}>
               {q.root}<span className="text-[9px] opacity-60">{q.octave}</span>
             </button>
           );

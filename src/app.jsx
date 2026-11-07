@@ -1,6 +1,6 @@
 // ==========================================
 // app — 탭 전환, 테마 적용, 마운트
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 // ==========================================
 
 // ==========================================
@@ -18,7 +18,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('tuner');
   const theme = tuner.settings.uiMode;
   practiceCtxRef.current = {
-    tab: activeTab, metroPlaying: metro.isPlayingMetro, bpm: metro.bpm,
+    tab: activeTab, metroPlaying: metro.isPlayingMetro, bpm: metro.bpm, tolerance: tuner.tolerance,
     droneActive: drone.playing, droneClasses: new Set(droneChordNotes(drone.cfg).map(n => n.replace(/\d+$/, ''))),
     onGoal: (m) => { haptic([60, 60, 60]); showToast(`🎯 오늘 목표 ${m}분 달성!`); },
   };
@@ -94,12 +94,15 @@ const App = () => {
       >
         <div className={activeTab==='tuner'       ? 'flex flex-col w-full h-full' : 'hidden'}><Tuner       tuner={tuner} metro={metro}/></div>
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro}/></div>
-        <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro}/></div>
+        <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
         <div className={activeTab==='drone'       ? 'flex flex-col w-full h-full' : 'hidden'}><Drone       drone={drone} metro={metro}/></div>
         <div className={activeTab==='log'         ? 'flex flex-col w-full h-full' : 'hidden'}><PracticeLog log={log}/></div>
       </div>
 
       {/* 연주 명령 알림 */}
+      {/* 첫 실행 안내 */}
+      {!tuner.settings.onboarded && <Onboarding tuner={tuner}/>}
+
       {toast && (
         <div className="absolute inset-x-0 z-[70] flex justify-center pointer-events-none"
           style={{ top: 'max(4rem, calc(env(safe-area-inset-top, 0px) + 3rem))' }}>
@@ -116,7 +119,9 @@ const App = () => {
       >
         {TAB_NAV.map(({ id, label, color: tabColor, Icon }) => {
           const active = activeTab === id;
-          const color = theme === 'vintage' ? '#f6dd94' : tabColor;   // 빈티지: 모든 탭 황동색
+          // 빈티지: 모든 탭 황동색 / 라이트: 밝은 바탕에서 잘 보이게 진한 색
+          const LIGHT_TAB = { tuner:'#059669', metronome:'#b45309', fingerboard:'#0284c7', drone:'#7c3aed', log:'#ea580c' };
+          const color = theme === 'vintage' ? '#f6dd94' : theme === 'light' ? LIGHT_TAB[id] : tabColor;
           return (
             <button
               key={id}

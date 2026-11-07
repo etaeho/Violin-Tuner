@@ -1,155 +1,216 @@
 // ==========================================
-// fingerboard — 지판 탭
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → app)
+// fingerboard — 지판 탭 (v2 디자인)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+//  - 조표별 음 표시, 지금 연주하는 음, 누르면 기준음, 박마다 테두리 빛남
+//  - 히트맵: 최근 30일 음별 평균 센트 (자주 높으면 빨강 ▲, 낮으면 파랑 ▼) — 연습 기록(practice.jsx)의 음별 정확도 사용
+//  - 스케일 연습: 다음 음 안내 → 그 음을 0.15초 이상 연주하면 센트 기록하고 다음으로
 // ==========================================
 
-// ==========================================
-// 3. Fingerboard Component
-// ==========================================
-const Fingerboard = ({ tuner, metro }) => {
-  const [selectedKey, setSelectedKey] = usePersistentState('fingerboard.key', 'C Major (0)', v => !!KEY_SIGNATURES[v]);
-  const currentScale = KEY_SIGNATURES[selectedKey];
-  const detectedStr = (tuner.isStarted&&tuner.pitch>0) ? tuner.currentNote.name+tuner.currentNote.symbol : null;
-  const detectedOctave = tuner.isStarted ? tuner.currentNote.octave : null;
-  const displayStrings = [...FINGERBOARD_STRINGS_EXT].reverse();
+const FB_POSITIONS = 16;     // 개방현 + 15칸 (대략 4포지션까지)
+const FB_CHROMATIC = [['C','B#'],['C#','Db'],['D'],['D#','Eb'],['E','Fb'],['F','E#'],['F#','Gb'],['G'],['G#','Ab'],['A'],['A#','Bb'],['B','Cb']];
+const FB_KEYS = [
+  { id: 'C',  label: 'C장조 (0)',   tonic: 0,  notes: ['C','D','E','F','G','A','B'] },
+  { id: 'G',  label: 'G장조 (1♯)',  tonic: 7,  notes: ['G','A','B','C','D','E','F#'] },
+  { id: 'D',  label: 'D장조 (2♯)',  tonic: 2,  notes: ['D','E','F#','G','A','B','C#'] },
+  { id: 'A',  label: 'A장조 (3♯)',  tonic: 9,  notes: ['A','B','C#','D','E','F#','G#'] },
+  { id: 'E',  label: 'E장조 (4♯)',  tonic: 4,  notes: ['E','F#','G#','A','B','C#','D#'] },
+  { id: 'B',  label: 'B장조 (5♯)',  tonic: 11, notes: ['B','C#','D#','E','F#','G#','A#'] },
+  { id: 'F#', label: 'F♯장조 (6♯)', tonic: 6,  notes: ['F#','G#','A#','B','C#','D#','E#'] },
+  { id: 'F',  label: 'F장조 (1♭)',  tonic: 5,  notes: ['F','G','A','Bb','C','D','E'] },
+  { id: 'Bb', label: 'B♭장조 (2♭)', tonic: 10, notes: ['Bb','C','D','Eb','F','G','A'] },
+  { id: 'Eb', label: 'E♭장조 (3♭)', tonic: 3,  notes: ['Eb','F','G','Ab','Bb','C','D'] },
+  { id: 'Ab', label: 'A♭장조 (4♭)', tonic: 8,  notes: ['Ab','Bb','C','Db','Eb','F','G'] },
+  { id: 'Db', label: 'D♭장조 (5♭)', tonic: 1,  notes: ['Db','Eb','F','Gb','Ab','Bb','C'] },
+];
+const fbKey = (id) => FB_KEYS.find(k => k.id === id) || FB_KEYS[0];
+const fbSpell = (pc, keyId) => FB_CHROMATIC[((pc % 12) + 12) % 12].find(n => fbKey(keyId).notes.includes(n)) || null;
+const fbPretty = (n) => n.replace('#', '♯').replace(/([A-G])b/, '$1♭');
+const fbLabel = (semi) => { const m = semi + 69; return NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); };
+const fbPc = (semi) => (((semi + 9) % 12) + 12) % 12;
+// 장음계 1옥타브, 근음은 G3 이상에서 가장 낮게 (예: D장조 → D4…D5)
+const fbScale = (keyId) => {
+  let root = fbKey(keyId).tonic - 9;
+  while (root < -14) root += 12;
+  while (root - 12 >= -14) root -= 12;
+  return [0, 2, 4, 5, 7, 9, 11, 12].map(s => root + s);
+};
+// 예전 저장값 'D Major (2#)' → 'D' (v2에 없는 조는 같은 음의 조로)
+const fbInitialKey = () => {
+  try {
+    const old = JSON.parse(localStorage.getItem('vt.fingerboard.key') || 'null');
+    if (typeof old === 'string') { const id = old.split(' ')[0]; return ({ 'C#': 'Db', Gb: 'F#', Cb: 'B' })[id] || id; }
+  } catch (_) {}
+  return 'C';
+};
+
+// 스케일 연습
+const useScalePractice = (keyId, tuner) => {
+  const [active, setActive] = useState(false);
+  const [idx, setIdx] = useState(0);
+  const [results, setResults] = useState([]);
+  const seq = fbScale(keyId);
+  const st = useRef({ idx: 0, run: '', since: 0, last: 0 });
+
+  useEffect(() => {
+    if (!active) return;
+    const listener = (label, cents, now) => {
+      const s = st.current;
+      if (s.idx >= seq.length) return;
+      if (label !== fbLabel(seq[s.idx])) { s.run = ''; return; }
+      if (s.run !== label || now - s.last > 300) { s.run = label; s.since = now; }
+      s.last = now;
+      if (now - s.since >= 150) {
+        s.run = ''; s.idx++;
+        setResults(r => [...r, cents]); setIdx(s.idx);
+        haptic(Math.abs(cents) <= tuner.tolerance ? 15 : [10, 30, 10]);
+      }
+    };
+    tuner.noteListeners.add(listener);
+    return () => { tuner.noteListeners.delete(listener); };
+  }, [active, keyId]);
+
+  const start = () => { st.current = { idx: 0, run: '', since: 0, last: 0 }; setIdx(0); setResults([]); setActive(true); haptic(10); };
+  const stop = () => setActive(false);
+  const done = active && idx >= seq.length;
+  const okCount = results.filter(c => Math.abs(c) <= tuner.tolerance).length;
+  const avgAbs = results.length ? results.reduce((a, c) => a + Math.abs(c), 0) / results.length : 0;
+  return { active, idx, results, seq, start, stop, done, okCount, avgAbs };
+};
+
+const Fingerboard = ({ tuner, metro, log }) => {
+  const [keyId, setKeyId] = usePersistentState('fb.key', fbInitialKey(), v => !!FB_KEYS.find(k => k.id === v));
+  const [heat, setHeat] = usePersistentState('fb.heat', false, v => typeof v === 'boolean');
   const vintage = useVintage();
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
-  // 지금 박 정보 (메트로놈 재생 중일 때만)
+  const scale = useScalePractice(keyId, tuner);
+  const per = heat ? mergePerNote(log.days, 30) : {};
+
+  const live = tuner.isStarted && tuner.pitch > 0;
+  const detSemi = live ? Math.round(12 * Math.log2(tuner.pitch / tuner.a4Freq)) : null;
+  const detOk = live && Math.abs(tuner.cents) <= tuner.tolerance;
+
   const playing = metro.isPlayingMetro;
   const beatSnd = playing && metro.currentBeat >= 0 ? metro.beatSounds[metro.currentBeat] : 0;
-  const flash = playing ? metro.visualFlash : false;
-  const flashColor = flash === 'main' && beatSnd ? pal[beatSnd] : flash === 'sub' ? pal.sub : null;
-  const isDownbeat = flash === 'main' && metro.currentBeat === 0;
+  const flashCol = playing && metro.visualFlash === 'main' && beatSnd ? pal[beatSnd] : null;
+  const downbeat = flashCol && metro.currentBeat === 0;
+
+  const strings = [...VIOLIN_STRINGS];      // G D A E (왼쪽 → 오른쪽)
+  const target = scale.active && !scale.done ? scale.seq[scale.idx] : null;
 
   return (
-    <div className="w-full h-full flex flex-col tab-enter gap-2">
-      {/* Header bar */}
-      <div className="w-full flex justify-between items-center h-10 shrink-0 px-1">
-        <div className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-[10px] font-bold shadow-md">
-          <span className="text-gray-400">조표=</span>
-          <select value={selectedKey} onChange={e=>setSelectedKey(e.target.value)}
-            className="bg-transparent text-white font-mono text-[10px] outline-none cursor-pointer">
-            {Object.keys(KEY_SIGNATURES).map(k=>(
-              <option key={k} value={k} className="bg-[#1a1a1a] text-white">{k}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-2 pr-1">
-          {tuner.isStarted && (
-            <div className="flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full animate-pulse ${detectedStr?(Math.abs(tuner.cents)<=tuner.tolerance?'bg-[#4afc9d]':'bg-[#ff4d4d]'):'bg-[#4afc9d]'}`}/>
-              <span className={`text-[11px] font-black tracking-widest ${Math.abs(tuner.cents)<=tuner.tolerance?'text-[#4afc9d]':'text-[#ff4d4d]'}`}>
-                {detectedStr?`${detectedStr}${detectedOctave}`:'ON'}
-              </span>
-            </div>
-          )}
-          {tuner.isStarted && <div className="w-[1px] h-3 bg-gray-700"/>}
-          {/* 박 표시 + BPM/재생 버튼 */}
-          <button onClick={metro.toggleMetronome}
-            className="flex items-center gap-2 pl-2.5 pr-2 py-1.5 rounded-full t-chip transition-all active:scale-95"
-            style={flashColor ? { borderColor: flashColor, boxShadow: `0 0 ${12 * pal.glow + 4}px ${flashColor}` } : {}}>
-            <span className="flex items-center gap-1">
-              {metro.beatSounds.slice(0, 8).map((snd, i) => {
-                const cur = playing && i === metro.currentBeat;
-                const on = cur && flash === 'main';
-                return (
-                  <span key={i} className="rounded-full transition-all duration-75"
-                    style={{ width: on ? 10 : 7, height: on ? 10 : 7,
-                      background: snd ? pal[snd] : 'transparent', border: snd ? 'none' : `1.5px solid ${pal[0]}`,
-                      opacity: !playing ? 0.35 : cur ? 1 : 0.3, boxShadow: on && snd ? `0 0 8px ${pal[snd]}` : 'none' }}/>
-                );
-              })}
-            </span>
-            <span className="text-[11px] font-black font-mono" style={{ color: playing ? (vintage ? '#f6dd94' : '#ffcc00') : '#9ca3af' }}>{metro.bpm}</span>
-            {playing ? <Square size={10} fill="currentColor" className="text-gray-300"/> : <Play size={10} fill="currentColor" className="text-gray-400"/>}
-          </button>
-        </div>
+    <div className="w-full h-full flex flex-col tab-enter gap-2.5">
+      {/* 조표 · 히트맵 · 스케일 · 박자 */}
+      <div className="w-full flex items-center gap-1.5 shrink-0 h-10">
+        <select value={keyId} onChange={e => setKeyId(e.target.value)}
+          className="t-chip rounded-full px-2 py-1.5 text-xs font-black outline-none max-w-[108px] min-w-0" style={{ color: 'var(--ink)' }}>
+          {FB_KEYS.map(k => <option key={k.id} value={k.id} style={{ background: 'var(--sheet-bg)' }}>{k.label}</option>)}
+        </select>
+        <button onClick={() => { setHeat(!heat); haptic(8); }}
+          className="t-chip rounded-full flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-black whitespace-nowrap shrink-0"
+          style={heat ? { color: '#ef4444', borderColor: 'rgba(239,68,68,.5)' } : { color: '#9ca3af' }}>
+          <Flame size={12}/>히트맵
+        </button>
+        <button onClick={scale.active ? scale.stop : scale.start}
+          className="t-chip rounded-full flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-black whitespace-nowrap shrink-0"
+          style={scale.active ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : { color: '#9ca3af' }}>
+          <Target size={12}/>스케일
+        </button>
+        <button onClick={metro.toggleMetronome} aria-label="박자"
+          className="ml-auto t-chip rounded-full flex items-center gap-1 pl-2 pr-1.5 py-1.5 shrink-0 transition-shadow"
+          style={flashCol ? { borderColor: flashCol, boxShadow: `0 0 ${12 * pal.glow + 4}px ${flashCol}` } : {}}>
+          {metro.beatSounds.slice(0, 4).map((snd, i) => {
+            const on = playing && i === metro.currentBeat && metro.visualFlash === 'main';
+            return <span key={i} className="rounded-full transition-all duration-75" style={{
+              width: on ? 9 : 6, height: on ? 9 : 6, background: snd ? pal[snd] : 'transparent', border: snd ? 'none' : `1px solid ${pal[0]}`,
+              opacity: !playing ? 0.35 : i === metro.currentBeat ? 1 : 0.3 }}/>;
+          })}
+          <span className="text-[11px] font-black font-mono" style={{ color: playing ? (vintage ? '#f6dd94' : '#ffcc00') : '#9ca3af' }}>{metro.bpm}</span>
+          {playing ? <Square size={9} fill="currentColor" className="text-gray-400"/> : <Play size={9} fill="currentColor" className="text-gray-400"/>}
+        </button>
       </div>
 
-      {/* Fingerboard */}
-      <div className="w-full flex-1 rounded-2xl t-board flex flex-col relative px-2 py-2 min-h-0 transition-shadow duration-75"
-        style={{ boxShadow: flashColor
-          ? `0 10px 40px rgba(0,0,0,.8), inset 0 0 0 ${isDownbeat ? 3 : 2}px ${flashColor}, 0 0 ${(isDownbeat ? 28 : 16) * pal.glow + 4}px ${flashColor}`
-          : '0 10px 40px rgba(0,0,0,.8)' }}>
-        {/* 박자 막대: 박마다 위쪽 띠가 켜짐 (첫 박은 더 굵게) */}
-        {playing && (
-          <div className="absolute left-3 right-3 top-0 flex gap-1 z-30 pointer-events-none">
-            {metro.beatSounds.map((snd, i) => {
-              const on = i === metro.currentBeat;
-              return <div key={i} className="flex-1 rounded-b-full transition-all duration-75"
-                style={{ height: on && flash === 'main' ? (i === 0 ? 9 : 6) : 4,
-                  background: snd ? pal[snd] : pal[0], opacity: on ? 1 : 0.18,
-                  boxShadow: on && flash === 'main' && snd ? `0 0 10px ${pal[snd]}` : 'none' }}/>;
-            })}
-          </div>
-        )}
-        <div className="flex w-full items-center mb-1 z-20 shrink-0">
-          {displayStrings.map(s=>(
-            <div key={s.string} className="flex-1 flex justify-center">
-              <span className="t-chip text-[#ffcc00] text-[9px] font-black px-2 py-0.5 rounded shadow-md">{s.string}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex-1 flex w-full relative z-10 min-h-0">
-          {/* Guide lines */}
-          <div className="absolute inset-0 flex flex-col justify-between pointer-events-none z-0 px-2">
-            {Array.from({length:26}).map((_,i)=>(
-              <div key={`line-${i}`} className="flex-1 flex items-center w-full">
-                <div className={`w-full rounded-full ${(i===0||i%5===0)?'border-t-[3px] border-solid border-[#0ea5e9]/60 shadow-[0_0_8px_rgba(14,165,233,0.4)]':'border-t-[1.5px] border-dashed border-gray-600/50'}`}/>
-              </div>
-            ))}
-          </div>
-          {/* String columns */}
-          {displayStrings.map((s,idx)=>(
-            <div key={s.string} className="flex-1 flex flex-col items-center relative h-full">
-              <div className={`absolute top-0 bottom-0 bg-gray-600 rounded-full shadow-[inset_0_1px_3px_rgba(0,0,0,1)] z-0 ${idx===0?'w-[5px]':idx===1?'w-[4px]':idx===2?'w-[2.5px]':'w-[1.5px]'}`}/>
-              <div className="flex-1 w-full flex flex-col justify-between z-10">
-                {Array.from({length:26}).map((_,pos)=>{
-                  const note=s.notes[pos];
-                  const matchedScaleNote=note.names.find(n=>currentScale.includes(n));
-                  const inScale=!!matchedScaleNote;
-                  const isOpenString=note.pos===0;
-                  const isDetected=detectedStr&&note.names.includes(detectedStr)&&note.octave===detectedOctave;
-                  const isPlaying=tuner.playingTone===note.id;
-                  const semitonesFromA4=(note.octave*12+note.noteIndex)-57;
-                  if (!inScale&&!isDetected&&!isPlaying) {
-                    return (
-                      <div key={pos} className="flex-1 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-gray-700/80 cursor-pointer active:bg-[#8b5a2b]" onClick={()=>tuner.toggleTone(note.id,semitonesFromA4)}/>
-                      </div>
-                    );
-                  }
-                  const isPitchPerfect=Math.abs(tuner.cents)<=tuner.tolerance;
-                  let activeStyle='';
-                  if (isPlaying) activeStyle='bg-[#8b5a2b] text-white shadow-[0_0_20px_rgba(233,196,106,0.6)] z-40 scale-[1.3] border-[#e9c46a] border-[1.5px]';
-                  else if (isDetected) activeStyle=isPitchPerfect?'bg-[#4afc9d] text-black shadow-[0_0_20px_#4afc9d] z-30 scale-[1.3] border-transparent':'bg-[#ff4d4d] text-white shadow-[0_0_20px_#ff4d4d] z-30 scale-[1.3] border-transparent';
-                  else activeStyle=isOpenString?'bg-gray-800 text-gray-200 border border-gray-500':'bg-[#151515] text-gray-300 border border-gray-700';
-                  const displayName=(isDetected&&!inScale)||isPlaying?note.names[0]:matchedScaleNote;
-                  const yOffsetPx=isPitchPerfect?0:Math.max(-18,Math.min(18,tuner.cents/2));
-                  return (
-                    <div key={pos} className="flex-1 flex items-center justify-center relative w-full">
-                      <div className="relative flex items-center justify-center">
-                        {isDetected&&!isPlaying&&(
-                          <div className={`absolute right-full mr-1 flex flex-col items-center justify-center animate-pulse ${isPitchPerfect?'text-[#4afc9d]':'text-[#ff4d4d]'}`}
-                            style={{top:'50%',transform:`translateY(calc(-50% + ${yOffsetPx}px))`}}>
-                            {!isPitchPerfect&&tuner.cents<0&&<span className="text-[10px] font-black leading-none mb-[2px]">▴</span>}
-                            <span className="text-[16px] leading-none">▸</span>
-                            {!isPitchPerfect&&tuner.cents>0&&<span className="text-[10px] font-black leading-none mt-[2px]">▾</span>}
-                          </div>
-                        )}
-                        <button onClick={()=>tuner.toggleTone(note.id,semitonesFromA4)}
-                          className={`flex items-center justify-center font-black text-[12px] transition-all duration-100 px-1.5 py-[2px] leading-none whitespace-nowrap min-w-[28px] cursor-pointer ${isOpenString?'rounded-[4px]':'rounded-full'} ${activeStyle}`}>
-                          {displayName}
-                        </button>
-                      </div>
-                    </div>
-                  );
+      {/* 스케일 연습 안내 */}
+      {scale.active && (
+        <div className="t-panel rounded-3xl px-4 py-2.5 flex items-center gap-3 shrink-0">
+          {scale.done ? (
+            <>
+              <span className="text-sm font-black" style={{ color: 'var(--ink)' }}>완료! 평균 오차 <span style={{ color: 'var(--accent)' }}>{scale.avgAbs.toFixed(0)}¢</span> · 맞음 {scale.okCount}/{scale.seq.length}</span>
+              <button onClick={scale.start} className="ml-auto t-chip rounded-full px-3 py-1 text-xs font-black" style={{ color: 'var(--accent)' }}>다시</button>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] font-black text-gray-500">다음 음</span>
+              <span className="text-2xl font-black" style={{ color: 'var(--accent)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+                {fbPretty(fbSpell(fbPc(target), keyId) || FB_CHROMATIC[fbPc(target)][0])}
+                <span className="text-sm text-gray-500">{fbLabel(target).replace(/\D+/, '')}</span>
+              </span>
+              <div className="flex gap-1 ml-auto">
+                {scale.seq.map((_, i) => {
+                  const r = scale.results[i];
+                  return <span key={i} className={`w-2.5 h-2.5 rounded-full ${r === undefined && i === scale.idx ? 'animate-pulse' : ''}`}
+                    style={{ background: r === undefined ? (i === scale.idx ? 'var(--accent)' : 'var(--chip-border)') : Math.abs(r) <= tuner.tolerance ? '#4afc9d' : '#ef4444' }}/>;
                 })}
               </div>
+            </>
+          )}
+          <button onClick={scale.stop} aria-label="스케일 연습 끝" className="text-gray-500"><X size={16}/></button>
+        </div>
+      )}
+
+      {/* 지판 */}
+      <div className="w-full flex-1 min-h-0 rounded-2xl t-board relative px-1.5 py-2 flex flex-col transition-shadow duration-75"
+        style={{ boxShadow: flashCol ? `inset 0 0 0 ${downbeat ? 3 : 2}px ${flashCol}, 0 0 ${(downbeat ? 24 : 14) * pal.glow + 4}px ${flashCol}` : 'none' }}>
+        <div className="flex mb-1 shrink-0">
+          {strings.map(s => <div key={s.name} className="flex-1 flex justify-center">
+            <span className="t-chip rounded px-2 py-0.5 text-[10px] font-black" style={{ color: vintage ? '#f6dd94' : document.documentElement.dataset.theme === 'light' ? '#b45309' : '#ffcc00' }}>{s.note}</span>
+          </div>)}
+        </div>
+        <div className="flex-1 min-h-0 flex relative">
+          {/* 줄 (G가 가장 굵게) */}
+          {strings.map((s, i) => <div key={s.name} className="absolute top-0 bottom-0 rounded-full"
+            style={{ left: `${12.5 + i * 25}%`, width: 4 - i * 0.8, marginLeft: -(4 - i * 0.8) / 2, background: vintage ? 'rgba(201,161,74,.55)' : 'rgba(128,128,140,.45)' }}/>)}
+          {strings.map(s => (
+            <div key={s.name} className="flex-1 flex flex-col relative z-10">
+              {Array.from({ length: FB_POSITIONS }, (_, pos) => {
+                const semi = s.semitone + pos, label = fbLabel(semi), pc = fbPc(semi);
+                const spelled = fbSpell(pc, keyId);
+                const isDet = detSemi === semi;
+                const isPlay = tuner.playingTone === label;
+                const isTarget = target === semi;
+                const stt = per[label];
+                const mean = stt && stt.n >= 3 ? stt.sum / stt.n : null;
+                const name = fbPretty(spelled || FB_CHROMATIC[pc][0]);
+                let style = { background: 'var(--chip-bg)', borderColor: 'var(--chip-border)', color: 'var(--ink)' };
+                let extra = '';
+                if (isPlay) { style = { background: '#8b5a2b', borderColor: '#e9c46a', color: '#fff', boxShadow: '0 0 16px rgba(233,196,106,.5)' }; extra = 'scale-125 z-30'; }
+                else if (isDet) { const c = detOk ? '#4afc9d' : '#ef4444'; style = { background: c, borderColor: c, color: detOk ? '#000' : '#fff', boxShadow: `0 0 16px ${c}` }; extra = 'scale-125 z-20'; }
+                else if (isTarget) { style = { background: 'transparent', borderColor: 'var(--accent)', color: 'var(--accent)' }; extra = 'scale-110 animate-pulse'; }
+                else if (mean !== null) {
+                  const k = Math.min(1, Math.abs(mean) / 25), rgb = mean > 0 ? '239,68,68' : '59,130,246';
+                  style = { background: `rgba(${rgb},${0.18 + k * 0.6})`, borderColor: `rgb(${rgb})`, color: 'var(--ink)' };
+                }
+                const line = pos === 12 ? 'border-t-2 border-[#4afc9d]/40' : pos === 5 || pos === 7 ? 'border-t border-gray-700/60' : '';
+                return (
+                  <div key={pos} className={`flex-1 flex items-center justify-center relative ${line}`}>
+                    {spelled || isDet || isPlay || isTarget ? (
+                      <button onClick={() => tuner.toggleTone(label, semi)}
+                        className={`min-w-[30px] px-1.5 py-[1px] border text-[11px] font-black leading-tight transition-all duration-100 ${pos === 0 ? 'rounded-md' : 'rounded-full'} ${extra}`}
+                        style={{ ...style, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+                        {name}{mean !== null && !isDet && !isPlay && <span className="text-[8px] ml-0.5">{mean > 0 ? '▲' : '▼'}</span>}
+                      </button>
+                    ) : (
+                      <button onClick={() => tuner.toggleTone(label, semi)} className="w-2 h-2 rounded-full" style={{ background: 'var(--chip-border)' }} aria-label={label}/>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
       </div>
+      {heat && <p className="text-[10px] text-gray-500 text-center shrink-0">
+        <span className="font-black" style={{ color: '#ef4444' }}>▲ 빨강</span> = 자주 높게 · <span className="font-black" style={{ color: '#3b82f6' }}>▼ 파랑</span> = 자주 낮게 (최근 30일, 3번 이상 연주한 음)
+      </p>}
 
       {tuner.error && (
         <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 backdrop-blur-sm rounded-2xl">
