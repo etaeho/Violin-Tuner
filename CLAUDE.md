@@ -1,4 +1,28 @@
-# Violin Tuner — 작업 가이드
+# Violin Tuner — 작업 가이드 (v2 브랜치)
+
+> **이 브랜치(`v2`)는 전면 재구성 중.** 계획: `docs/redesign-v2.md`. 지금 앱(v1) 코드는 루트의 `index.html`·`src/`·`vendor/`에 참고용으로 남아 있음 (APK에는 안 들어감).
+> v1 개발은 다른 브랜치에서 계속됨 — v1 파일은 이 브랜치에서 수정하지 말 것.
+
+## v2 구조 (`web/`)
+- Vite + React 18 + TypeScript + Tailwind(빌드 시 생성, 오프라인) + zustand
+- `web/src/ui/themes.css` — **디자인 토큰. 테마 = 변수 블록 하나** (tape / vintage / light). 컴포넌트는 tailwind 색 이름(`bg-panel`, `text-ink`, `text-accent`, `border-line` …)과 `.card` `.chip` `.inset` 만 사용, 색 직접 쓰지 말 것
+- `web/src/ui/components/` — 공용 부품 (Sheet, TabBar, Brass(BrassPlate·Screw·DrumDigits), PlannedScreen)
+- `web/src/features/<탭>/` — 탭별 화면: tuning · practice · fingerboard · log, `SettingsSheet.tsx`
+- `web/src/audio/detector.ts` — 음정 검출(NSDF). DOM 의존 금지 (2단계에서 AudioWorklet에서 사용)
+- `web/src/store/settings.ts` — 설정 저장 (zustand persist, localStorage `vt2.settings`). **사용자가 바꾸는 값은 저장되어야 함**
+- `web/tests/` — vitest. 음정 검출은 합성 음원으로 테스트 (`npm test`)
+- 명령: `cd web && npm install && npm run dev`(개발 서버) / `npm test` / `npm run build`(→ `web/dist`)
+
+## 빌드 · 테스트 흐름 (v2)
+1. 수정 → commit → `git push origin v2`
+2. GitHub Actions: `npm ci` → **`npm test`(실패하면 빌드 중단)** → `npm run build` → APK
+3. 폰에서 https://github.com/etaeho/Violin-Tuner/releases/download/dev-v2/violin-tuner-v2.apk
+   - 앱 ID `com.etaeho.violintuner.v2`, 이름 "Violin v2" → v1과 **따로** 설치됨
+4. 푸시 전 로컬 확인: `cd web && npm test && npm run build`
+
+---
+
+# (참고) v1 작업 가이드
 
 바이올린 튜너 · 메트로놈 · 지판 앱. 사용자는 **모바일에서 바이브 코딩**으로 개발하고, 폰에서 바로 APK를 받아 테스트한다.
 

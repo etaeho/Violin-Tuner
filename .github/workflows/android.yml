@@ -1,8 +1,7 @@
 name: Android APK
 
-# 어느 브랜치든 push 하면 APK를 빌드해서
-# 1) Actions 아티팩트로 올리고
-# 2) "dev" 프리릴리스에 violin-tuner.apk 로 덮어써서 폰에서 고정 링크로 바로 받을 수 있게 한다.
+# v2 브랜치: web/(Vite+React+TS)을 테스트·빌드한 뒤 APK로 묶어서
+# "dev-v2" 프리릴리스에 violin-tuner-v2.apk 로 올린다 (v1의 "dev" 링크와 별개).
 on:
   push:
   workflow_dispatch:
@@ -11,7 +10,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-apk
+  group: android-apk-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,6 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Web — install, test, build
+        working-directory: web
+        run: |
+          npm ci
+          npm test
+          npm run build
 
       - uses: actions/setup-java@v4
         with:
@@ -31,23 +43,23 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
-          cp app/build/outputs/apk/debug/app-debug.apk violin-tuner.apk
+          cp app/build/outputs/apk/debug/app-debug.apk violin-tuner-v2.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: violin-tuner-${{ github.run_number }}
-          path: violin-tuner.apk
+          name: violin-tuner-v2-${{ github.run_number }}
+          path: violin-tuner-v2.apk
 
-      - name: Publish to "dev" pre-release
+      - name: Publish to "dev-v2" pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="브랜치: ${GITHUB_REF_NAME}
+          NOTES="v2 개발 빌드 — 브랜치: ${GITHUB_REF_NAME}
           커밋: ${GITHUB_SHA::7} — $(git log -1 --pretty=%s)
           빌드 #${GITHUB_RUN_NUMBER}"
-          gh release delete dev --yes --cleanup-tag || true
-          gh release create dev violin-tuner.apk \
+          gh release delete dev-v2 --yes --cleanup-tag || true
+          gh release create dev-v2 violin-tuner-v2.apk \
             --prerelease \
             --target "$GITHUB_SHA" \
-            --title "개발 빌드 #${GITHUB_RUN_NUMBER} (${GITHUB_REF_NAME})" \
+            --title "v2 개발 빌드 #${GITHUB_RUN_NUMBER}" \
             --notes "$NOTES"

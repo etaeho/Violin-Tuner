@@ -1,0 +1,35 @@
+/* ==========================================================
+   디자인 토큰 — 테마 = 이 변수 묶음 하나. 컴포넌트는 tailwind 색 이름(bg-panel, text-ink…)만 사용.
+   값은 "R G B" 형식 (tailwind의 /투명도 표기를 쓰기 위해)
+   새 테마 추가: 여기 블록 하나 + src/store/settings.ts THEMES 항목
+   ========================================================== */
+:root, :root[data-theme='tape'] {
+  --app: 0 0 0;        --panel: 8 8 8;       --inset: 11 11 11;   --chip: 26 26 26;
+  --line: 38 38 44;    --ink: 229 231 235;   --dim: 120 126 140;  --faint: 55 60 70;
+  --accent: 74 252 157; --onaccent: 0 0 0;
+  --good: 74 252 157;  --warn: 255 204 0;    --sharp: 239 68 68;  --flat: 59 130 246;
+  --app-image: none;
+  --font-display: ui-sans-serif, system-ui, sans-serif;
+  color-scheme: dark;
+}
+:root[data-theme='vintage'] {
+  --app: 58 32 13;     --panel: 26 15 7;     --inset: 20 11 5;    --chip: 42 26 13;
+  --line: 120 90 40;   --ink: 244 227 181;   --dim: 190 165 120;  --faint: 107 74 18;
+  --accent: 246 221 148; --onaccent: 59 42 26;
+  --good: 74 222 128;  --warn: 224 169 79;   --sharp: 230 90 70;  --flat: 110 150 230;
+  --app-image:
+    repeating-linear-gradient(92deg, rgba(0,0,0,.10) 0 2px, transparent 2px 7px, rgba(255,255,255,.03) 7px 9px, transparent 9px 15px),
+    linear-gradient(180deg, #6e4220, #4a2a12 60%, #3a200d);
+  --font-display: Georgia, 'Times New Roman', serif;
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  /* 야외·무대 조명 아래에서 잘 보이게 */
+  --app: 244 243 238;  --panel: 255 255 255; --inset: 236 235 230; --chip: 255 255 255;
+  --line: 214 211 205; --ink: 24 24 27;      --dim: 100 100 110;  --faint: 200 200 205;
+  --accent: 5 150 105; --onaccent: 255 255 255;
+  --good: 5 150 105;   --warn: 202 138 4;    --sharp: 220 38 38;  --flat: 37 99 235;
+  --app-image: none;
+  --font-display: ui-sans-serif, system-ui, sans-serif;
+  color-scheme: light;
+}

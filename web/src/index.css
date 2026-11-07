@@ -1,0 +1,27 @@
+@import './ui/themes.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0; overflow: hidden; overscroll-behavior: none;
+  background: rgb(var(--app)); background-image: var(--app-image);
+  color: rgb(var(--ink));
+  -webkit-tap-highlight-color: transparent; user-select: none;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Noto Sans KR', sans-serif;
+}
+button { touch-action: manipulation; }
+::-webkit-scrollbar { display: none; }
+
+@layer components {
+  .card  { @apply bg-panel border border-line rounded-card; }
+  .chip  { @apply bg-chip border border-line rounded-pill; }
+  .inset { @apply bg-inset border border-line rounded-2xl; }
+}
+
+input[type='range'] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 4px; background: rgb(var(--faint)); outline: none; }
+input[type='range']::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: rgb(var(--accent)); box-shadow: 0 0 8px rgb(var(--accent) / .5); }
+
+@keyframes tabIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.tab-in { animation: tabIn .18s ease-out; }
