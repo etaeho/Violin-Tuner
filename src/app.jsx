@@ -93,7 +93,7 @@ const App = () => {
         }}
       >
         <div className={activeTab==='tuner'       ? 'flex flex-col w-full h-full' : 'hidden'}><Tuner       tuner={tuner} metro={metro}/></div>
-        <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro}/></div>
+        <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro} tuner={tuner}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
         <div className={activeTab==='drone'       ? 'flex flex-col w-full h-full' : 'hidden'}><Drone       drone={drone} metro={metro}/></div>
         <div className={activeTab==='log'         ? 'flex flex-col w-full h-full' : 'hidden'}><PracticeLog log={log}/></div>

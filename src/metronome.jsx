@@ -298,7 +298,44 @@ const Stepper = ({ value, onUp, onDown, accent }) => {
   );
 };
 
-const Metronome = ({ metro }) => {
+// 메트로놈 탭 위쪽 한 줄 음정 표시 (튜너와 같은 값): LIVE · 음이름 · ±50센트 바늘 · 센트
+const PitchStrip = ({ tuner }) => {
+  const { isStarted, pitch, cents, tolerance, currentNote, ensureMic } = tuner;
+  const vintage = useVintage();
+  const live = isStarted && pitch > 0;
+  const ok = live && Math.abs(cents) <= tolerance;
+  const col = !live ? 'var(--chip-border)' : ok ? '#4afc9d' : Math.abs(cents) <= tolerance + 15 ? '#ffcc00' : cents > 0 ? '#ef4444' : '#3b82f6';
+  const pos = Math.max(-50, Math.min(50, cents));
+  return (
+    <div className="w-full t-inset rounded-2xl px-3 py-2 flex items-center gap-3 shrink-0">
+      {/* 마이크 상태 */}
+      <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest shrink-0"
+        style={{ color: isStarted ? '#4afc9d' : '#ef4444' }}>
+        <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>
+        {isStarted ? 'LIVE' : 'OFF'}
+      </button>
+      {/* 음이름 */}
+      <span className="w-10 shrink-0 text-center font-black leading-none" style={{ color: live ? 'var(--ink)' : 'var(--ink-off)', fontSize: 20, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        {live ? currentNote.name : '—'}<span className="text-[11px]" style={{ color: '#4afc9d' }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
+        <span className="text-[10px] text-gray-500">{live ? currentNote.octave : ''}</span>
+      </span>
+      {/* ±50센트 막대 */}
+      <div className="relative flex-1 h-6">
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full" style={{ background: 'var(--chip-bg)', border: '1px solid var(--chip-border)' }}/>
+        <div className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full" style={{ left: `${50 - tolerance}%`, width: `${tolerance * 2}%`, background: 'rgba(74,252,157,.3)' }}/>
+        <div className="absolute top-0 bottom-0 left-1/2 w-px" style={{ background: 'var(--chip-border)' }}/>
+        <div className="absolute top-0.5 bottom-0.5 w-1.5 -ml-[3px] rounded-full transition-[left] duration-100"
+          style={{ left: `${50 + pos}%`, background: col, boxShadow: live ? `0 0 8px ${col}` : 'none', opacity: live ? 1 : 0.4 }}/>
+      </div>
+      {/* 센트 */}
+      <span className="w-12 shrink-0 text-right text-base font-black font-mono" style={{ color: live ? col : 'var(--ink-off)' }}>
+        {live ? (ok ? 'OK' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}{live && !ok && <span className="text-[9px]">¢</span>}
+      </span>
+    </div>
+  );
+};
+
+const Metronome = ({ metro, tuner }) => {
   const {
     bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
@@ -330,7 +367,7 @@ const Metronome = ({ metro }) => {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-black tracking-widest uppercase"
-            style={{ color: vintage ? '#f6dd94' : '#ffcc00', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+            style={{ color: vintage ? '#f6dd94' : document.documentElement.dataset.theme === 'light' ? '#b45309' : '#ffcc00', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
             {getTempoMarking(bpm)}
           </span>
           {/* 초기화: 두 번 눌러야 실행 */}
@@ -342,6 +379,9 @@ const Metronome = ({ metro }) => {
           </button>
         </div>
       </div>
+
+      {/* 지금 음정 (간단히) */}
+      {tuner && <PitchStrip tuner={tuner}/>}
 
       {/* 2. 박 설정 */}
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">
