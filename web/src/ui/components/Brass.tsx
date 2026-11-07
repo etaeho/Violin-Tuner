@@ -31,7 +31,7 @@ export function DrumDigits({ text, unit }: { text: string; unit?: string }) {
   return (
     <div className="flex items-end gap-[3px]">
       {text.split('').map((ch, i) => ch === '.' ? (
-        <span key={i} className="text-lg font-black leading-none pb-1 text-dim">.</span>
+        <span key={i} className="text-lg font-black leading-none pb-1" style={{ color: vintage ? '#3b2a1a' : 'rgb(var(--dim))' }}>.</span>
       ) : (
         <span key={i} className="w-[22px] h-8 rounded-[4px] flex items-center justify-center font-mono text-lg font-black"
           style={vintage

@@ -8,8 +8,12 @@
 - `web/src/ui/themes.css` — **디자인 토큰. 테마 = 변수 블록 하나** (tape / vintage / light). 컴포넌트는 tailwind 색 이름(`bg-panel`, `text-ink`, `text-accent`, `border-line` …)과 `.card` `.chip` `.inset` 만 사용, 색 직접 쓰지 말 것
 - `web/src/ui/components/` — 공용 부품 (Sheet, TabBar, Brass(BrassPlate·Screw·DrumDigits), PlannedScreen)
 - `web/src/features/<탭>/` — 탭별 화면: tuning · practice · fingerboard · log, `SettingsSheet.tsx`
-- `web/src/audio/detector.ts` — 음정 검출(NSDF). DOM 의존 금지 (2단계에서 AudioWorklet에서 사용)
-- `web/src/store/settings.ts` — 설정 저장 (zustand persist, localStorage `vt2.settings`). **사용자가 바꾸는 값은 저장되어야 함**
+- `web/src/audio/` — 오디오 (DOM 의존 없는 순수 로직은 테스트 필수)
+  - `detector.ts` 음정 검출(NSDF) · `pitch-worklet.ts` **오디오 스레드**에서 2048샘플/1024마다 분석 → 메인으로 전달
+  - `engine.ts` 마이크·AudioContext·워크렛 연결 (`mic` 싱글턴) · `tracker.ts` 게이트·신뢰도·확정·평균·유지 (순수 클래스)
+  - `strings.ts` 현·조율 방식(평균율/순정 5도) · `synth.ts` 기준음
+- `web/src/store/` — zustand. `settings.ts`(테마·탭, `vt2.settings`), `tuner.ts`(A4·범위·조율·감도, `vt2.tuner`), `live.ts`(실시간 상태, 저장 안 함 — 엔진→트래커→상태 연결, 소음 측정). **사용자가 바꾸는 값은 저장되어야 함**
+- `web/src/features/tuning/` — TuningScreen(조절줄·현별 세로 테이프·숫자 표시), VTape, Ripple("울림")
 - `web/tests/` — vitest. 음정 검출은 합성 음원으로 테스트 (`npm test`)
 - 명령: `cd web && npm install && npm run dev`(개발 서버) / `npm test` / `npm run build`(→ `web/dist`)
 

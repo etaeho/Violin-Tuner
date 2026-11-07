@@ -8,6 +8,10 @@ import { FingerboardScreen } from '@/features/fingerboard/FingerboardScreen';
 import { LogScreen } from '@/features/log/LogScreen';
 import { SettingsSheet } from '@/features/SettingsSheet';
 import { haptic } from '@/ui/haptic';
+import { mic } from '@/audio/engine';
+import { stopTone } from '@/audio/synth';
+import { useTuner } from '@/store/tuner';
+import { useLive } from '@/store/live';
 
 const SCREENS = { tuning: TuningScreen, practice: PracticeScreen, fingerboard: FingerboardScreen, log: LogScreen };
 
@@ -18,6 +22,18 @@ export default function App() {
 
   // 테마 = <html data-theme> → themes.css 변수가 바뀜
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+
+  // 켜면 바로 듣기: 마이크 자동 시작, 앱을 내리면 정지, 첫 터치 때 오디오 재개
+  useEffect(() => {
+    const { minFreq, maxFreq } = useTuner.getState().sens;
+    mic.setRange(minFreq, maxFreq);
+    mic.start();
+    const onVis = () => { if (document.visibilityState === 'hidden') { mic.stop(); stopTone(); useLive.getState().setPlaying(null); } else mic.start(); };
+    const onTouch = () => mic.resume();
+    document.addEventListener('visibilitychange', onVis);
+    document.addEventListener('pointerdown', onTouch);
+    return () => { document.removeEventListener('visibilitychange', onVis); document.removeEventListener('pointerdown', onTouch); mic.stop(); };
+  }, []);
 
   const Screen = SCREENS[tab];
   const title = TABS.find((t) => t.id === tab)?.label;
