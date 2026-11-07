@@ -21,11 +21,11 @@ const applyTheme = (id) => { document.documentElement.dataset.theme = id; };
 
 // 숫자 표시 (Hz · BPM)
 //  - 테이프/라이트: 검은 숫자판
-//  - 빈티지: 닉시관 — 어두운 유리관 안에서 주황빛으로 빛나는 숫자 (황동·원목과 어울리는 옛 계측기 느낌)
-const DrumDigits = ({ text, unit = 'Hz', size = 'md' }) => {
+//  - 빈티지: 얇은 플립 카드 (FlipDigits)
+const DrumDigits = ({ text, unit = 'Hz', size = 'md', onDark = false }) => {   // onDark: 어두운 바탕 위(황동판 밖)
   const vintage = useVintage();
   const big = size === 'lg';
-  if (vintage) return <NixieDigits text={text} unit={unit} big={big}/>;
+  if (vintage) return <FlipDigits text={text} unit={unit} big={big} onDark={onDark}/>;
   return (
   <div className="flex items-end gap-[3px]">
     {text.split('').map((ch, i) => ch === '.' ? (
@@ -41,28 +41,25 @@ const DrumDigits = ({ text, unit = 'Hz', size = 'md' }) => {
 );
 };
 
-const NIXIE_GLOW = '0 0 3px #ffb46b, 0 0 8px #ff7a1a, 0 0 16px rgba(255,100,0,.55)';
-const NixieDigits = ({ text, unit, big }) => {
-  const w = big ? 30 : 21, h = big ? 46 : 34, fs = big ? 32 : 22;
+// 빈티지 숫자: 얇은 플립 카드 (공항 안내판처럼 가운데 접힌 선, 호두나무색 카드 + 크림색 세리프 숫자)
+const FlipDigits = ({ text, unit, big, onDark }) => {
+  const w = big ? 28 : 18, h = big ? 42 : 28, fs = big ? 30 : 19;
   return (
-    <div className="flex items-end gap-[3px] rounded-lg px-2 py-1.5"
-      style={{ background: 'linear-gradient(180deg,#1b100a,#0b0604)', border: '1px solid #6b4a12',
-               boxShadow: 'inset 0 3px 8px rgba(0,0,0,.85), 0 1px 0 rgba(255,236,190,.35)' }}>
+    <div className="flex items-center" style={{ gap: big ? 3 : 2 }}>
       {text.split('').map((ch, i) => ch === '.' ? (
-        <span key={i} className="rounded-full mb-1.5" style={{ width: 5, height: 5, background: '#ffb46b', boxShadow: NIXIE_GLOW }}/>
+        <span key={i} className="font-black" style={{ color: '#f2e6c4', fontSize: fs * 0.8, margin: '0 1px', fontFamily: 'Georgia,serif' }}>.</span>
       ) : (
-        <span key={i} className="relative flex items-center justify-center overflow-hidden"
-          style={{ width: w, height: h, borderRadius: `${w / 2}px ${w / 2}px 4px 4px`,
-                   background: 'radial-gradient(ellipse at 50% 40%, rgba(255,130,40,.16), rgba(14,7,3,.96) 72%)',
-                   border: '1px solid rgba(255,210,160,.16)', boxShadow: 'inset 0 0 6px rgba(0,0,0,.9)' }}>
-          {/* 꺼진 음극(8) 흔적 */}
-          <span className="absolute" style={{ fontFamily: 'Georgia,serif', fontSize: fs, color: 'rgba(255,160,90,.07)', lineHeight: 1 }}>8</span>
-          <span className="relative" style={{ fontFamily: 'Georgia,serif', fontSize: fs, lineHeight: 1, color: '#ffc27a', textShadow: NIXIE_GLOW }}>{ch}</span>
-          {/* 유리 반사 */}
-          <span className="absolute rounded-full" style={{ top: 3, left: 3, width: 3, height: h * 0.35, background: 'rgba(255,255,255,.10)' }}/>
+        <span key={i} className="relative"
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: w, height: h, borderRadius: big ? 4 : 3,
+                   background: 'linear-gradient(180deg,#5a3820 0 49%,#472c18 51% 100%)',
+                   border: '1px solid #6b4a12', boxShadow: '0 1px 2px rgba(0,0,0,.5)',
+                   color: '#f2e6c4', font: `700 ${fs}px/1 Georgia,serif` }}>
+          {ch}
+          {/* 가운데 접힌 선 */}
+          <span className="absolute inset-x-0 top-1/2" style={{ height: 1, background: 'rgba(0,0,0,.6)' }}/>
         </span>
       ))}
-      <span className="ml-1 pb-0.5 font-black tracking-wider" style={{ fontSize: big ? 11 : 9, color: '#c9a14a', fontFamily: 'Georgia,serif' }}>{unit}</span>
+      {unit && <span className="font-bold" style={{ marginLeft: big ? 6 : 4, fontSize: big ? 11 : 10, color: onDark ? '#c9a14a' : '#3b2a1a', fontFamily: 'Georgia,serif' }}>{unit}</span>}
     </div>
   );
 };

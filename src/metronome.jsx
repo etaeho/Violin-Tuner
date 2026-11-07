@@ -508,7 +508,7 @@ const MiniMetronome = ({ metro }) => {
         </button>
         <div className="flex-1 flex flex-col items-center justify-center min-w-0">
           {vintage
-            ? <DrumDigits text={String(bpm).padStart(3, '0')} unit="BPM" size="lg"/>
+            ? <DrumDigits text={String(bpm).padStart(3, '0')} unit="BPM" size="lg" onDark/>
             : <div className="flex items-baseline gap-1">
                 <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: text }}>{bpm}</span>
                 <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
