@@ -311,13 +311,15 @@ const BAR_MAX_CENTS = 350;
 const BAR_TICKS = [10, 50, 100, 200];
 const BAR_H = 'clamp(52px, 13vh, 120px)';
 // 막대 크기: 'normal'(고정) | 'fill'(남는 세로 공간 채움) | 'compact'(작게, 템포 패널과 함께)
-const BAR_H_COMPACT = 'clamp(40px, 9vh, 76px)';   // 테이프(약 92px)와 비슷한 크기
-const barBox = (size) => (size === 'fill' ? { flex: '1 1 0', minHeight: 56 } : { height: size === 'compact' ? BAR_H_COMPACT : BAR_H });
+const barBox = (size) => (
+  size === 'fill' ? { flex: '1 1 0', minHeight: 56 }
+  : size === 'compact' ? { flex: '1 1 0', minHeight: 44, maxHeight: 130 }   // 남는 공간만큼 늘어나되 최대 130px
+  : { height: BAR_H });
 const barTicks = (size) => (size === 'compact' ? [10, 50, 100] : BAR_TICKS);
 
 // 튜너 화면 구성 (설정 → 화면 모드)
 const TUNER_LAYOUTS = [
-  { id: 'tapeTempo', name: '테이프 + 템포', desc: '작은 막대 + 미니 메트로놈 + 테이프' },
+  { id: 'tapeTempo', name: '테이프 + 템포', desc: '막대 + 테이프 + 미니 메트로놈' },
   { id: 'tape',   name: '테이프만',   desc: '막대 크게 + 하단 테이프' },
   { id: 'center', name: '음 표시만', desc: '막대 크게 + 큰 음이름' },
   { id: 'both',   name: '모두',      desc: '음 표시 + 테이프' },
@@ -363,12 +365,12 @@ const StringBar = ({ dir, show, pos, color, tolerance, size }) => {
 };
 
 const StringBars = ({ tuner, size = 'normal' }) => {
-  const fill = size === 'fill';
+  const fill = size === 'fill' || size === 'compact';
   const vintage = useVintage();
   const { isStarted, pitch, stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;
   return (
     <div className={`flex justify-between w-full max-w-sm pr-2 my-2 ${fill ? 'flex-1 min-h-0 items-stretch' : 'shrink-0 items-center'}`}>
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-center justify-center">
         <span className="text-[9px] font-black mb-1 text-red-500/70">♯</span>
         <BarScale dir="up" size={size}/>
         <div className="h-12 my-0.5"/>
@@ -639,9 +641,10 @@ const SettingsSheet = ({ tuner, onClose }) => {
                     <div className="flex justify-around" style={{ flex: l.id === 'both' || l.id === 'tapeTempo' ? '0 0 26%' : '1 1 0' }}>
                       {[0,1,2,3].map(i => <div key={i} className="w-[3px] h-full rounded-full bg-gray-500"/>)}
                     </div>
+                    {l.id === 'tapeTempo' && <div className="rounded-sm bg-gray-800 border-t-2 border-red-500/70" style={{ flex: '0 0 22%' }}/>}
                     {l.id === 'tapeTempo' && <div className="rounded-sm bg-gray-800 flex items-center justify-center gap-[2px]" style={{ flex: '1 1 0' }}>{[0,1,2,3].map(i => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i ? 'bg-[#4afc9d]/50' : 'bg-[#ffcc00]'}`}/>)}</div>}
                     {(l.id === 'center' || l.id === 'both') && <div className="rounded-sm bg-gray-700 flex items-center justify-center text-[8px] font-black text-white" style={{ flex: '0 0 30%' }}>A</div>}
-                    {l.id !== 'center' && <div className="rounded-sm bg-gray-800 border-t-2 border-red-500/70" style={{ flex: '0 0 22%' }}/>}
+                    {(l.id === 'tape' || l.id === 'both') && <div className="rounded-sm bg-gray-800 border-t-2 border-red-500/70" style={{ flex: '0 0 22%' }}/>}
                   </div>
                   <span className={`text-xs font-black ${on ? 'text-[#4afc9d]' : 'text-gray-300'}`}>{l.name}</span>
                   <span className="text-[9px] text-gray-500 leading-tight text-center">{l.desc}</span>
@@ -860,11 +863,14 @@ const Tuner = ({ tuner, metro }) => {
       {/* Violin strings */}
       <StringBars tuner={tuner} size={barSize}/>
 
-      {/* 미니 템포 (테이프 + 템포 구성) — 2번 탭과 같은 메트로놈 */}
+      {/* 테이프 + 템포 구성: 막대 → 음 테이프 → 미니 템포(맨 아래) — 2번 탭과 같은 메트로놈 */}
       {withTempo && (
-        <div className="w-full flex-1 min-h-0 flex items-center justify-center">
-          <MiniMetronome metro={metro}/>
-        </div>
+        <>
+          <NoteTape tuner={tuner} showMic/>
+          <div className="w-full shrink-0 flex justify-center pt-2.5">
+            <MiniMetronome metro={metro}/>
+          </div>
+        </>
       )}
 
       {/* Main display (설정 → 튜너 화면 구성에서 숨길 수 있음) */}
@@ -924,7 +930,7 @@ const Tuner = ({ tuner, metro }) => {
       )}
 
       {/* Bottom: 음 테이프 (테마에 따라 다크/황동) */}
-      {showTape && <NoteTape tuner={tuner} showMic={!showCenter}/>}
+      {showTape && !withTempo && <NoteTape tuner={tuner} showMic={!showCenter}/>}
 
       {showSettings && <SettingsSheet tuner={tuner} onClose={() => setShowSettings(false)}/>}
 
