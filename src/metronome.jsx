@@ -497,7 +497,7 @@ const Metronome = ({ metro, tuner }) => {
       </div>
 
       {visibleBlocks('t2', layout).map(b => (
-        <LayoutBlock key={b.id} grow={b.grow} size={b.size}>
+        <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
           {b.id === 'pitch' && tuner && <PitchStrip tuner={tuner}/>}
           {b.id === 'beats' && (
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">

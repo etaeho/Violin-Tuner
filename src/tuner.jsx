@@ -837,10 +837,29 @@ const PartsEditor = ({ parts, onChange }) => {
   );
 };
 
+// 화면 배치 미리보기: 실제 탭 화면을 그대로 작게 그림 (조작은 안 됨)
+const LayoutPreview = ({ tab, tuner, metro, sel }) => {
+  const W = Math.min(window.innerWidth, 448) - 32;            // 탭 내용 영역 크기 (app.jsx 여백 기준)
+  const H = Math.max(480, window.innerHeight - 100);
+  const k = 300 / H;
+  return (
+    <div className="self-center rounded-[18px] overflow-hidden relative t-app" style={{ width: W * k + 12, height: H * k + 12, padding: 6,
+      border: '2px solid var(--chip-border)', boxShadow: '0 8px 24px rgba(0,0,0,.45)' }}>
+      <div style={{ width: W, height: H, transform: `scale(${k})`, transformOrigin: 'top left', pointerEvents: 'none' }} className="flex flex-col" aria-hidden="true">
+        <LayoutHighlightContext.Provider value={sel}>
+          {tab === 't1' ? <Tuner tuner={tuner} metro={metro} preview/> : <Metronome metro={metro} tuner={tuner}/>}
+        </LayoutHighlightContext.Provider>
+      </div>
+    </div>
+  );
+};
+
 // ── 화면 배치: 탭별 블록을 손잡이(⋮⋮)로 끌어 위아래 이동 · 크기 · 보이기 ──
 const SIZE_NAMES = { s: '작게', m: '보통', l: '크게' };
-const LayoutEditor = ({ S, updateSettings }) => {
+const LayoutEditor = ({ S, updateSettings, tuner, metro }) => {
   const [tab, setTab] = useState('t1');
+  const [sel, setSel] = useState(null);          // 미리보기에서 테두리로 표시할 블록
+  const [showPrev, setShowPrev] = useState(true);
   const key = tab === 't1' ? 'layout1' : 'layout2';
   const list = S[key];
   const listRef = useRef(null);
@@ -852,7 +871,7 @@ const LayoutEditor = ({ S, updateSettings }) => {
   const move = (from, to) => { const l = [...listNow.current]; const [it] = l.splice(from, 1); l.splice(to, 0, it); save(l); };
 
   // 끌기: 손가락이 다른 줄의 가운데를 넘으면 그 자리로 이동
-  const onDown = (e, id) => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} setDragId(id); haptic(12); };
+  const onDown = (e, id) => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} setDragId(id); setSel(id); haptic(12); };
   const onMove = (e) => {
     if (!dragId || !listRef.current) return;
     const rows = [...listRef.current.children];
@@ -867,10 +886,14 @@ const LayoutEditor = ({ S, updateSettings }) => {
     <div className="flex flex-col gap-2.5">
       <div className="flex gap-1 p-1 rounded-full t-chip">
         {[['t1', '튜너 탭'], ['t2', '메트로놈 탭']].map(([id, name]) => (
-          <button key={id} onClick={() => { setTab(id); haptic(6); }} className="flex-1 py-1.5 rounded-full text-xs font-black transition-all"
+          <button key={id} onClick={() => { setTab(id); setSel(null); haptic(6); }} className="flex-1 py-1.5 rounded-full text-xs font-black transition-all"
             style={tab === id ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{name}</button>
         ))}
       </div>
+      {showPrev && metro && <LayoutPreview tab={tab} tuner={tuner} metro={metro} sel={sel}/>}
+      <button onClick={() => { setShowPrev(v => !v); haptic(6); }} className="self-center text-[10px] font-bold text-gray-500 -mt-1">
+        {showPrev ? '미리보기 접기 ▲' : '미리보기 보기 ▼'}
+      </button>
       {tab === 't1' && (
         <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
           {LAYOUT_PRESETS.map(p => (
@@ -889,18 +912,18 @@ const LayoutEditor = ({ S, updateSettings }) => {
               <span onPointerDown={e => onDown(e, b.id)} className="w-9 h-11 flex items-center justify-center shrink-0 cursor-grab" style={{ touchAction: 'none', color: 'var(--ink2)' }} aria-label="끌어서 옮기기">
                 <GripVertical size={18}/>
               </span>
-              <span className="flex-1 min-w-0 flex flex-col">
-                <span className="text-xs font-black truncate" style={{ color: 'var(--ink)' }}>{m.name}</span>
+              <span className="flex-1 min-w-0 flex flex-col" onClick={() => { setSel(sel === b.id ? null : b.id); haptic(6); }}>
+                <span className="text-xs font-black truncate" style={{ color: sel === b.id ? 'var(--accent)' : 'var(--ink)' }}>{m.name}</span>
                 <span className="text-[9px] text-gray-500">{m.grow ? '남는 공간 채움' : '고정 높이'}</span>
               </span>
               <span className="flex rounded-full overflow-hidden shrink-0" style={{ border: '1px solid var(--chip-border)' }}>
                 {LAYOUT_SIZES.map(z => (
-                  <button key={z} disabled={!b.on} onClick={() => { patch(b.id, { size: z }); haptic(6); }}
+                  <button key={z} disabled={!b.on} onClick={() => { patch(b.id, { size: z }); setSel(b.id); haptic(6); }}
                     className="px-1.5 py-1 text-[10px] font-black"
                     style={b.size === z ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{SIZE_NAMES[z]}</button>
                 ))}
               </span>
-              <button disabled={m.lock} onClick={() => { patch(b.id, { on: !b.on }); haptic(8); }}
+              <button disabled={m.lock} onClick={() => { patch(b.id, { on: !b.on }); setSel(b.id); haptic(8); }}
                 className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" aria-label={b.on ? '숨기기' : '보이기'}
                 style={{ color: m.lock ? 'var(--ink-off)' : b.on ? 'var(--accent)' : 'var(--ink2)' }}>
                 {b.on ? <Eye size={17}/> : <EyeOff size={17}/>}
@@ -910,7 +933,7 @@ const LayoutEditor = ({ S, updateSettings }) => {
         })}
       </div>
       <div className="flex justify-between items-center">
-        <span className="text-[10px] text-gray-500">⋮⋮ 를 누른 채 위아래로 끌어 순서를 바꿉니다</span>
+        <span className="text-[10px] text-gray-500 leading-snug">⋮⋮ 끌기 = 순서 · 이름 누르기 = 미리보기에 표시</span>
         <button onClick={() => { save(tab === 't1' ? makeLayout('t1', LAYOUT_PRESETS[0].on) : makeLayout('t2', DEFAULT_LAYOUT2_ON)); haptic(8); }}
           className="text-[11px] font-bold text-gray-400 shrink-0">↺ 기본 배치</button>
       </div>
@@ -918,7 +941,7 @@ const LayoutEditor = ({ S, updateSettings }) => {
   );
 };
 
-const SettingsSheet = ({ tuner, onClose }) => {
+const SettingsSheet = ({ tuner, metro, onClose }) => {
   const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise, noteTracker } = tuner;
   const [lv, setLv] = useState(levelRef.current);
   const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
@@ -985,7 +1008,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
         </Section>
 
         <Section title="② 화면 배치">
-          <LayoutEditor S={S} updateSettings={updateSettings}/>
+          <LayoutEditor S={S} updateSettings={updateSettings} tuner={tuner} metro={metro}/>
         </Section>
 
         <Section title="③ 소리 감지">
@@ -1256,7 +1279,7 @@ const Tuner = ({ tuner, metro }) => {
       {/* 화면 배치 (설정 → 화면 배치): 켜진 블록을 순서대로 */}
       <div className="w-full flex-1 min-h-0 flex flex-col items-center gap-2 pt-1">
         {blocks.map(b => (
-          <LayoutBlock key={b.id} grow={b.grow} size={b.size}>
+          <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
             {b.id === 'bars' && <StringBars tuner={tuner} size="fill"/>}
             {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
@@ -1268,7 +1291,7 @@ const Tuner = ({ tuner, metro }) => {
         {!blocks.some(b => b.grow) && <div className="flex-1"/>}
       </div>
 
-      {showSettings && <SettingsSheet tuner={tuner} onClose={() => setShowSettings(false)}/>}
+      {showSettings && <SettingsSheet tuner={tuner} metro={metro} onClose={() => setShowSettings(false)}/>}
 
       {/* Error modal */}
       {error && (

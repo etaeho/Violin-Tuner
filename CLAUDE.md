@@ -21,7 +21,7 @@
   모양 자체가 다른 부분만 `useVintage()`로 분기. 새 우드 디자인 = `SKINS` 항목 + `DESIGNS` 한 줄 + core.jsx `DESIGN_BASE` 한 줄. 새 바탕 테마 = theme.css 변수 블록 + loadSettings 허용 목록.
   설정 시트는 ① 디자인(+세부 꾸미기) ② 화면 배치 ③ 소리 감지 ④ 연주 명령 ⑤ 백업·정보 — 자주 안 쓰는 값은 `Fold`(펼치기) 안에 둔다.
   - **세부 꾸미기** `settings.parts {num, plate}` (core.jsx `PART_NUM_STYLES`/`PART_PLATE_STYLES`) → `PartsContext`/`useParts()`. 숫자 = `PartNumber`(flip·radio·drum·led), 판 = `BrassPlate`. 적용: TunerReadout, 미니 메트로놈 BPM, 2번 탭 다이얼 가운데(`DialCenter`)
-  - **화면 배치** `settings.layout1`(1번 탭) / `layout2`(2번 탭) = `[{id, on, size:'s'|'m'|'l'}]` 순서대로. 블록 목록은 core.jsx `LAYOUT_BLOCKS` (grow = 남는 공간 채움, 크기 = 비율 / 나머지는 크기 = zoom 배율, lock = 숨기기 불가). 렌더: `visibleBlocks` + `LayoutBlock`(theme.jsx). 편집: `LayoutEditor`(tuner.jsx, 손잡이 끌기). 새 블록 = LAYOUT_BLOCKS 한 줄 + Tuner/Metronome의 `b.id === ...` 한 줄
+  - **화면 배치** `settings.layout1`(1번 탭) / `layout2`(2번 탭) = `[{id, on, size:'s'|'m'|'l'}]` 순서대로. 블록 목록은 core.jsx `LAYOUT_BLOCKS` (grow = 남는 공간 채움, 크기 = 비율 / 나머지는 크기 = zoom 배율, lock = 숨기기 불가). 렌더: `visibleBlocks` + `LayoutBlock`(theme.jsx). 편집: `LayoutEditor`(tuner.jsx, 손잡이 끌기 + `LayoutPreview` 실제 화면 축소 미리보기, 고른 블록은 `LayoutHighlightContext`로 테두리). 새 블록 = LAYOUT_BLOCKS 한 줄 + Tuner/Metronome의 `b.id === ...` 한 줄
   - 2번 탭 위 음정 표시 = `PitchStrip`(바늘 게이지)
 - `vendor/` — React/ReactDOM/Lucide/Babel 고정 버전. Tailwind만 CDN.
 - `manifest.json`, `sw.js`, `icons/` — PWA 리소스

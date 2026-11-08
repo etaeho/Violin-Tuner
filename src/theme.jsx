@@ -178,9 +178,15 @@ const PartNumber = ({ style, text, unit, size = 26, unitColor }) => {
 //  고정 블록: 크기 = 확대 배율 (zoom — 폭은 화면 안에 맞춰지고 높이만 커짐)
 const BLOCK_ZOOM = { s: 0.85, m: 1, l: 1.2 };
 const BLOCK_GROW = { s: 1, m: 2, l: 3 };
-const LayoutBlock = ({ grow, size = 'm', children }) => grow
-  ? <div className="w-full min-h-0 flex flex-col items-center" style={{ flex: `${BLOCK_GROW[size]} 1 0`, maxHeight: size === 's' ? '45%' : undefined }}>{children}</div>
-  : <div className="w-full shrink-0 flex flex-col items-center" style={{ zoom: BLOCK_ZOOM[size] }}>{children}</div>;
+// 설정 미리보기에서 고른 블록을 테두리로 표시
+const LayoutHighlightContext = React.createContext(null);
+const LayoutBlock = ({ id, grow, size = 'm', children }) => {
+  const hl = React.useContext(LayoutHighlightContext) === id;
+  const mark = hl ? { outline: '3px solid var(--accent)', outlineOffset: 2, borderRadius: 14 } : {};
+  return grow
+    ? <div className="w-full min-h-0 flex flex-col items-center" style={{ flex: `${BLOCK_GROW[size]} 1 0`, maxHeight: size === 's' ? '45%' : undefined, ...mark }}>{children}</div>
+    : <div className="w-full shrink-0 flex flex-col items-center" style={{ zoom: BLOCK_ZOOM[size], ...mark }}>{children}</div>;
+};
 // 켜진 블록만 순서대로 [{id, size, grow}]
 const visibleBlocks = (tab, list) => list.filter(b => b.on).map(b => ({ ...b, grow: !!LAYOUT_BLOCKS[tab].find(k => k.id === b.id)?.grow }));
 
