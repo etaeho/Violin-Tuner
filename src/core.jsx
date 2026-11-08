@@ -10,7 +10,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 const {
   Play, Square, Settings, Volume2, VolumeX, AlertCircle,
   Music, Activity, Minus, Plus, ChevronUp, ChevronDown, RotateCcw,
-  LayoutGrid, SlidersHorizontal, X, Mic, ZoomIn, ZoomOut, AudioWaveform, Waves, BarChart3, Flame, Trash2, Download, Upload, Target
+  LayoutGrid, SlidersHorizontal, X, GripVertical, Eye, EyeOff, Mic, ZoomIn, ZoomOut, AudioWaveform, Waves, BarChart3, Flame, Trash2, Download, Upload, Target
 } = LucideReact;
 
 /* 햅틱 피드백 헬퍼 */
@@ -145,6 +145,69 @@ const getTempoMarking = (bpm) => {
 // ==========================================
 // 튜너 감도 설정 (localStorage 저장)
 // ==========================================
+// ── 화면 배치 (설정 → 화면 배치): 탭마다 블록 순서 · 보이기 · 크기 ──
+//  grow = 남는 세로 공간을 채우는 블록(크기 = 차지 비율), 나머지는 크기 = 확대 배율. lock = 숨길 수 없음
+const LAYOUT_BLOCKS = {
+  t1: [
+    { id: 'vtapes',  name: '현별 세로 테이프', grow: true },
+    { id: 'bars',    name: '현별 막대',       grow: true },
+    { id: 'note',    name: '큰 음이름',       grow: true },
+    { id: 'readout', name: '음정 숫자창' },
+    { id: 'tape',    name: '가로 음 테이프' },
+    { id: 'mini',    name: '미니 메트로놈' },
+  ],
+  t2: [
+    { id: 'pitch',    name: '음정 바늘 게이지' },
+    { id: 'beats',    name: '박 설정' },
+    { id: 'dial',     name: '박자 다이얼', grow: true },
+    { id: 'tempo',    name: '템포 슬라이더 · 프리셋' },
+    { id: 'controls', name: 'TAP · 시작', lock: true },
+  ],
+};
+// 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
+const LAYOUT_PRESETS = [
+  { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'readout', 'mini'] },
+  { id: 'tapeTempo',  name: '막대 + 테이프 + 템포', on: ['bars', 'tape', 'mini'] },
+  { id: 'tape',       name: '막대 + 테이프', on: ['bars', 'tape'] },
+  { id: 'center',     name: '막대 + 큰 음이름', on: ['bars', 'note'] },
+  { id: 'both',       name: '큰 음이름 + 테이프', on: ['bars', 'note', 'tape'] },
+];
+const LAYOUT_SIZES = ['s', 'm', 'l'];
+const makeLayout = (tab, onIds) => [
+  ...onIds.map(id => ({ id, on: true, size: 'm' })),
+  ...LAYOUT_BLOCKS[tab].filter(b => !onIds.includes(b.id)).map(b => ({ id: b.id, on: !!b.lock, size: 'm' })),
+];
+const DEFAULT_LAYOUT2_ON = ['pitch', 'beats', 'dial', 'tempo', 'controls'];
+// 저장값 정리: 모르는 블록 제거, 빠진 블록은 꺼진 채로 뒤에 추가
+const normLayout = (tab, list) => {
+  const known = LAYOUT_BLOCKS[tab], seen = new Set(), out = [];
+  (Array.isArray(list) ? list : []).forEach(it => {
+    const b = it && known.find(k => k.id === it.id);
+    if (!b || seen.has(b.id)) return;
+    seen.add(b.id);
+    out.push({ id: b.id, on: b.lock ? true : !!it.on, size: LAYOUT_SIZES.includes(it.size) ? it.size : 'm' });
+  });
+  known.forEach(b => { if (!seen.has(b.id)) out.push({ id: b.id, on: !!b.lock, size: 'm' }); });
+  return out;
+};
+
+// ── 부품별 꾸미기 (디자인 위에 덮어쓰기) ──
+const PART_NUM_STYLES = [
+  { id: 'auto',  name: '디자인 기본' },
+  { id: 'flip',  name: '플립 카드' },
+  { id: 'radio', name: '크림 창' },
+  { id: 'drum',  name: '검은 숫자판' },
+  { id: 'led',   name: 'LED' },
+];
+const PART_PLATE_STYLES = [
+  { id: 'auto',  name: '디자인 기본' },
+  { id: 'brass', name: '황동판 (나사)' },
+];
+const normParts = (p) => ({
+  num: PART_NUM_STYLES.some(x => x.id === p?.num) ? p.num : 'auto',
+  plate: PART_PLATE_STYLES.some(x => x.id === p?.plate) ? p.plate : 'auto',
+});
+
 const DEFAULT_SETTINGS = {
   gateDb: -40,       // 이 레벨(dB) 미만 소리는 무시 (노이즈 게이트)
   clarity: 0.90,     // 주기성 신뢰도 0~1. 잡음은 낮고 악기 소리는 높음
@@ -155,7 +218,10 @@ const DEFAULT_SETTINGS = {
   maxFreq: 3500,     // 감지 최고 Hz
   uiMode: 'tape',    // 바탕 테마(theme.css data-theme) — design에서 자동으로 정해짐
   design: 'dark',    // 디자인 7가지 중 하나 → theme.jsx DESIGNS (dark·light·piano·leather·radio·violin·sheet)
-  tunerLayout: 'vtapeTempo', // 튜너 화면 구성: 'vtapeTempo'(현별 세로 테이프+템포) | 'tapeTempo' | 'tape' | 'center' | 'both'  → tuner.jsx TUNER_LAYOUTS
+  tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
+  layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
+  layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
+  parts: { num: 'auto', plate: 'auto' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   layoutRev: 3,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
@@ -174,6 +240,10 @@ const loadSettings = () => {
     v.uiMode = DESIGN_BASE[v.design];
     if (stored.layoutRev !== 3) { v.tunerLayout = 'vtapeTempo'; v.layoutRev = 3; }   // 저장값 기준으로 판단
     if (!['vtapeTempo', 'tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'vtapeTempo';
+    // 블록 배치: 저장값이 없으면 예전 '튜너 화면 구성'에서 만들어 줌
+    v.layout1 = normLayout('t1', stored.layout1 || makeLayout('t1', LAYOUT_PRESETS.find(p => p.id === v.tunerLayout).on));
+    v.layout2 = normLayout('t2', stored.layout2 || makeLayout('t2', DEFAULT_LAYOUT2_ON));
+    v.parts = normParts(stored.parts);
     return v;
   }
   catch (_) { return { ...DEFAULT_SETTINGS }; }

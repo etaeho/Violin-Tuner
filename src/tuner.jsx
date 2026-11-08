@@ -45,7 +45,7 @@ const useTunerLogic = () => {
     saveSettings(next);
     setSettingsState(next);
   };
-  const resetSettings = () => { const c = settingsRef.current; updateSettings({ ...DEFAULT_SETTINGS, design: c.design, uiMode: c.uiMode, onboarded: c.onboarded, tunerLayout: c.tunerLayout, layoutRev: c.layoutRev }); };
+  const resetSettings = () => { const c = settingsRef.current; updateSettings({ ...DEFAULT_SETTINGS, design: c.design, uiMode: c.uiMode, onboarded: c.onboarded, tunerLayout: c.tunerLayout, layoutRev: c.layoutRev, layout1: c.layout1, layout2: c.layout2, parts: c.parts }); };
 
   useEffect(() => {
     if (settingsRef.current.onboarded) ensureMic();    // 처음이면 안내 화면에서 허용받은 뒤 시작
@@ -305,14 +305,6 @@ const barBox = (size) => (
   : { height: BAR_H });
 const barTicks = (size) => (size === 'compact' ? [10, 50, 100] : BAR_TICKS);
 
-// 튜너 화면 구성 (설정 → 화면 모드)
-const TUNER_LAYOUTS = [
-  { id: 'vtapeTempo', name: '세로 테이프 + 템포', desc: '현마다 세로 테이프 + 미니 메트로놈' },
-  { id: 'tapeTempo', name: '테이프 + 템포', desc: '막대 + 테이프 + 미니 메트로놈' },
-  { id: 'tape',   name: '테이프만',   desc: '막대 크게 + 하단 테이프' },
-  { id: 'center', name: '음 표시만', desc: '막대 크게 + 큰 음이름' },
-  { id: 'both',   name: '모두',      desc: '음 표시 + 테이프' },
-];
 const barPct = (c) => Math.min(100, Math.sqrt(Math.min(Math.abs(c), BAR_MAX_CENTS) / BAR_MAX_CENTS) * 100);
 
 const BarScale = ({ dir, size }) => {
@@ -505,6 +497,38 @@ const TunerReadout = ({ tuner }) => {
   const live = isStarted && pitch > 0;
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
   const col = !live ? (vintage ? 'rgba(244,227,181,.35)' : '#27272a') : Math.abs(cents) <= tolerance ? '#4afc9d' : cents > 0 ? '#ef4444' : '#3b82f6';
+  const parts = useParts();
+  if (partsCustom(parts)) {
+    // 부품별 꾸미기: 판(디자인 기본 / 황동판) + 숫자 모양(플립 카드·크림 창·검은 숫자판·LED)
+    const { currentNote } = tuner;
+    const brass = parts.plate === 'brass';
+    const ns = partNumStyle(parts);
+    const ok = live && Math.abs(cents) <= tolerance;
+    const ink = brass ? { label: '#3a2410', live: '#1f7a2e', good: '#1f7a2e', off: 'rgba(58,36,16,.45)', unit: '#5a3a1e' }
+      : vintage ? { label: skin.label, live: skin.live, good: skin.good, off: skin.unit, unit: skin.unit }
+      : { label: 'var(--ink2)', live: '#4afc9d', good: '#4afc9d', off: 'var(--ink-off)', unit: '#6b7280' };
+    const cc = !live ? ink.off : ok ? ink.good : cents > 0 ? '#c0392b' : '#2563eb';
+    const row = (
+      <div className="flex items-center justify-between gap-2 w-full">
+        <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[10px] font-black tracking-widest shrink-0"
+          style={{ color: isStarted ? ink.live : '#ef4444' }}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>{isStarted ? 'LIVE' : 'OFF'}
+        </button>
+        <span className="flex items-center gap-1.5">
+          <span style={{ fontFamily: 'Georgia,serif', fontWeight: 700, fontSize: 12, color: ink.label, minWidth: 22, textAlign: 'right' }}>
+            {live ? `${currentNote.name}${currentNote.symbol.replace('#', '♯')}${currentNote.octave}` : ''}
+          </span>
+          <PartNumber style={ns} text={ns === 'flip' || ns === 'drum' ? hz : (pitch > 0 ? Number(pitch) : 0).toFixed(1)} unit="Hz" size={22} unitColor={ink.unit}/>
+        </span>
+        <span className="text-xl font-black shrink-0 min-w-[48px] text-right" style={{ color: cc, fontFamily: 'Georgia,serif' }}>
+          {live ? (ok ? 'OK' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}<span className="text-[11px]">¢</span>
+        </span>
+      </div>
+    );
+    if (brass) return <BrassPlate className="w-full max-w-sm shrink-0 !px-6 !py-2">{row}</BrassPlate>;
+    if (vintage) return <div className="w-full max-w-sm shrink-0 rounded-[14px] px-3 py-2" style={skin.frame}>{row}</div>;
+    return <div className="w-full max-w-sm shrink-0 t-inset rounded-2xl px-3 py-2">{row}</div>;
+  }
   const body = (
     <div className="flex items-center justify-center gap-4">
       <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest"
@@ -772,6 +796,128 @@ const BackupSection = () => {
   );
 };
 
+// ── 세부 꾸미기: 숫자 모양 · 판 모양 (디자인 위에 덮어씀) ──
+const PartsEditor = ({ parts, onChange }) => {
+  const Opt = ({ on, onClick, children }) => (
+    <button onClick={() => { onClick(); haptic(8); }}
+      className="rounded-xl p-1.5 flex flex-col items-center justify-center gap-1 border-2 transition-all active:scale-95 min-h-[58px]"
+      style={{ borderColor: on ? 'var(--accent)' : 'var(--chip-border)', background: 'rgba(0,0,0,.25)' }}>
+      {children}
+    </button>
+  );
+  const label = (t, on) => <span className="text-[10px] font-black" style={{ color: on ? 'var(--accent)' : 'var(--ink2)' }}>{t}</span>;
+  return (
+    <div className="flex flex-col gap-3">
+      <div>
+        <div className="text-[10px] font-bold text-gray-500 mb-1.5">숫자 모양 (Hz · BPM)</div>
+        <div className="grid grid-cols-3 gap-2">
+          {PART_NUM_STYLES.map(o => (
+            <Opt key={o.id} on={parts.num === o.id} onClick={() => onChange({ num: o.id })}>
+              {o.id === 'auto' ? <span className="text-lg leading-none" style={{ color: 'var(--ink2)' }}>A</span> : <PartNumber style={o.id} text={o.id === 'flip' || o.id === 'drum' ? '092' : '92'} size={15}/>}
+              {label(o.name, parts.num === o.id)}
+            </Opt>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="text-[10px] font-bold text-gray-500 mb-1.5">판 모양 (숫자창 · 다이얼 가운데)</div>
+        <div className="grid grid-cols-2 gap-2">
+          {PART_PLATE_STYLES.map(o => (
+            <Opt key={o.id} on={parts.plate === o.id} onClick={() => onChange({ plate: o.id })}>
+              {o.id === 'brass'
+                ? <BrassPlate className="!px-4 !py-1 !rounded-xl"><PartNumber style={partNumStyle({ ...parts, plate: 'brass' })} text="092" size={12}/></BrassPlate>
+                : <span className="text-[10px]" style={{ color: 'var(--ink2)' }}>디자인 그대로</span>}
+              {label(o.name, parts.plate === o.id)}
+            </Opt>
+          ))}
+        </div>
+      </div>
+      {partsCustom(parts) && <button onClick={() => { onChange({ num: 'auto', plate: 'auto' }); haptic(8); }} className="self-start text-[11px] font-bold text-gray-400">↺ 디자인 기본으로</button>}
+    </div>
+  );
+};
+
+// ── 화면 배치: 탭별 블록을 손잡이(⋮⋮)로 끌어 위아래 이동 · 크기 · 보이기 ──
+const SIZE_NAMES = { s: '작게', m: '보통', l: '크게' };
+const LayoutEditor = ({ S, updateSettings }) => {
+  const [tab, setTab] = useState('t1');
+  const key = tab === 't1' ? 'layout1' : 'layout2';
+  const list = S[key];
+  const listRef = useRef(null);
+  const [dragId, setDragId] = useState(null);
+  const listNow = useRef(list); listNow.current = list;
+  const save = (l) => updateSettings({ [key]: l });
+  const meta = (id) => LAYOUT_BLOCKS[tab].find(b => b.id === id);
+  const patch = (id, p) => save(list.map(b => b.id === id ? { ...b, ...p } : b));
+  const move = (from, to) => { const l = [...listNow.current]; const [it] = l.splice(from, 1); l.splice(to, 0, it); save(l); };
+
+  // 끌기: 손가락이 다른 줄의 가운데를 넘으면 그 자리로 이동
+  const onDown = (e, id) => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} setDragId(id); haptic(12); };
+  const onMove = (e) => {
+    if (!dragId || !listRef.current) return;
+    const rows = [...listRef.current.children];
+    const from = listNow.current.findIndex(b => b.id === dragId);
+    let to = from;
+    rows.forEach((r, i) => { const rc = r.getBoundingClientRect(); if (e.clientY > rc.top && e.clientY < rc.bottom) to = i; });
+    if (to !== from) { move(from, to); haptic(6); }
+  };
+  const onUp = () => setDragId(null);
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex gap-1 p-1 rounded-full t-chip">
+        {[['t1', '튜너 탭'], ['t2', '메트로놈 탭']].map(([id, name]) => (
+          <button key={id} onClick={() => { setTab(id); haptic(6); }} className="flex-1 py-1.5 rounded-full text-xs font-black transition-all"
+            style={tab === id ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{name}</button>
+        ))}
+      </div>
+      {tab === 't1' && (
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
+          {LAYOUT_PRESETS.map(p => (
+            <button key={p.id} onClick={() => { save(makeLayout('t1', p.on)); haptic(8); }}
+              className="shrink-0 px-2.5 py-1 rounded-full t-chip text-[10px] font-bold" style={{ color: 'var(--ink2)' }}>{p.name}</button>
+          ))}
+        </div>
+      )}
+      <div ref={listRef} className="flex flex-col gap-1.5" onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+        {list.map(b => {
+          const m = meta(b.id), drag = dragId === b.id;
+          return (
+            <div key={b.id} className="flex items-center gap-1.5 rounded-xl pr-1.5 transition-shadow"
+              style={{ background: drag ? 'rgba(74,252,157,.12)' : 'rgba(0,0,0,.25)', border: `1px solid ${drag ? 'var(--accent)' : 'var(--chip-border)'}`,
+                boxShadow: drag ? '0 6px 16px rgba(0,0,0,.5)' : 'none', opacity: b.on ? 1 : 0.5 }}>
+              <span onPointerDown={e => onDown(e, b.id)} className="w-9 h-11 flex items-center justify-center shrink-0 cursor-grab" style={{ touchAction: 'none', color: 'var(--ink2)' }} aria-label="끌어서 옮기기">
+                <GripVertical size={18}/>
+              </span>
+              <span className="flex-1 min-w-0 flex flex-col">
+                <span className="text-xs font-black truncate" style={{ color: 'var(--ink)' }}>{m.name}</span>
+                <span className="text-[9px] text-gray-500">{m.grow ? '남는 공간 채움' : '고정 높이'}</span>
+              </span>
+              <span className="flex rounded-full overflow-hidden shrink-0" style={{ border: '1px solid var(--chip-border)' }}>
+                {LAYOUT_SIZES.map(z => (
+                  <button key={z} disabled={!b.on} onClick={() => { patch(b.id, { size: z }); haptic(6); }}
+                    className="px-1.5 py-1 text-[10px] font-black"
+                    style={b.size === z ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{SIZE_NAMES[z]}</button>
+                ))}
+              </span>
+              <button disabled={m.lock} onClick={() => { patch(b.id, { on: !b.on }); haptic(8); }}
+                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" aria-label={b.on ? '숨기기' : '보이기'}
+                style={{ color: m.lock ? 'var(--ink-off)' : b.on ? 'var(--accent)' : 'var(--ink2)' }}>
+                {b.on ? <Eye size={17}/> : <EyeOff size={17}/>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] text-gray-500">⋮⋮ 를 누른 채 위아래로 끌어 순서를 바꿉니다</span>
+        <button onClick={() => { save(tab === 't1' ? makeLayout('t1', LAYOUT_PRESETS[0].on) : makeLayout('t2', DEFAULT_LAYOUT2_ON)); haptic(8); }}
+          className="text-[11px] font-bold text-gray-400 shrink-0">↺ 기본 배치</button>
+      </div>
+    </div>
+  );
+};
+
 const SettingsSheet = ({ tuner, onClose }) => {
   const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise, noteTracker } = tuner;
   const [lv, setLv] = useState(levelRef.current);
@@ -833,43 +979,13 @@ const SettingsSheet = ({ tuner, onClose }) => {
 
         <Section title="① 디자인">
           <DesignPicker value={S.design} onChange={d => updateSettings({ design: d.id, uiMode: d.base })}/>
+          <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 모양)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
+            <PartsEditor parts={S.parts} onChange={p => updateSettings({ parts: { ...S.parts, ...p } })}/>
+          </Fold>
         </Section>
 
-        <Section title="② 튜너 화면">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-sm font-black" style={{ color: 'var(--ink)' }}>{(TUNER_LAYOUTS.find(l => l.id === S.tunerLayout) || TUNER_LAYOUTS[0]).name}</span>
-              <span className="text-[10px] text-gray-500">{(TUNER_LAYOUTS.find(l => l.id === S.tunerLayout) || TUNER_LAYOUTS[0]).desc}</span>
-            </div>
-            <button onClick={() => { setOpen(o => ({ ...o, layout: !o.layout })); haptic(6); }}
-              className="px-3 py-1.5 rounded-full t-chip text-xs font-bold text-gray-300">{open.layout ? '닫기' : '바꾸기'}</button>
-          </div>
-          {open.layout && <div className="grid grid-cols-2 gap-2">
-            {TUNER_LAYOUTS.map(l => {
-              const on = S.tunerLayout === l.id;
-              return (
-                <button key={l.id} onClick={() => { updateSettings({ tunerLayout: l.id }); haptic(10); }}
-                  className={`flex flex-col items-center gap-1.5 rounded-xl p-2 border-2 transition-all active:scale-95 ${on ? 'border-[#4afc9d] bg-[#4afc9d]/10' : 'border-gray-800'}`}>
-                  {/* 미니 배치도 */}
-                  <div className="w-full h-16 rounded-md bg-black/60 flex flex-col gap-[3px] p-1.5">
-                    {l.id === 'vtapeTempo' && <div className="flex justify-around gap-1" style={{ flex: '1 1 0' }}>
-                      {[0,1,2,3].map(i => <div key={i} className="flex-1 rounded-sm bg-gray-800 relative"><div className={`absolute inset-x-0 top-1/2 h-[2px] ${i === 2 ? 'bg-[#4afc9d]' : 'bg-red-500/60'}`}/></div>)}
-                    </div>}
-                    {l.id === 'vtapeTempo' && <div className="rounded-sm bg-gray-800 flex items-center justify-center gap-[2px]" style={{ flex: '0 0 26%' }}>{[0,1,2,3].map(i => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i ? 'bg-[#4afc9d]/50' : 'bg-[#ffcc00]'}`}/>)}</div>}
-                    {l.id !== 'vtapeTempo' && <div className="flex justify-around" style={{ flex: l.id === 'both' || l.id === 'tapeTempo' ? '0 0 26%' : '1 1 0' }}>
-                      {[0,1,2,3].map(i => <div key={i} className="w-[3px] h-full rounded-full bg-gray-500"/>)}
-                    </div>}
-                    {l.id === 'tapeTempo' && <div className="rounded-sm bg-gray-800 border-t-2 border-red-500/70" style={{ flex: '0 0 22%' }}/>}
-                    {l.id === 'tapeTempo' && <div className="rounded-sm bg-gray-800 flex items-center justify-center gap-[2px]" style={{ flex: '1 1 0' }}>{[0,1,2,3].map(i => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i ? 'bg-[#4afc9d]/50' : 'bg-[#ffcc00]'}`}/>)}</div>}
-                    {(l.id === 'center' || l.id === 'both') && <div className="rounded-sm bg-gray-700 flex items-center justify-center text-[8px] font-black text-white" style={{ flex: '0 0 30%' }}>A</div>}
-                    {(l.id === 'tape' || l.id === 'both') && <div className="rounded-sm bg-gray-800 border-t-2 border-red-500/70" style={{ flex: '0 0 22%' }}/>}
-                  </div>
-                  <span className={`text-xs font-black ${on ? 'text-[#4afc9d]' : 'text-gray-300'}`}>{l.name}</span>
-                  <span className="text-[9px] text-gray-500 leading-tight text-center">{l.desc}</span>
-                </button>
-              );
-            })}
-          </div>}
+        <Section title="② 화면 배치">
+          <LayoutEditor S={S} updateSettings={updateSettings}/>
         </Section>
 
         <Section title="③ 소리 감지">
@@ -1033,83 +1149,18 @@ const SettingsSheet = ({ tuner, onClose }) => {
   );
 };
 
-const Tuner = ({ tuner, metro }) => {
-  const {
-    isStarted, pitch, cents, stringCents, a4Freq, tolerance,
-    currentNote, closestString, error, playingTone,
-    ensureMic, handleReset, cycleA4Freq, cycleTolerance, toggleTone
-  } = tuner;
-  const [showSettings, setShowSettings] = useState(false);
-  const layout = tuner.settings.tunerLayout;
-  const vtape = layout === 'vtapeTempo';
-  const withTempo = layout === 'tapeTempo';
-  const showCenter = layout === 'center' || layout === 'both';
-  const showTape = layout !== 'center';
-  const fillBars = layout === 'tape' || layout === 'center';
-  const barSize = withTempo ? 'compact' : fillBars ? 'fill' : 'normal';
-
+// 큰 음이름 판 (화면 배치 'note' 블록)
+const BigNote = ({ tuner, showCents }) => {
+  const { isStarted, pitch, cents, tolerance, currentNote, playingTone, ensureMic } = tuner;
   const getStatusColor = () => {
     if (!isStarted || pitch===0) return '#1a1a1a';
     if (Math.abs(cents)<=tolerance) return '#4afc9d';
     if (Math.abs(cents)<=tolerance+15) return '#ffcc00';
     return '#ff4d4d';
   };
-
   return (
-    <div className="w-full h-full flex flex-col items-center relative justify-between tab-enter">
-      {/* Top controls */}
-      <div className="w-full flex justify-between items-center h-10 shrink-0 max-w-sm">
-        <div className="flex gap-2">
-          <button onClick={cycleA4Freq}
-            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md">
-            <span className="text-gray-400">A4=</span>
-            <span className="text-white font-mono text-sm w-7 text-left">{a4Freq}</span>
-          </button>
-          <button onClick={cycleTolerance}
-            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md">
-            <div className="w-2 h-2 rounded-full bg-[#4afc9d] shadow-[0_0_6px_#4afc9d]"/>
-            <span className="text-gray-400">범위</span>
-            <span className="text-white font-mono text-sm w-7 text-left">±{tolerance}</span>
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => { setShowSettings(true); haptic(8); }}
-            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md text-gray-300">
-            <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 설정
-          </button>
-          <button onClick={handleReset}
-            className="text-gray-400 active:rotate-180 transition-all duration-500 t-chip p-2 rounded-full shadow-md">
-            <RotateCcw size={14}/>
-          </button>
-        </div>
-      </div>
-
-      {/* Violin strings */}
-      {vtape ? (
-        <>
-          {/* 세로 테이프 + 템포: 현별 세로 테이프 → 숫자 표시 → 미니 템포 */}
-          <StringVTapes tuner={tuner}/>
-          <TunerReadout tuner={tuner}/>
-          <div className="w-full shrink-0 flex justify-center pt-2.5">
-            <MiniMetronome metro={metro}/>
-          </div>
-        </>
-      ) : <StringBars tuner={tuner} size={barSize}/>}
-
-      {/* 테이프 + 템포 구성: 막대 → 음 테이프 → 미니 템포(맨 아래) — 2번 탭과 같은 메트로놈 */}
-      {withTempo && (
-        <>
-          <NoteTape tuner={tuner} showMic/>
-          <div className="w-full shrink-0 flex justify-center pt-2.5">
-            <MiniMetronome metro={metro}/>
-          </div>
-        </>
-      )}
-
-      {/* Main display (설정 → 튜너 화면 구성에서 숨길 수 있음) */}
-      {showCenter && (
-      <div className={`flex flex-col items-center justify-center w-full max-w-sm relative mt-1 ${fillBars ? 'shrink-0 h-[220px]' : 'flex-1 min-h-0'}`}>
-        <div className={`w-full h-full max-h-[230px] rounded-[2.5rem] t-panel shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative py-4`}>
+      <div className="flex flex-col items-center justify-center w-full max-w-sm relative flex-1 min-h-0">
+        <div className={`w-full h-full max-h-[360px] rounded-[2.5rem] t-panel shadow-[0_20px_60px_rgba(0,0,0,0.8)] flex flex-col items-center justify-center relative py-4`}>
           {/* Mic status */}
           <div className="absolute top-4 left-4 flex flex-col items-center gap-1 z-10">
             <button onClick={isStarted ? undefined : ensureMic} disabled={isStarted}
@@ -1151,7 +1202,7 @@ const Tuner = ({ tuner, metro }) => {
               <div className="text-sm font-mono tracking-[0.4em] text-gray-500 bg-black/60 px-4 py-1.5 rounded-xl border border-white/5">
                 {pitch>0?`${pitch} Hz`:'000.0 Hz'}
               </div>
-              {!showTape && (
+              {showCents && (
                 <span className={`text-lg font-black font-mono ${isStarted&&pitch>0?(Math.abs(cents)<=tolerance?'text-[#4afc9d]':cents>0?'text-red-500':'text-blue-500'):'text-gray-800'}`}>
                   {isStarted&&pitch>0?(cents>0?`+${cents}`:cents):'0'}¢
                 </span>
@@ -1160,10 +1211,62 @@ const Tuner = ({ tuner, metro }) => {
           </div>
         </div>
       </div>
-      )}
+  );
+};
 
-      {/* Bottom: 음 테이프 (테마에 따라 다크/황동) */}
-      {showTape && !withTempo && !vtape && <NoteTape tuner={tuner} showMic={!showCenter}/>}
+const Tuner = ({ tuner, metro }) => {
+  const {
+    isStarted, pitch, cents, stringCents, a4Freq, tolerance,
+    currentNote, closestString, error, playingTone,
+    ensureMic, handleReset, cycleA4Freq, cycleTolerance, toggleTone
+  } = tuner;
+  const [showSettings, setShowSettings] = useState(false);
+  const blocks = visibleBlocks('t1', tuner.settings.layout1);
+  const has = (id) => blocks.some(b => b.id === id);
+
+  return (
+    <div className="w-full h-full flex flex-col items-center relative justify-between tab-enter">
+      {/* Top controls */}
+      <div className="w-full flex justify-between items-center h-10 shrink-0 max-w-sm">
+        <div className="flex gap-2">
+          <button onClick={cycleA4Freq}
+            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md">
+            <span className="text-gray-400">A4=</span>
+            <span className="text-white font-mono text-sm w-7 text-left">{a4Freq}</span>
+          </button>
+          <button onClick={cycleTolerance}
+            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md">
+            <div className="w-2 h-2 rounded-full bg-[#4afc9d] shadow-[0_0_6px_#4afc9d]"/>
+            <span className="text-gray-400">범위</span>
+            <span className="text-white font-mono text-sm w-7 text-left">±{tolerance}</span>
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => { setShowSettings(true); haptic(8); }}
+            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md text-gray-300">
+            <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 설정
+          </button>
+          <button onClick={handleReset}
+            className="text-gray-400 active:rotate-180 transition-all duration-500 t-chip p-2 rounded-full shadow-md">
+            <RotateCcw size={14}/>
+          </button>
+        </div>
+      </div>
+
+      {/* 화면 배치 (설정 → 화면 배치): 켜진 블록을 순서대로 */}
+      <div className="w-full flex-1 min-h-0 flex flex-col items-center gap-2 pt-1">
+        {blocks.map(b => (
+          <LayoutBlock key={b.id} grow={b.grow} size={b.size}>
+            {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
+            {b.id === 'bars' && <StringBars tuner={tuner} size="fill"/>}
+            {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
+            {b.id === 'readout' && <TunerReadout tuner={tuner}/>}
+            {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('readout') && !has('note')}/>}
+            {b.id === 'mini' && <MiniMetronome metro={metro}/>}
+          </LayoutBlock>
+        ))}
+        {!blocks.some(b => b.grow) && <div className="flex-1"/>}
+      </div>
 
       {showSettings && <SettingsSheet tuner={tuner} onClose={() => setShowSettings(false)}/>}
 

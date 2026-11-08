@@ -126,6 +126,64 @@ const SkinNumber = ({ skin, text, unit, size = 22 }) => (
   </span>
 );
 
+// ── 부품별 꾸미기: 디자인 위에 숫자 모양 · 판 모양을 덮어씀 (settings.parts, app.jsx에서 제공) ──
+const PartsContext = React.createContext({ num: 'auto', plate: 'auto' });
+const useParts = () => React.useContext(PartsContext);
+const partsCustom = (p) => p.num !== 'auto' || p.plate !== 'auto';
+// 판이 황동이면 숫자는 기본 플립 카드 (원래 시안)
+const partNumStyle = (p) => p.num !== 'auto' ? p.num : p.plate === 'brass' ? 'flip' : null;
+
+// 숫자 한 덩어리 — style: flip | radio | drum | led, size = 숫자 글자 크기(px)
+const PartNumber = ({ style, text, unit, size = 26, unitColor }) => {
+  const u = unit && <span style={{ fontFamily: 'Georgia,serif', fontWeight: 700, fontSize: Math.max(9, size * 0.32), color: unitColor || '#8a6a3a', marginLeft: size * 0.18, alignSelf: 'center' }}>{unit}</span>;
+  if (style === 'flip' || style === 'drum') {
+    const flip = style === 'flip';
+    return (
+      <span className="inline-flex items-center" style={{ gap: Math.max(2, size * 0.1) }}>
+        {text.split('').map((ch, i) => ch === '.' ? (
+          <span key={i} style={{ width: size * 0.2, height: size * 0.2, borderRadius: 99, background: flip ? '#3e2614' : '#6b7280', alignSelf: 'flex-end', marginBottom: size * 0.2 }}/>
+        ) : (
+          <span key={i} className="relative inline-flex items-center justify-center" style={{
+            width: size * 0.78, height: size * 1.3, borderRadius: Math.max(3, size * 0.12),
+            background: flip ? 'linear-gradient(180deg,#5c3a20,#3e2614 49%,#2c180a 51%,#45291a)' : 'linear-gradient(180deg,#000,#1c1c1c 35%,#1c1c1c 65%,#000)',
+            border: flip ? '1px solid #1e0f06' : '1px solid #262626',
+            boxShadow: flip ? '0 2px 3px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,220,170,.15)' : 'none',
+            color: flip ? '#f4e6c4' : '#e5e5e5', fontFamily: flip ? 'Georgia,serif' : 'ui-monospace,monospace', fontWeight: 700, fontSize: size, lineHeight: 1 }}>
+            {ch}
+            <i className="absolute inset-x-0 top-1/2" style={{ height: 1, background: flip ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.05)' }}/>
+          </span>
+        ))}
+        {u}
+      </span>
+    );
+  }
+  const shown = text.replace(/^0+(?=\d)/, '');
+  if (style === 'led') return (
+    <span className="inline-flex items-baseline rounded-md" style={{ background: '#0b0b0b', border: '1px solid #222', boxShadow: 'inset 0 2px 6px rgba(0,0,0,.9)', padding: `1px ${size * 0.35}px` }}>
+      <span style={{ fontFamily: 'ui-monospace,monospace', fontWeight: 800, fontSize: size, lineHeight: 1.1, color: '#ff5a36', textShadow: '0 0 6px rgba(255,90,54,.85)', letterSpacing: '0.04em' }}>{shown}</span>
+      {unit && <span style={{ fontFamily: 'ui-monospace,monospace', fontWeight: 800, fontSize: Math.max(9, size * 0.3), color: 'rgba(255,90,54,.7)', marginLeft: 4 }}>{unit}</span>}
+    </span>
+  );
+  // radio: 크림색 창
+  return (
+    <span className="inline-flex items-baseline rounded-lg" style={{ background: 'linear-gradient(180deg,#e9dcbc,#f8f0dc 40%,#e2d3ad)', boxShadow: 'inset 0 2px 5px rgba(0,0,0,.35)', padding: `1px ${size * 0.4}px` }}>
+      <span style={{ fontFamily: 'Georgia,serif', fontSize: size, lineHeight: 1.08, color: '#2a1a0e' }}>{shown}</span>
+      {unit && <span style={{ fontFamily: 'Georgia,serif', fontSize: Math.max(9, size * 0.28), color: '#5a3a1e', marginLeft: 4 }}>{unit}</span>}
+    </span>
+  );
+};
+
+// ── 화면 배치 블록 감싸기 (LAYOUT_BLOCKS) ──
+//  grow 블록: 크기 = 남는 공간 차지 비율 (작게는 최대 45%)
+//  고정 블록: 크기 = 확대 배율 (zoom — 폭은 화면 안에 맞춰지고 높이만 커짐)
+const BLOCK_ZOOM = { s: 0.85, m: 1, l: 1.2 };
+const BLOCK_GROW = { s: 1, m: 2, l: 3 };
+const LayoutBlock = ({ grow, size = 'm', children }) => grow
+  ? <div className="w-full min-h-0 flex flex-col items-center" style={{ flex: `${BLOCK_GROW[size]} 1 0`, maxHeight: size === 's' ? '45%' : undefined }}>{children}</div>
+  : <div className="w-full shrink-0 flex flex-col items-center" style={{ zoom: BLOCK_ZOOM[size] }}>{children}</div>;
+// 켜진 블록만 순서대로 [{id, size, grow}]
+const visibleBlocks = (tab, list) => list.filter(b => b.on).map(b => ({ ...b, grow: !!LAYOUT_BLOCKS[tab].find(k => k.id === b.id)?.grow }));
+
 // 디자인 고르기 카드 (설정 · 첫 실행 안내 공용) — 실제 Hz·BPM 모양을 작게 미리 보여줌
 const WOOD_BG = 'repeating-linear-gradient(92deg,rgba(0,0,0,.12) 0 2px,transparent 2px 6px),linear-gradient(180deg,#6e4220,#3a200d)';
 const DesignPreview = ({ d }) => {

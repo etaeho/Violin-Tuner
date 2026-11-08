@@ -246,7 +246,7 @@ const useFitSquare = (pad = 0, max = 320) => {
 };
 
 // 빈티지: 아르데코 라디오 다이얼 — 크림색 문자판, 눈금 링, 박마다 빨간 바늘이 그 박 위치로 이동
-const RadioBeatDial = ({ metro, size }) => {
+const RadioBeatDial = ({ metro, size, center }) => {
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
   const n = beatSounds.length, gap = n > 8 ? 3 : 6;
   const firing = visualFlash === 'main';
@@ -280,16 +280,16 @@ const RadioBeatDial = ({ metro, size }) => {
           <line x1="100" y1="12" x2="100" y2="40" stroke={RADIO.needle} strokeWidth="3" strokeLinecap="round"/>
         </g>
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      {center ? <div className="absolute inset-0 flex flex-col items-center justify-center">{center}</div> : <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span style={{ fontFamily: 'Georgia,serif', fontSize: size * 0.24, lineHeight: 1, color: RADIO.ink }}>{bpm}</span>
         <span style={{ fontFamily: 'Georgia,serif', fontSize: 10, letterSpacing: '0.2em', color: RADIO.brown, marginTop: 2 }}>BPM · {getTempoMarking(bpm).toUpperCase()}</span>
-      </div>
+      </div>}
     </div>
   );
 };
 
 // 우드 계열 다이얼 (피아노·가죽·바이올린·악보): 박 구간 링 + 문자판 + 가운데 BPM
-const SkinBeatDial = ({ metro, size, k }) => {
+const SkinBeatDial = ({ metro, size, k, center }) => {
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
   const d = k.dial, n = beatSounds.length, gap = n > 8 ? 3 : 6, firing = visualFlash === 'main';
   return (
@@ -306,19 +306,31 @@ const SkinBeatDial = ({ metro, size, k }) => {
         <circle cx="100" cy="100" r="68" fill={d.face} stroke={d.ring} strokeWidth="1.5" strokeDasharray={d.ringDash ? '4 3' : undefined}/>
         <circle cx="100" cy="100" r="63" fill="none" stroke={d.sub} strokeWidth="0.8" opacity={visualFlash === 'sub' ? 0.9 : 0.15} style={{ transition: 'opacity 60ms' }}/>
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      {center ? <div className="absolute inset-0 flex flex-col items-center justify-center">{center}</div> : <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span style={{ fontFamily: 'Georgia,serif', fontSize: k.quarter ? size * 0.17 : size * 0.24, lineHeight: 1, color: d.text,
           textShadow: k.emboss ? '0 2px 0 #1e0f06' : 'none' }}>{k.quarter ? <>♩ = <b style={{ fontSize: size * 0.22 }}>{bpm}</b></> : bpm}</span>
         <span style={{ fontFamily: 'Georgia,serif', fontSize: k.quarter ? 12 : 10, letterSpacing: k.quarter ? 0 : '0.2em', color: d.sub, marginTop: 3, fontStyle: k.italic ? 'italic' : 'normal' }}>
           {k.quarter ? getTempoMarking(bpm) : `BPM · ${getTempoMarking(bpm).toUpperCase()}`}
         </span>
-      </div>
+      </div>}
     </div>
   );
 };
 
+// 부품별 꾸미기가 켜지면 다이얼 가운데를 바꿈: (황동판 +) 고른 숫자 모양
+const DialCenter = ({ bpm, size, parts, sub }) => {
+  const ns = partNumStyle(parts);
+  const text = ns === 'flip' || ns === 'drum' ? String(bpm).padStart(3, '0') : String(bpm);
+  const num = <PartNumber style={ns} text={text} unit="BPM" size={Math.round(size * 0.13)} unitColor={parts.plate === 'brass' ? '#5a3a1e' : sub}/>;
+  const mark = (c) => <span className="uppercase" style={{ fontFamily: 'Georgia,serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.2em', color: c, marginTop: 4 }}>{getTempoMarking(bpm)}</span>;
+  if (parts.plate === 'brass') return <BrassPlate className="flex flex-col items-center !px-5 !py-3">{num}{mark('#3b2a1a')}</BrassPlate>;
+  return <>{num}{mark(sub)}</>;
+};
+
 const BeatDial = ({ metro, size, pal, vintage, skin }) => {
-  if (vintage) return skin && !skin.dial.ticks ? <SkinBeatDial metro={metro} size={size} k={skin}/> : <RadioBeatDial metro={metro} size={size}/>;
+  const parts = useParts();
+  const center = partsCustom(parts) ? <DialCenter bpm={metro.bpm} size={size} parts={parts} sub={vintage ? (skin.dial.ticks ? '#f4d78a' : skin.dial.sub) : '#9ca3af'}/> : null;
+  if (vintage) return skin && !skin.dial.ticks ? <SkinBeatDial metro={metro} size={size} k={skin} center={center}/> : <RadioBeatDial metro={metro} size={size} center={center}/>;
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
   const n = beatSounds.length;
   const gap = n > 8 ? 4 : 7;
@@ -342,7 +354,7 @@ const BeatDial = ({ metro, size, pal, vintage, skin }) => {
         <circle cx="100" cy="100" r="72" fill="none" stroke={pal.sub} strokeWidth="1.5"
           opacity={visualFlash === 'sub' ? 0.9 : 0.08} style={{ transition: 'opacity 60ms' }}/>
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
+      {center ? <div className="absolute inset-0 flex flex-col items-center justify-center">{center}</div> : <div className="absolute inset-0 flex flex-col items-center justify-center">
         {vintage ? (
           <BrassPlate className="flex flex-col items-center !px-4 !py-2.5">
             <DrumDigits text={String(bpm).padStart(3, '0')} unit="BPM" size="lg"/>
@@ -355,7 +367,7 @@ const BeatDial = ({ metro, size, pal, vintage, skin }) => {
             <span className="text-[10px] font-bold text-[#ffcc00]/80 tracking-widest uppercase mt-1">{getTempoMarking(bpm)}</span>
           </>
         )}
-      </div>
+      </div>}
     </div>
   );
 };
@@ -373,39 +385,69 @@ const Stepper = ({ value, onUp, onDown, accent }) => {
 
 // 메트로놈 탭 위쪽 한 줄 음정 표시 (튜너와 같은 값): LIVE · 음이름 · ±50센트 바늘 · 센트
 const PitchStrip = ({ tuner }) => {
+  // 바늘 게이지: 반원 눈금(−50~+50센트) 위를 바늘이 움직임. 가운데 초록 띠 = 허용 범위
   const { isStarted, pitch, cents, tolerance, currentNote, ensureMic } = tuner;
   const vintage = useVintage();
+  const skin = useSkin();
   const live = isStarted && pitch > 0;
   const ok = live && Math.abs(cents) <= tolerance;
-  const col = !live ? 'var(--chip-border)' : ok ? '#4afc9d' : Math.abs(cents) <= tolerance + 15 ? '#ffcc00' : cents > 0 ? '#ef4444' : '#3b82f6';
-  const pos = Math.max(-50, Math.min(50, cents));
+  const c = live ? Math.max(-50, Math.min(50, cents)) : 0;
+  // 색: 우드 = 디자인 다이얼 색(라디오는 크림 문자판), 다크·라이트 = 검은 계기판
+  const radio = vintage && skin.dial.ticks;
+  const face = !vintage ? '#0a0a0a' : radio ? '#f3e8cc' : skin.dial.face;
+  const tick = !vintage ? '#52525b' : radio ? '#5a3a1e' : skin.dial.sub;
+  const ink = !vintage ? 'var(--ink)' : skin.label;
+  const needle = !vintage ? (!live ? '#3f3f46' : ok ? '#4afc9d' : Math.abs(cents) <= tolerance + 15 ? '#ffcc00' : cents > 0 ? '#ef4444' : '#3b82f6') : (skin.dial.needle || '#c0392b');
+  const cc = !live ? (vintage ? skin.unit : 'var(--ink-off)') : ok ? (vintage ? skin.good : '#4afc9d') : cents > 0 ? '#ef4444' : '#3b82f6';
+  const W = 160, H = 64, cx = 80, cy = 90, R = 82;               // 원 중심을 아래로 → 얕고 넓은 부채꼴
+  const ang = (v) => (v / 50) * 52;                               // ±50센트 → ±52°
+  const pt = (deg, r) => [cx + r * Math.sin(deg * Math.PI / 180), cy - r * Math.cos(deg * Math.PI / 180)];
+  const arc = (d0, d1, r) => { const [x0, y0] = pt(d0, r), [x1, y1] = pt(d1, r); return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`; };
+  const [nx, ny] = pt(ang(c), R - 4);
   return (
-    <div className="w-full t-inset rounded-2xl px-3 py-2 flex items-center gap-3 shrink-0">
-      {/* 마이크 상태 */}
-      <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest shrink-0"
-        style={{ color: isStarted ? '#4afc9d' : '#ef4444' }}>
-        <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>
-        {isStarted ? 'LIVE' : 'OFF'}
-      </button>
-      {/* 음이름 */}
-      <span className="w-10 shrink-0 text-center font-black leading-none" style={{ color: live ? 'var(--ink)' : 'var(--ink-off)', fontSize: 20, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-        {live ? currentNote.name : '—'}<span className="text-[11px]" style={{ color: '#4afc9d' }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
-        <span className="text-[10px] text-gray-500">{live ? currentNote.octave : ''}</span>
-      </span>
-      {/* ±50센트 막대 */}
-      <div className="relative flex-1 h-6">
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full" style={{ background: 'var(--chip-bg)', border: '1px solid var(--chip-border)' }}/>
-        <div className="absolute top-1/2 -translate-y-1/2 h-1.5 rounded-full" style={{ left: `${50 - tolerance}%`, width: `${tolerance * 2}%`, background: 'rgba(74,252,157,.3)' }}/>
-        <div className="absolute top-0 bottom-0 left-1/2 w-px" style={{ background: 'var(--chip-border)' }}/>
-        <div className="absolute top-0.5 bottom-0.5 w-1.5 -ml-[3px] rounded-full transition-[left] duration-100"
-          style={{ left: `${50 + pos}%`, background: col, boxShadow: live ? `0 0 8px ${col}` : 'none', opacity: live ? 1 : 0.4 }}/>
+    <div className={`w-full rounded-2xl px-3 py-1.5 flex items-center gap-2 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+      {/* 마이크 상태 + 음이름 */}
+      <div className="flex flex-col items-start shrink-0 w-14">
+        <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest"
+          style={{ color: isStarted ? (vintage ? skin.live : '#4afc9d') : '#ef4444' }}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>
+          {isStarted ? 'LIVE' : 'OFF'}
+        </button>
+        <span className="font-black leading-none mt-0.5" style={{ color: live ? ink : (vintage ? skin.unit : 'var(--ink-off)'), fontSize: 24, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+          {live ? currentNote.name : '—'}<span className="text-[12px]">{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
+          <span className="text-[10px] opacity-60">{live ? currentNote.octave : ''}</span>
+        </span>
+      </div>
+      {/* 바늘 계기판 */}
+      <div className="flex-1 min-w-0 rounded-xl overflow-hidden" style={{ background: face, boxShadow: 'inset 0 2px 6px rgba(0,0,0,.45)' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" style={{ height: 56 }}>
+          <path d={arc(ang(-tolerance), ang(tolerance), R - 6)} fill="none" stroke={ok ? 'rgba(74,252,157,.75)' : 'rgba(74,180,110,.35)'} strokeWidth="9"/>
+          {Array.from({ length: 21 }, (_, k) => {
+            const v = -50 + k * 5, big = v % 25 === 0;
+            const [x0, y0] = pt(ang(v), R), [x1, y1] = pt(ang(v), R - (big ? 11 : 6));
+            return <line key={k} x1={x0} y1={y0} x2={x1} y2={y1} stroke={tick} strokeWidth={big ? 1.6 : 0.8} opacity={big ? 0.95 : 0.6}/>;
+          })}
+          {[-50, -25, 25, 50].map(v => { const [x, y] = pt(ang(v), R - 19); return <text key={v} x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="700" fill={tick} fontFamily="Georgia,serif">{v > 0 ? `+${v}` : v}</text>; })}
+          <text x={pt(0, R - 19)[0]} y={pt(0, R - 19)[1] + 3} textAnchor="middle" fontSize="9" fontWeight="800" fill={tick} fontFamily="Georgia,serif">0</text>
+          <text x="4" y={H - 4} fontSize="11" fontWeight="800" fill="#3b82f6">♭</text>
+          <text x={W - 11} y={H - 4} fontSize="11" fontWeight="800" fill="#ef4444">♯</text>
+          <line x1={cx} y1={cy} x2={nx} y2={ny} stroke={needle} strokeWidth="2.2" strokeLinecap="round" opacity={live ? 1 : 0.4}
+            style={{ transition: 'all 110ms ease-out', filter: live && !vintage ? `drop-shadow(0 0 3px ${needle})` : 'none' }}/>
+          <circle cx={cx} cy={H} r="7" fill={tick}/>
+        </svg>
       </div>
       {/* 센트 */}
-      <span className="w-12 shrink-0 text-right text-base font-black font-mono" style={{ color: live ? col : 'var(--ink-off)' }}>
+      <span className="w-12 shrink-0 text-right text-lg font-black" style={{ color: cc, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
         {live ? (ok ? 'OK' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}{live && !ok && <span className="text-[9px]">¢</span>}
       </span>
     </div>
   );
+};
+
+// 다이얼 칸: 남는 공간에 맞춰 정사각형 크기 계산 (배치에서 숨기면 통째로 빠짐)
+const DialBlock = ({ children }) => {
+  const [ref, size] = useFitSquare(120, 300);
+  return <div ref={ref} className="w-full flex-1 min-h-0 flex items-center justify-between">{children(size)}</div>;
 };
 
 const Metronome = ({ metro, tuner }) => {
@@ -422,7 +464,7 @@ const Metronome = ({ metro, tuner }) => {
     if (confirmReset) { resetMetronome(); setConfirmReset(false); }
     else { setConfirmReset(true); haptic(8); setTimeout(() => setConfirmReset(false), 2500); }
   };
-  const [dialRef, dialSize] = useFitSquare(120, 300);
+  const layout = tuner?.settings.layout2 || DEFAULT_SETTINGS.layout2;
   const isDense = beatSounds.length > 8;
 
   const pressProps = (d) => ({
@@ -454,10 +496,10 @@ const Metronome = ({ metro, tuner }) => {
         </div>
       </div>
 
-      {/* 지금 음정 (간단히) */}
-      {tuner && <PitchStrip tuner={tuner}/>}
-
-      {/* 2. 박 설정 */}
+      {visibleBlocks('t2', layout).map(b => (
+        <LayoutBlock key={b.id} grow={b.grow} size={b.size}>
+          {b.id === 'pitch' && tuner && <PitchStrip tuner={tuner}/>}
+          {b.id === 'beats' && (
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">
         <div className={`grid justify-center justify-items-center w-full ${isDense ? 'gap-x-1.5 gap-y-2' : 'gap-x-3'}`}
           style={{ gridTemplateColumns: `repeat(${Math.min(beatSounds.length, 8)},minmax(0,auto))` }}>
@@ -485,8 +527,9 @@ const Metronome = ({ metro, tuner }) => {
         </p>
       </div>
 
-      {/* 3. 비트 다이얼 (남는 공간 채움) */}
-      <div ref={dialRef} className="w-full flex-1 min-h-0 flex items-center justify-between">
+          )}
+          {b.id === 'dial' && (
+      <DialBlock>{(dialSize) => (<>
         <button {...pressProps(-1)} style={{ ...pressProps(-1).style, ...(vintage ? skin.knob : {}) }}
           className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
           <Minus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
@@ -496,9 +539,10 @@ const Metronome = ({ metro, tuner }) => {
           className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
           <Plus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
         </button>
-      </div>
+      </>)}</DialBlock>
 
-      {/* 4. 슬라이더 + 프리셋 */}
+          )}
+          {b.id === 'tempo' && (
       <div className="w-full t-inset rounded-[1.5rem] px-4 pt-3 pb-2.5 shrink-0 flex flex-col gap-2.5">
         <input type="range" min="30" max="250" value={bpm} onChange={handleBpmChange} className="w-full cursor-pointer"/>
         <div className="flex justify-between gap-1.5">
@@ -517,7 +561,8 @@ const Metronome = ({ metro, tuner }) => {
         </div>
       </div>
 
-      {/* 5. 탭 템포 + 시작 */}
+          )}
+          {b.id === 'controls' && (
       <div className="w-full flex gap-2.5 shrink-0">
         <button onClick={tapTempo}
           className="w-24 h-14 rounded-2xl t-chip flex flex-col items-center justify-center active:scale-95 transition-transform">
@@ -535,6 +580,10 @@ const Metronome = ({ metro, tuner }) => {
           {isPlayingMetro ? '정지' : '시작'}
         </button>
       </div>
+          )}
+        </LayoutBlock>
+      ))}
+      {!layout.some(b => b.on && b.id === 'dial') && <div className="flex-1"/>}
     </div>
   );
 };
@@ -581,6 +630,7 @@ const SkinPresets = ({ k, bpm, setBpm }) => {
 
 const SkinMiniMetronome = ({ metro }) => {
   const k = useSkin();
+  const parts = useParts();
   const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
           toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd });
@@ -601,7 +651,9 @@ const SkinMiniMetronome = ({ metro }) => {
           <Minus size={18} className="pointer-events-none" style={{ color: k.knob.color }}/>
         </button>
         <div className="flex-1 flex justify-center min-w-0">
-          {k.quarter
+          {parts.num !== 'auto'
+            ? <PartNumber style={parts.num} text={parts.num === 'flip' || parts.num === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={32} unitColor={k.unit}/>
+            : k.quarter
             ? <span style={{ fontFamily: 'Georgia,serif', fontSize: 30, lineHeight: 1, color: k.ink }}>♩ = <b style={{ fontSize: 40 }}>{bpm}</b></span>
             : <SkinNumber skin={k} text={String(bpm)} unit="BPM" size={42}/>}
         </div>
@@ -621,6 +673,7 @@ const SkinMiniMetronome = ({ metro }) => {
 const MiniMetronome = ({ metro }) => useVintage() ? <SkinMiniMetronome metro={metro}/> : <PlainMiniMetronome metro={metro}/>;
 
 const PlainMiniMetronome = ({ metro }) => {
+  const parts = useParts();
   const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
           toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
   const pal = METRO_PALETTE.tape;
@@ -657,10 +710,12 @@ const PlainMiniMetronome = ({ metro }) => {
           <Minus size={18} className="pointer-events-none" style={{ color: dim }}/>
         </button>
         <div className="flex-1 flex flex-col items-center justify-center min-w-0">
-          <div className="flex items-baseline gap-1">
-            <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: 'var(--ink)' }}>{bpm}</span>
-            <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
-          </div>
+          {parts.num !== 'auto'
+            ? <PartNumber style={parts.num} text={parts.num === 'flip' || parts.num === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={32} unitColor={dim}/>
+            : <div className="flex items-baseline gap-1">
+                <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: 'var(--ink)' }}>{bpm}</span>
+                <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
+              </div>}
         </div>
         <button {...press(1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 t-chip" aria-label="BPM 올리기">
           <Plus size={18} className="pointer-events-none" style={{ color: dim }}/>
