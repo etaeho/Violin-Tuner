@@ -409,10 +409,10 @@ const VTAPE_SP = 56;   // 반음 간격(px) → 10센트 ≈ 5.6px
 const VTape = ({ center, active, perfect, tolerance, vintage }) => {
   const base = Math.round(center);
   const keys = [];
-  for (let k = base - 4; k <= base + 4; k++) keys.push(k);
+  for (let k = base - 8; k <= base + 8; k++) keys.push(k);
   const needle = !active ? (vintage ? 'rgba(201,161,74,.45)' : '#3f3f46') : perfect ? '#4afc9d' : '#ef4444';
   return (
-    <div className="relative w-full flex-1 min-h-[120px] max-h-[420px] overflow-hidden rounded-xl"
+    <div className="relative w-full flex-1 min-h-[120px] overflow-hidden rounded-xl"
       style={vintage
         ? { background: 'linear-gradient(90deg,#c9c0a8,#f6f1e4 30%,#f6f1e4 70%,#c9c0a8)', border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' }
         : { background: '#070707', border: '1px solid rgba(255,255,255,.06)' }}>
