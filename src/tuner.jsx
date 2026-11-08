@@ -517,9 +517,22 @@ const TunerReadout = ({ tuner }) => {
       </span>
     </div>
   );
-  return vintage
-    ? <BrassPlate className="w-full max-w-sm shrink-0 !py-2">{body}</BrassPlate>
-    : <div className="w-full max-w-sm shrink-0 t-inset rounded-2xl py-2">{body}</div>;
+  if (vintage) {
+    // 아르데코 라디오: 갈색 판 + 크림색 Hz 눈금 창 + 빨간 바늘
+    const { currentNote } = tuner;
+    return (
+      <div className="w-full max-w-sm shrink-0 rounded-[14px] px-2.5 py-[7px] flex items-center gap-2" style={RADIO.frame}>
+        <button onClick={isStarted ? undefined : ensureMic} className="flex flex-col items-center gap-0.5 shrink-0 w-7"
+          style={{ color: isStarted ? '#7fd89c' : '#ef4444' }}>
+          <span className={`w-2 h-2 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor', boxShadow: isStarted ? '0 0 6px currentColor' : 'none' }}/>
+          <span className="text-[7px] font-black tracking-wider">{isStarted ? 'LIVE' : 'OFF'}</span>
+        </button>
+        <RadioDial hz={Number(pitch) || 0} cents={cents} live={live} tolerance={tolerance}
+          label={`${currentNote.name}${currentNote.symbol.replace('#', '♯')}${currentNote.octave}`}/>
+      </div>
+    );
+  }
+  return <div className="w-full max-w-sm shrink-0 t-inset rounded-2xl py-2">{body}</div>;
 };
 
 // ==========================================

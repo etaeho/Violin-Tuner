@@ -245,7 +245,51 @@ const useFitSquare = (pad = 0, max = 320) => {
   return [ref, size];
 };
 
+// 빈티지: 아르데코 라디오 다이얼 — 크림색 문자판, 눈금 링, 박마다 빨간 바늘이 그 박 위치로 이동
+const RadioBeatDial = ({ metro, size }) => {
+  const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
+  const n = beatSounds.length, gap = n > 8 ? 3 : 6;
+  const firing = visualFlash === 'main';
+  const beatAngle = isPlayingMetro && currentBeat >= 0 ? (360 / n) * (currentBeat + 0.5) : 0;
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
+        <defs>
+          <radialGradient id="radioFace" cx="50%" cy="40%" r="60%"><stop offset="0" stopColor="#fbf4e2"/><stop offset="1" stopColor="#e2d3ad"/></radialGradient>
+        </defs>
+        <circle cx="100" cy="100" r="97" fill="#3a2410" stroke="#b88a35" strokeWidth="3"/>
+        {/* 박 구간 (바깥 링) */}
+        {beatSounds.map((snd, i) => {
+          const a0 = (360 / n) * i + gap / 2, a1 = (360 / n) * (i + 1) - gap / 2;
+          const cur = isPlayingMetro && i === currentBeat;
+          return <path key={i} d={arcPath(100, 100, 90, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur && firing ? 6 : 4}
+            stroke={snd === 0 ? 'rgba(244,215,138,.15)' : cur ? RADIO.cream : snd === 2 ? 'rgba(244,215,138,.55)' : 'rgba(184,138,53,.45)'}
+            style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && firing ? `drop-shadow(0 0 4px ${RADIO.cream})` : 'none' }}/>;
+        })}
+        {/* 눈금 */}
+        {Array.from({ length: 40 }, (_, k) => {
+          const a = (k * 9 - 90) * Math.PI / 180, r1 = 82, r2 = k % 5 === 0 ? 72 : 77;
+          return <line key={k} x1={100 + r1 * Math.cos(a)} y1={100 + r1 * Math.sin(a)} x2={100 + r2 * Math.cos(a)} y2={100 + r2 * Math.sin(a)}
+            stroke="#f4d78a" strokeWidth={k % 5 === 0 ? 1.6 : 0.8} opacity="0.6"/>;
+        })}
+        {/* 문자판 */}
+        <circle cx="100" cy="100" r="64" fill="url(#radioFace)" stroke="#b88a35" strokeWidth="2"/>
+        <circle cx="100" cy="100" r="60" fill="none" stroke="#b88a35" strokeWidth="0.8" opacity={visualFlash === 'sub' ? 0.9 : 0.25} style={{ transition: 'opacity 60ms' }}/>
+        {/* 바늘: 지금 박 위치 */}
+        <g style={{ transform: `rotate(${beatAngle}deg)`, transformOrigin: '100px 100px', transition: 'transform 120ms ease-out' }} opacity={isPlayingMetro ? 1 : 0.5}>
+          <line x1="100" y1="12" x2="100" y2="40" stroke={RADIO.needle} strokeWidth="3" strokeLinecap="round"/>
+        </g>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span style={{ fontFamily: 'Georgia,serif', fontSize: size * 0.24, lineHeight: 1, color: RADIO.ink }}>{bpm}</span>
+        <span style={{ fontFamily: 'Georgia,serif', fontSize: 10, letterSpacing: '0.2em', color: RADIO.brown, marginTop: 2 }}>BPM · {getTempoMarking(bpm).toUpperCase()}</span>
+      </div>
+    </div>
+  );
+};
+
 const BeatDial = ({ metro, size, pal, vintage }) => {
+  if (vintage) return <RadioBeatDial metro={metro} size={size}/>;
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
   const n = beatSounds.length;
   const gap = n > 8 ? 4 : 7;
@@ -413,14 +457,14 @@ const Metronome = ({ metro, tuner }) => {
 
       {/* 3. 비트 다이얼 (남는 공간 채움) */}
       <div ref={dialRef} className="w-full flex-1 min-h-0 flex items-center justify-between">
-        <button {...pressProps(-1)}
-          className="w-12 h-12 rounded-full t-chip flex items-center justify-center active:scale-90 transition-transform shrink-0">
-          <Minus size={20} className="text-gray-400 pointer-events-none"/>
+        <button {...pressProps(-1)} style={{ ...pressProps(-1).style, ...(vintage ? RADIO.knob : {}) }}
+          className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
+          <Minus size={20} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : '#9ca3af' }}/>
         </button>
         <BeatDial metro={metro} size={dialSize} pal={pal} vintage={vintage}/>
-        <button {...pressProps(1)}
-          className="w-12 h-12 rounded-full t-chip flex items-center justify-center active:scale-90 transition-transform shrink-0">
-          <Plus size={20} className="text-gray-400 pointer-events-none"/>
+        <button {...pressProps(1)} style={{ ...pressProps(1).style, ...(vintage ? RADIO.knob : {}) }}
+          className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
+          <Plus size={20} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : '#9ca3af' }}/>
         </button>
       </div>
 
@@ -478,7 +522,7 @@ const MiniMetronome = ({ metro }) => {
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
   const dense = beatSounds.length > 8;
   return (
-    <div className="w-full max-w-sm t-panel rounded-3xl px-3 py-3 shrink-0 flex flex-col gap-3">
+    <div className={`w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 ${vintage ? 'rounded-[18px]' : 't-panel rounded-3xl'}`} style={vintage ? RADIO.frame : undefined}>
       {/* 박 표시 + 박자표 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -486,6 +530,13 @@ const MiniMetronome = ({ metro }) => {
             const fired = isPlayingMetro && i === currentBeat && visualFlash === 'main';
             const col = pal[snd];
             return (
+              vintage ? (
+                // 라디오: 마름모 표시등
+                <span key={i} className={`${dense ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} transition-all duration-75`}
+                  style={{ transform: `rotate(45deg) scale(${fired ? 1.25 : 1})`, border: '1px solid #b88a35',
+                    background: snd === 0 ? 'transparent' : fired ? RADIO.cream : snd === 2 ? 'rgba(244,215,138,.45)' : '#2a1a0e',
+                    boxShadow: fired ? `0 0 8px ${RADIO.cream}` : 'none' }}/>
+              ) :
               <span key={i} className={`${dense ? 'w-3 h-3' : 'w-4 h-4'} rounded-full transition-all duration-75`}
                 style={snd === 0
                   ? { border: `1.5px solid ${pal[0]}` }
@@ -494,17 +545,17 @@ const MiniMetronome = ({ metro }) => {
             );
           })}
         </div>
-        <span className="text-[10px] font-black tracking-widest shrink-0" style={{ color: dim, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        <span className="text-[10px] font-black tracking-widest shrink-0" style={{ color: vintage ? RADIO.cream : dim, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
           {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm).toUpperCase()}
         </span>
       </div>
       {/* BPM (가운데) — 왼쪽 TAP·−, 오른쪽 +·시작 으로 좌우 대칭 */}
       <div className="flex items-center gap-2">
-        <button onClick={tapTempo} className="w-12 h-12 rounded-2xl t-chip flex flex-col items-center justify-center active:scale-95 shrink-0">
+        <button onClick={tapTempo} className={`w-12 h-12 flex flex-col items-center justify-center active:scale-95 shrink-0 ${vintage ? 'rounded-full' : 'rounded-2xl t-chip'}`} style={vintage ? { ...RADIO.knob, borderWidth: 2 } : undefined}>
           <span className="text-xs font-black" style={{ color: vintage ? '#f6dd94' : 'var(--ink)' }}>TAP</span>
         </button>
-        <button {...press(-1)} className="w-11 h-11 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 내리기">
-          <Minus size={18} className="pointer-events-none" style={{ color: dim }}/>
+        <button {...press(-1)} className={`w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`} aria-label="BPM 내리기" style={{ ...press(-1).style, ...(vintage ? RADIO.knob : {}) }}>
+          <Minus size={18} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : dim }}/>
         </button>
         <div className="flex-1 flex flex-col items-center justify-center min-w-0">
           {vintage
@@ -514,14 +565,13 @@ const MiniMetronome = ({ metro }) => {
                 <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
               </div>}
         </div>
-        <button {...press(1)} className="w-11 h-11 rounded-full t-chip flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 올리기">
-          <Plus size={18} className="pointer-events-none" style={{ color: dim }}/>
+        <button {...press(1)} className={`w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`} aria-label="BPM 올리기" style={{ ...press(1).style, ...(vintage ? RADIO.knob : {}) }}>
+          <Plus size={18} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : dim }}/>
         </button>
         <button onClick={toggleMetronome}
-          className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 active:scale-95 transition-all"
+          className={`w-12 h-12 flex items-center justify-center shrink-0 active:scale-95 transition-all ${vintage ? 'rounded-full' : 'rounded-2xl'}`}
           style={vintage
-            ? { background: isPlayingMetro ? 'linear-gradient(#5a3a16,#3a230c)' : 'linear-gradient(180deg,#f3dc93,#d4ad55 40%,#b88a35)',
-                color: isPlayingMetro ? '#f6dd94' : '#3b2a1a', border: '2px solid #6b4a12' }
+            ? (isPlayingMetro ? { ...RADIO.knob, borderWidth: 2 } : RADIO.brassKnob)
             : { background: isPlayingMetro ? 'rgba(255,204,0,.12)' : 'rgba(74,252,157,.12)',
                 color: isPlayingMetro ? '#ffcc00' : '#4afc9d', border: `2px solid ${isPlayingMetro ? 'rgba(255,204,0,.35)' : 'rgba(74,252,157,.35)'}` }}>
           {isPlayingMetro ? <Square size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
@@ -533,10 +583,10 @@ const MiniMetronome = ({ metro }) => {
           const on = bpm === v;
           return (
             <button key={v} onClick={() => { setBpm(v); haptic(8); }}
-              className="flex-1 py-1.5 rounded-full text-[11px] font-black font-mono active:scale-95"
-              style={on
-                ? { background: vintage ? 'linear-gradient(#f3dc93,#b88a35)' : '#4afc9d', color: vintage ? '#3b2a1a' : '#000' }
-                : { color: dim, border: `1px solid ${vintage ? 'rgba(201,161,74,.3)' : 'var(--chip-border)'}` }}>
+              className={`flex-1 py-1.5 text-[11px] font-black active:scale-95 ${vintage ? 'rounded-[4px]' : 'rounded-full font-mono'}`}
+              style={vintage
+                ? (on ? { background: RADIO.cream, color: '#3a2010', fontFamily: 'Georgia,serif' } : { color: RADIO.cream, border: '1px solid rgba(184,138,53,.6)', fontFamily: 'Georgia,serif' })
+                : on ? { background: '#4afc9d', color: '#000' } : { color: dim, border: '1px solid var(--chip-border)' }}>
               {v}
             </button>
           );

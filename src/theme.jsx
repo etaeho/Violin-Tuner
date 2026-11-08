@@ -21,11 +21,11 @@ const applyTheme = (id) => { document.documentElement.dataset.theme = id; };
 
 // 숫자 표시 (Hz · BPM)
 //  - 테이프/라이트: 검은 숫자판
-//  - 빈티지: 얇은 플립 카드 (FlipDigits)
+//  - 빈티지: 아르데코 라디오의 크림색 창 (RadioDigits)
 const DrumDigits = ({ text, unit = 'Hz', size = 'md', onDark = false }) => {   // onDark: 어두운 바탕 위(황동판 밖)
   const vintage = useVintage();
   const big = size === 'lg';
-  if (vintage) return <FlipDigits text={text} unit={unit} big={big} onDark={onDark}/>;
+  if (vintage) return <RadioDigits text={text} unit={unit} big={big}/>;
   return (
   <div className="flex items-end gap-[3px]">
     {text.split('').map((ch, i) => ch === '.' ? (
@@ -41,25 +41,54 @@ const DrumDigits = ({ text, unit = 'Hz', size = 'md', onDark = false }) => {   /
 );
 };
 
-// 빈티지 숫자: 얇은 플립 카드 (공항 안내판처럼 가운데 접힌 선, 호두나무색 카드 + 크림색 세리프 숫자)
-const FlipDigits = ({ text, unit, big, onDark }) => {
-  const w = big ? 28 : 18, h = big ? 42 : 28, fs = big ? 30 : 19;
+// ── 빈티지 = 아르데코 라디오 (시안 ③) ──
+// 갈색 판 + 황동 테두리 · 크림색 눈금 창 · 베이클라이트 손잡이 버튼
+const RADIO = {
+  frame: { background: 'linear-gradient(180deg,#5a3a1e,#3a2410)', border: '2px solid #b88a35', boxShadow: '0 6px 16px rgba(0,0,0,.5)' },
+  window: { background: 'linear-gradient(180deg,#e9dcbc,#f8f0dc 40%,#e2d3ad)', boxShadow: 'inset 0 2px 5px rgba(0,0,0,.35)' },
+  knob: { background: 'radial-gradient(circle at 40% 35%,#7a4a26,#3a2010)', border: '1px solid #b88a35', color: '#f4d78a' },
+  brassKnob: { background: 'radial-gradient(circle at 40% 35%,#f4d78a,#b88a35)', border: '2px solid #6b4a12', color: '#3a2010' },
+  ink: '#2a1a0e', brown: '#5a3a1e', cream: '#f4d78a', needle: '#c0392b',
+};
+
+// 크림색 창 안의 숫자 (앞자리 0은 지움: '092' → '92')
+const RadioDigits = ({ text, unit, big }) => {
+  const shown = text.replace(/^0+(?=\d)/, '');
   return (
-    <div className="flex items-center" style={{ gap: big ? 3 : 2 }}>
-      {text.split('').map((ch, i) => ch === '.' ? (
-        <span key={i} className="font-black" style={{ color: '#f2e6c4', fontSize: fs * 0.8, margin: '0 1px', fontFamily: 'Georgia,serif' }}>.</span>
-      ) : (
-        <span key={i} className="relative"
-          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, width: w, height: h, borderRadius: big ? 4 : 3,
-                   background: 'linear-gradient(180deg,#5a3820 0 49%,#472c18 51% 100%)',
-                   border: '1px solid #6b4a12', boxShadow: '0 1px 2px rgba(0,0,0,.5)',
-                   color: '#f2e6c4', font: `700 ${fs}px/1 Georgia,serif` }}>
-          {ch}
-          {/* 가운데 접힌 선 */}
-          <span className="absolute inset-x-0 top-1/2" style={{ height: 1, background: 'rgba(0,0,0,.6)' }}/>
+    <span className="inline-flex items-baseline rounded-lg" style={{ ...RADIO.window, padding: big ? '2px 14px' : '1px 10px' }}>
+      <span style={{ fontFamily: 'Georgia,serif', fontSize: big ? 40 : 22, lineHeight: 1.05, color: RADIO.ink }}>{shown}</span>
+      {unit && <span style={{ fontFamily: 'Georgia,serif', fontSize: big ? 10 : 9, color: RADIO.brown, marginLeft: 4 }}>{unit}</span>}
+    </span>
+  );
+};
+
+// Hz 눈금 창: 가장 가까운 음 기준 −50~+50센트를 Hz 눈금으로, 빨간 바늘이 지금 음정을 가리킴
+const RadioDial = ({ hz, cents, live, tolerance, label }) => {
+  const c = live ? Math.max(-50, Math.min(50, cents)) : 0;
+  const f0 = live ? hz / Math.pow(2, cents / 1200) : 442;      // 가장 가까운 음의 정확한 주파수
+  const x = (v) => 4 + ((v + 50) / 100) * 92;                  // 센트 → 창 안 위치(%)
+  const ok = live && Math.abs(cents) <= tolerance;
+  return (
+    <div className="relative h-[46px] rounded-lg overflow-hidden flex-1" style={RADIO.window}>
+      {/* 허용 범위 */}
+      <div className="absolute top-0 h-[16px]" style={{ left: `${x(-tolerance)}%`, width: `${(tolerance / 100) * 92 * 2}%`, background: ok ? 'rgba(31,122,46,.35)' : 'rgba(31,122,46,.15)' }}/>
+      {/* 눈금: 5센트마다, 25센트마다 길게 */}
+      {Array.from({ length: 21 }, (_, k) => {
+        const v = -50 + k * 5;
+        return <i key={k} className="absolute top-0" style={{ left: `${x(v)}%`, width: 1, height: v % 25 === 0 ? 14 : 7, background: RADIO.brown }}/>;
+      })}
+      {[-50, -25, 0, 25, 50].map(v => (
+        <span key={v} className="absolute" style={{ left: `${x(v)}%`, top: 15, transform: 'translateX(-50%)', font: '700 9px Georgia,serif', color: RADIO.brown }}>
+          {(f0 * Math.pow(2, v / 1200)).toFixed(v === 0 ? 1 : 0)}
         </span>
       ))}
-      {unit && <span className="font-bold" style={{ marginLeft: big ? 6 : 4, fontSize: big ? 11 : 10, color: onDark ? '#c9a14a' : '#3b2a1a', fontFamily: 'Georgia,serif' }}>{unit}</span>}
+      {/* 음이름 · 숫자 */}
+      <span className="absolute left-2 bottom-[3px]" style={{ font: '700 13px Georgia,serif', color: RADIO.ink }}>{live ? label : '—'}</span>
+      <span className="absolute right-2 bottom-[3px]" style={{ font: '700 13px Georgia,serif', color: RADIO.ink }}>
+        {live ? `${hz.toFixed(1)} Hz` : '— Hz'} <span style={{ color: !live ? RADIO.brown : ok ? '#1f7a2e' : cents > 0 ? '#b3261e' : '#1d4ed8' }}>{live ? `${cents > 0 ? '+' : ''}${cents}¢` : ''}</span>
+      </span>
+      {/* 바늘 */}
+      <i className="absolute top-0 bottom-0 transition-[left] duration-100" style={{ left: `${x(c)}%`, width: 2, marginLeft: -1, background: RADIO.needle, boxShadow: '0 0 4px rgba(192,57,43,.6)', opacity: live ? 1 : 0.35 }}/>
     </div>
   );
 };
