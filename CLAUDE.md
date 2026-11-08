@@ -7,7 +7,7 @@
 - `src/` — 앱 코드 (React 18 + Babel standalone, 빌드 없이 브라우저에서 JSX 변환). **로드 순서 중요** (core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app):
   1. `core.jsx` — 공통 상수(음이름·현·조표), 설정(DEFAULT_SETTINGS, localStorage), 피치 검출(detectPitch)
   1-1. `commands.jsx` — 연주 명령: 음 패턴(기본 G3→E5→G3) 감지 → 메트로놈 켜기/끄기 (app.jsx에서 onCommand 연결)
-  2. `theme.jsx` — 화면 모드(UI_MODES), ThemeContext/useVintage, 공용 UI(DrumDigits · Screw · BrassPlate). **빈티지 = 아르데코 라디오** 스타일: `RADIO`(갈색 판·크림 창·베이클라이트 버튼 색) · `RadioDigits`(크림색 창 숫자) · `RadioDial`(1번 탭 Hz 눈금 창 + 빨간 바늘). 2번 탭은 `RadioBeatDial`(metronome.jsx, 바늘이 지금 박을 가리킴)
+  2. `theme.jsx` — **디자인 7종** `DESIGNS`(다크·라이트 / 피아노·가죽·라디오·바이올린·악보). 설정값 `settings.design`, 각 디자인의 `base`(tape|light|vintage)가 `settings.uiMode`·`data-theme`이 됨. 우드 계열은 `SKINS[skin]` 토큰(숫자창·버튼·표시등·다이얼 모양)을 `SkinContext`/`useSkin()`으로 받음 → `SkinNumber`(1번 탭 Hz), `SkinBeatDial`·`SkinMiniMetronome`(metronome.jsx). 고르는 화면 = `DesignPicker`(설정 ①, 온보딩 3단계 공용). 라디오만 `hzDial`로 `RadioDial`(Hz 눈금 창 + 빨간 바늘)·`RadioBeatDial` 사용. 그 외 ThemeContext/useVintage, 공용 UI(DrumDigits · Screw · BrassPlate)
   3. `tuner.jsx` — 튜너 탭: useTunerLogic, StringBars(막대), StringVTapes/VTape(현별 세로 테이프, 기본 구성), NoteTape(가로 테이프), TunerReadout, SettingsSheet, Tuner. 구성은 `TUNER_LAYOUTS`
   4. `metronome.jsx` — 메트로놈 탭(위쪽 `PitchStrip`: 튜너와 같은 음정 한 줄 표시) + `MiniMetronome`(튜너 탭 '테이프 + 템포' 구성에서 같은 metro 상태 공유). 클릭 시각을 `METRO_CLICKS`(core.jsx)에 기록 → 튜너가 그 순간 분석을 건너뜀
   5. `fingerboard.jsx` — 지판 탭 (v2 디자인): 조표(`fb.key`), 연주 음, 탭→기준음, 박마다 테두리, 히트맵(`fb.heat`, 연습 기록의 음별 정확도 최근 30일), 스케일 연습(`tuner.noteListeners`로 확정 음 받음)
@@ -18,7 +18,8 @@
   - 파일 간 공유는 전역 top-level `const`로 한다 (import/export 없음). 새 파일을 만들면 index.html, sw.js PRECACHE에 추가.
 - `src/theme.css` — 테마 색 변수. `<html data-theme="tape|vintage|light">`. 라이트는 밝은 바디 + 튜너 테이프·숫자창은 어두운 표시창. 컴포넌트에 직접 쓴 어두운 색 클래스(text-white, bg-[#141414] 등)는 파일 아래쪽 라이트 덮어쓰기 규칙으로 바뀜 → 새 색 클래스를 쓰면 거기에도 추가. 인라인 글자색은 `var(--ink)`, `var(--ink2)` 사용.
   **컴포넌트에서 배경/테두리 색을 직접 쓰지 말고 `t-panel`, `t-chip`, `t-inset`, `t-board`, `t-card`, `t-sheet`, `t-nav`, `t-app` 클래스 사용.**
-  모양 자체가 다른 부분만 `useVintage()`로 분기. 새 테마 = theme.css 변수 블록 + UI_MODES 항목 + core.jsx loadSettings 허용 목록.
+  모양 자체가 다른 부분만 `useVintage()`로 분기. 새 우드 디자인 = `SKINS` 항목 + `DESIGNS` 한 줄 + core.jsx `DESIGN_BASE` 한 줄. 새 바탕 테마 = theme.css 변수 블록 + loadSettings 허용 목록.
+  설정 시트는 ① 디자인 ② 튜너 화면 ③ 소리 감지 ④ 연주 명령 ⑤ 백업·정보 — 자주 안 쓰는 값은 `Fold`(펼치기) 안에 둔다.
 - `vendor/` — React/ReactDOM/Lucide/Babel 고정 버전. Tailwind만 CDN.
 - `manifest.json`, `sw.js`, `icons/` — PWA 리소스
 - `app/` — 안드로이드 네이티브 껍데기 (Kotlin, WebView). 빌드 시 위 웹 파일들을 assets로 복사해서

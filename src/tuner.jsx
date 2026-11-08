@@ -45,7 +45,7 @@ const useTunerLogic = () => {
     saveSettings(next);
     setSettingsState(next);
   };
-  const resetSettings = () => updateSettings({ ...DEFAULT_SETTINGS, uiMode: settingsRef.current.uiMode });
+  const resetSettings = () => { const c = settingsRef.current; updateSettings({ ...DEFAULT_SETTINGS, design: c.design, uiMode: c.uiMode, onboarded: c.onboarded, tunerLayout: c.tunerLayout, layoutRev: c.layoutRev }); };
 
   useEffect(() => {
     if (settingsRef.current.onboarded) ensureMic();    // 처음이면 안내 화면에서 허용받은 뒤 시작
@@ -500,6 +500,7 @@ const StringVTapes = ({ tuner }) => {
 // 한 줄 표시: LIVE · Hz 숫자 카운터 · 센트 (세로 테이프 구성용)
 const TunerReadout = ({ tuner }) => {
   const vintage = useVintage();
+  const skin = useSkin();
   const { isStarted, pitch, cents, tolerance, ensureMic } = tuner;
   const live = isStarted && pitch > 0;
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
@@ -517,6 +518,29 @@ const TunerReadout = ({ tuner }) => {
       </span>
     </div>
   );
+  if (vintage && !skin.hzDial) {
+    // 우드 계열 디자인(피아노·가죽·바이올린·악보): 디자인별 판 + 숫자
+    const { currentNote } = tuner;
+    const ok = live && Math.abs(cents) <= tolerance;
+    const cc = !live ? skin.unit : ok ? skin.good : cents > 0 ? '#c0392b' : '#2563eb';
+    return (
+      <div className="w-full max-w-sm shrink-0 rounded-[14px] px-3 py-2 flex items-center justify-between gap-2" style={skin.frame}>
+        <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest shrink-0"
+          style={{ color: isStarted ? skin.live : '#ef4444' }}>
+          <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>{isStarted ? 'LIVE' : 'OFF'}
+        </button>
+        <span className="flex items-baseline gap-2">
+          <span style={{ fontFamily: 'Georgia,serif', fontSize: 13, color: skin.label, fontStyle: skin.italic ? 'italic' : 'normal' }}>
+            {live ? `${currentNote.name}${currentNote.symbol.replace('#', '♯')}${currentNote.octave}` : '—'}
+          </span>
+          <SkinNumber skin={skin} text={live ? Number(pitch).toFixed(1) : '0.0'} unit="Hz" size={26}/>
+        </span>
+        <span className="text-lg font-black shrink-0 min-w-[46px] text-right" style={{ color: cc, fontFamily: 'Georgia,serif' }}>
+          {live ? (ok ? 'OK' : `${cents > 0 ? '+' : ''}${cents}¢`) : '0¢'}
+        </span>
+      </div>
+    );
+  }
   if (vintage) {
     // 아르데코 라디오: 갈색 판 + 크림색 Hz 눈금 창 + 빨간 바늘
     const { currentNote } = tuner;
@@ -670,6 +694,18 @@ const Section = ({ title, children }) => (
   </section>
 );
 
+// 접히는 묶음: 자주 안 쓰는 세부 설정은 눌러야 보이게
+const Fold = ({ label, open, onToggle, children }) => (
+  <>
+    <button onClick={() => { onToggle(); haptic(6); }}
+      className="flex items-center justify-between w-full py-1 text-xs font-bold text-gray-400 active:opacity-60">
+      <span>{label}</span>
+      <span className="text-[10px] text-gray-500">{open ? '접기 ▲' : '펼치기 ▼'}</span>
+    </button>
+    {open && <div className="flex flex-col gap-3">{children}</div>}
+  </>
+);
+
 // 백업: 'vt.' 저장값 전부를 JSON 파일 하나로 (안드로이드: 저장 위치 선택 창)
 const backupFileName = (d = new Date()) =>
   `violin-tuner-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
@@ -715,7 +751,7 @@ const BackupSection = () => {
     location.reload();
   };
   return (
-    <Section title="백업">
+    <>
       <div className="flex gap-2">
         <button onClick={exportNow} className="flex-1 t-chip rounded-full py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 text-gray-300"><Download size={14} className="text-[#4afc9d]"/>내보내기</button>
         <button onClick={() => fileRef.current?.click()} className="flex-1 t-chip rounded-full py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 text-gray-300"><Upload size={14} className="text-[#4afc9d]"/>가져오기</button>
@@ -732,7 +768,7 @@ const BackupSection = () => {
       )}
       {msg && <p className={`text-[11px] font-bold ${msg.ok ? 'text-[#4afc9d]' : 'text-[#ef4444]'}`}>{msg.text}</p>}
       <p className="text-[10px] text-gray-500 leading-snug">설정 · 템포 · 드론 · 연습 기록을 파일 하나로 저장합니다. 폰을 바꾸거나 앱을 다시 설치할 때 가져오세요.</p>
-    </Section>
+    </>
   );
 };
 
@@ -742,6 +778,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
   const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
   const [cmd, setCmd] = useState({ recording: null, events: [] });   // 연주 명령 상태 표시용
   const [recMsg, setRecMsg] = useState(null);
+  const [open, setOpen] = useState({});   // 접힌 묶음 펼침 상태
 
   // 패턴 녹음 완료 → 저장
   useEffect(() => {
@@ -794,26 +831,20 @@ const SettingsSheet = ({ tuner, onClose }) => {
           <button onClick={onClose} className="p-2 rounded-full t-chip text-gray-400"><X size={14}/></button>
         </div>
 
-        <Section title="테마">
-          <div className="grid grid-cols-3 gap-2">
-            {UI_MODES.map(m => {
-              const on = S.uiMode === m.id;
-              return (
-                <button key={m.id} onClick={() => { updateSettings({ uiMode: m.id }); haptic(10); }}
-                  className={`flex flex-col rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${on?'border-[#4afc9d] shadow-[0_0_12px_rgba(74,252,157,0.3)]':'border-gray-800'}`}>
-                  <div className="h-16 w-full"><ModePreview id={m.id}/></div>
-                  <div className={`py-1.5 flex flex-col items-center ${on?'bg-[#4afc9d]/10':'bg-[#141414]'}`}>
-                    <span className={`text-xs font-black ${on?'text-[#4afc9d]':'text-gray-300'}`}>{m.name}</span>
-                    <span className="text-[9px] text-gray-500">{m.desc}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+        <Section title="① 디자인">
+          <DesignPicker value={S.design} onChange={d => updateSettings({ design: d.id, uiMode: d.base })}/>
         </Section>
 
-        <Section title="튜너 화면 구성">
-          <div className="grid grid-cols-2 gap-2">
+        <Section title="② 튜너 화면">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-sm font-black" style={{ color: 'var(--ink)' }}>{(TUNER_LAYOUTS.find(l => l.id === S.tunerLayout) || TUNER_LAYOUTS[0]).name}</span>
+              <span className="text-[10px] text-gray-500">{(TUNER_LAYOUTS.find(l => l.id === S.tunerLayout) || TUNER_LAYOUTS[0]).desc}</span>
+            </div>
+            <button onClick={() => { setOpen(o => ({ ...o, layout: !o.layout })); haptic(6); }}
+              className="px-3 py-1.5 rounded-full t-chip text-xs font-bold text-gray-300">{open.layout ? '닫기' : '바꾸기'}</button>
+          </div>
+          {open.layout && <div className="grid grid-cols-2 gap-2">
             {TUNER_LAYOUTS.map(l => {
               const on = S.tunerLayout === l.id;
               return (
@@ -838,10 +869,10 @@ const SettingsSheet = ({ tuner, onClose }) => {
                 </button>
               );
             })}
-          </div>
+          </div>}
         </Section>
 
-        <Section title="① 입력 테스트 · 노이즈 게이트">
+        <Section title="③ 소리 감지">
           {!isStarted ? (
             <button onClick={ensureMic}
               className="flex items-center justify-center gap-2 py-3 rounded-full bg-[#4afc9d]/10 border border-[#4afc9d]/30 text-[#4afc9d] text-sm font-bold">
@@ -876,12 +907,11 @@ const SettingsSheet = ({ tuner, onClose }) => {
               )}
             </>
           )}
+          <Fold label="세부 조절 (소음 · 신뢰도 · 안정화)" open={open.sense} onToggle={() => setOpen(o => ({ ...o, sense: !o.sense }))}>
           <SliderRow label="소음 차단 임계값" value={S.gateDb} display={`${S.gateDb} dB`} min={-80} max={-10} step={1}
             onChange={v => updateSettings({ gateDb: v })}
             hint="흰 선보다 큰 소리만 분석합니다. 잡음에 반응하면 오른쪽으로, 약한 소리를 못 잡으면 왼쪽으로."/>
-        </Section>
 
-        <Section title="② 음정 신뢰도">
           {isStarted && (
             <div className="flex flex-col gap-1.5">
               <div className="flex justify-between text-[10px] font-bold">
@@ -894,9 +924,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
           <SliderRow label="최소 신뢰도" value={S.clarity} display={S.clarity.toFixed(2)} min={0.7} max={0.98} step={0.01}
             onChange={v => updateSettings({ clarity: v })}
             hint="소리가 얼마나 '음정다운지'. 잡음·말소리는 낮고 현 소리는 0.9 이상. 높일수록 잡음에 강해집니다."/>
-        </Section>
 
-        <Section title="③ 안정화 · 범위">
           <SliderRow label="확정 프레임" value={S.stableFrames} display={`${S.stableFrames}프레임 · ${Math.round(S.stableFrames * 16.7)}ms`} min={1} max={10} step={1}
             onChange={v => updateSettings({ stableFrames: v })}
             hint="같은 음이 이만큼 연속돼야 표시. 순간 잡음으로 튀는 걸 막습니다."/>
@@ -911,9 +939,10 @@ const SettingsSheet = ({ tuner, onClose }) => {
             hint="바이올린 최저음 G3 = 196Hz. 180Hz면 저음 웅웅거림을 걸러냅니다."/>
           <SliderRow label="최고 주파수" value={S.maxFreq} display={`${S.maxFreq} Hz`} min={1000} max={5000} step={100}
             onChange={v => updateSettings({ maxFreq: v })}/>
+          </Fold>
         </Section>
 
-        <Section title="④ 연주 명령 · 박자 켜기/끄기">
+        <Section title="④ 연주 명령">
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-xs font-bold text-gray-300">음 패턴으로 메트로놈 켜기/끄기</span>
@@ -954,6 +983,7 @@ const SettingsSheet = ({ tuner, onClose }) => {
             {!cmd.recording && recMsg && <span className="text-[11px] font-bold text-[#4afc9d]">{recMsg}</span>}
           </div>
 
+          <Fold label="패턴 바꾸기 · 제한 시간" open={open.cmd || !!cmd.recording} onToggle={() => setOpen(o => ({ ...o, cmd: !o.cmd }))}>
           <div className="flex gap-2">
             {cmd.recording ? (
               <button onClick={() => { noteTracker.cancelRecording(); haptic(8); }}
@@ -981,15 +1011,15 @@ const SettingsSheet = ({ tuner, onClose }) => {
           <span className="text-[10px] text-gray-600 leading-snug">
             튜닝할 때 자주 켜는 인접 현(G→D, A→E)은 피하고, G→E→G처럼 현을 건너뛰는 패턴을 추천합니다.
           </span>
+          </Fold>
         </Section>
 
-        <BackupSection/>
-
-        <Section title="정보">
-          <p className="text-xs text-gray-500 leading-relaxed">
-            Violin Tuner — 모든 기록은 이 폰 안에만 저장됩니다.
-          </p>
-          <button onClick={() => { updateSettings({ onboarded: false }); onClose(); }} className="self-start text-xs font-bold text-[#4afc9d]">처음 안내 다시 보기</button>
+        <Section title="⑤ 백업 · 정보">
+          <Fold label="백업 내보내기 · 가져오기, 앱 정보" open={open.misc} onToggle={() => setOpen(o => ({ ...o, misc: !o.misc }))}>
+            <BackupSection/>
+            <p className="text-xs text-gray-500 leading-relaxed">Violin Tuner — 모든 기록은 이 폰 안에만 저장됩니다.</p>
+            <button onClick={() => { updateSettings({ onboarded: false }); onClose(); }} className="self-start text-xs font-bold text-[#4afc9d]">처음 안내 다시 보기</button>
+          </Fold>
         </Section>
 
         <div className="flex gap-3 mt-1">

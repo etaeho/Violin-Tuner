@@ -53,23 +53,10 @@ const Onboarding = ({ tuner }) => {
         </>}
         {step === 2 && <>
           <span className="text-5xl">🎨</span>
-          <h2 className="text-2xl font-black" style={{ color: 'var(--ink)' }}>화면 테마</h2>
+          <h2 className="text-2xl font-black" style={{ color: 'var(--ink)' }}>디자인 고르기</h2>
           <p className="text-sm text-gray-500">나중에 설정에서 바꿀 수 있습니다.</p>
-          <div className="grid grid-cols-3 gap-2 w-full mt-2">
-            {UI_MODES.map(m => {
-              const on = settings.uiMode === m.id;
-              return (
-                <button key={m.id} onClick={() => { updateSettings({ uiMode: m.id }); haptic(10); }}
-                  className="rounded-xl overflow-hidden border-2 active:scale-95 transition-all"
-                  style={{ borderColor: on ? 'var(--accent)' : 'var(--chip-border)' }}>
-                  <div className="h-16 w-full"><ModePreview id={m.id}/></div>
-                  <div className="py-1.5 t-chip" style={{ border: 'none' }}>
-                    <div className="text-xs font-black" style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{m.name}</div>
-                    <div className="text-[9px] text-gray-500">{m.desc}</div>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="w-full mt-2 text-left">
+            <DesignPicker compact value={settings.design} onChange={d => updateSettings({ design: d.id, uiMode: d.base })}/>
           </div>
         </>}
       </div>

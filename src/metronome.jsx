@@ -288,8 +288,37 @@ const RadioBeatDial = ({ metro, size }) => {
   );
 };
 
-const BeatDial = ({ metro, size, pal, vintage }) => {
-  if (vintage) return <RadioBeatDial metro={metro} size={size}/>;
+// 우드 계열 다이얼 (피아노·가죽·바이올린·악보): 박 구간 링 + 문자판 + 가운데 BPM
+const SkinBeatDial = ({ metro, size, k }) => {
+  const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
+  const d = k.dial, n = beatSounds.length, gap = n > 8 ? 3 : 6, firing = visualFlash === 'main';
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
+        <circle cx="100" cy="100" r="97" fill={d.outer} stroke={d.ring} strokeWidth="2.5" strokeDasharray={d.ringDash ? '5 4' : undefined}/>
+        {beatSounds.map((snd, i) => {
+          const a0 = (360 / n) * i + gap / 2, a1 = (360 / n) * (i + 1) - gap / 2;
+          const cur = isPlayingMetro && i === currentBeat;
+          return <path key={i} d={arcPath(100, 100, 85, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur && firing ? 11 : 8}
+            stroke={snd === 0 ? d.off : cur ? d.on : snd === 2 ? d.strong : d.off}
+            style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && firing ? `drop-shadow(0 0 5px ${d.on})` : 'none' }}/>;
+        })}
+        <circle cx="100" cy="100" r="68" fill={d.face} stroke={d.ring} strokeWidth="1.5" strokeDasharray={d.ringDash ? '4 3' : undefined}/>
+        <circle cx="100" cy="100" r="63" fill="none" stroke={d.sub} strokeWidth="0.8" opacity={visualFlash === 'sub' ? 0.9 : 0.15} style={{ transition: 'opacity 60ms' }}/>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span style={{ fontFamily: 'Georgia,serif', fontSize: k.quarter ? size * 0.17 : size * 0.24, lineHeight: 1, color: d.text,
+          textShadow: k.emboss ? '0 2px 0 #1e0f06' : 'none' }}>{k.quarter ? <>♩ = <b style={{ fontSize: size * 0.22 }}>{bpm}</b></> : bpm}</span>
+        <span style={{ fontFamily: 'Georgia,serif', fontSize: k.quarter ? 12 : 10, letterSpacing: k.quarter ? 0 : '0.2em', color: d.sub, marginTop: 3, fontStyle: k.italic ? 'italic' : 'normal' }}>
+          {k.quarter ? getTempoMarking(bpm) : `BPM · ${getTempoMarking(bpm).toUpperCase()}`}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const BeatDial = ({ metro, size, pal, vintage, skin }) => {
+  if (vintage) return skin && !skin.dial.ticks ? <SkinBeatDial metro={metro} size={size} k={skin}/> : <RadioBeatDial metro={metro} size={size}/>;
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
   const n = beatSounds.length;
   const gap = n > 8 ? 4 : 7;
@@ -380,6 +409,7 @@ const PitchStrip = ({ tuner }) => {
 };
 
 const Metronome = ({ metro, tuner }) => {
+  const skin = useSkin();
   const {
     bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
@@ -457,14 +487,14 @@ const Metronome = ({ metro, tuner }) => {
 
       {/* 3. 비트 다이얼 (남는 공간 채움) */}
       <div ref={dialRef} className="w-full flex-1 min-h-0 flex items-center justify-between">
-        <button {...pressProps(-1)} style={{ ...pressProps(-1).style, ...(vintage ? RADIO.knob : {}) }}
+        <button {...pressProps(-1)} style={{ ...pressProps(-1).style, ...(vintage ? skin.knob : {}) }}
           className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
-          <Minus size={20} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : '#9ca3af' }}/>
+          <Minus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
         </button>
-        <BeatDial metro={metro} size={dialSize} pal={pal} vintage={vintage}/>
-        <button {...pressProps(1)} style={{ ...pressProps(1).style, ...(vintage ? RADIO.knob : {}) }}
+        <BeatDial metro={metro} size={dialSize} pal={pal} vintage={vintage} skin={skin}/>
+        <button {...pressProps(1)} style={{ ...pressProps(1).style, ...(vintage ? skin.knob : {}) }}
           className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
-          <Plus size={20} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : '#9ca3af' }}/>
+          <Plus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
         </button>
       </div>
 
@@ -512,17 +542,93 @@ const Metronome = ({ metro, tuner }) => {
 // ==========================================
 // 미니 메트로놈 — 튜너 탭에 들어가는 템포 패널 (같은 metro 상태 공유)
 // ==========================================
-const MiniMetronome = ({ metro }) => {
+// 우드 계열 템포 패널: 디자인 토큰(SKINS)으로 판·표시등·버튼·숫자·프리셋 모양이 바뀜
+const SkinLamp = ({ k, snd, fired, dense }) => {
+  const L = k.lamp, sz = dense ? 10 : 14;
+  const col = snd === 0 ? 'transparent' : fired ? L.on : snd === 2 ? L.strong : L.off;
+  if (L.shape === 'note') return <span style={{ fontFamily: 'Georgia,serif', fontSize: fired ? sz + 8 : sz + 4, lineHeight: 1, color: snd === 0 ? L.off : fired ? L.on : L.off, transition: 'all 75ms' }}>♩</span>;
+  const base = { width: sz, height: sz, transition: 'all 75ms', boxShadow: fired && snd ? `0 0 8px ${L.on}` : 'none' };
+  if (L.shape === 'diamond') return <span style={{ ...base, transform: `rotate(45deg) scale(${fired ? 1.25 : 1})`, background: col, border: `1px solid ${L.border}` }}/>;
+  if (L.shape === 'stud') return <span className="rounded-full" style={{ ...base, transform: `scale(${fired ? 1.25 : 1})`,
+    background: fired || snd === 2 ? `radial-gradient(circle at 35% 30%,#fff3c4,${fired ? '#e8c46a' : '#b88a35'} 60%,#6b4a12)` : L.off, border: `1px solid ${L.border}` }}/>;
+  return <span className="rounded-full" style={{ ...base, transform: `scale(${fired ? 1.25 : 1})`, background: col, border: snd === 0 ? `1.5px solid ${L.off}` : `1px solid ${L.border}` }}/>;
+};
+
+const SkinPresets = ({ k, bpm, setBpm }) => {
+  if (k.presets === 'keys') return (
+    <div className="flex h-9 rounded overflow-hidden" style={{ border: '1px solid #333' }}>
+      {TEMPO_PRESETS.map(v => (
+        <button key={v} onClick={() => { setBpm(v); haptic(8); }} className="flex-1 flex items-end justify-center pb-1 text-[10px] font-black font-mono active:brightness-90"
+          style={{ background: bpm === v ? 'linear-gradient(#d9cdb0,#bfb093)' : 'linear-gradient(#fbf7ee,#e9e2d0)', color: '#222', borderRight: '1px solid #999',
+            boxShadow: bpm === v ? 'inset 0 3px 6px rgba(0,0,0,.35)' : 'none' }}>{v}</button>
+      ))}
+    </div>
+  );
+  const st = {
+    stitch: (on) => on ? { background: '#c9a14a', color: '#2a170c', borderRadius: 999 } : { color: '#d9b878', border: '1px dashed rgba(217,184,120,.5)', borderRadius: 999 },
+    radio:  (on) => on ? { background: '#f4d78a', color: '#3a2010', borderRadius: 4, fontFamily: 'Georgia,serif' } : { color: '#f4d78a', border: '1px solid rgba(184,138,53,.6)', borderRadius: 4, fontFamily: 'Georgia,serif' },
+    ebony:  (on) => on ? { background: '#111', color: '#efe6d0', borderRadius: 999 } : { color: '#2a1205', border: '1px solid rgba(42,18,5,.45)', borderRadius: 999 },
+    ink:    (on) => on ? { background: '#1f140a', color: '#efe2c0', borderRadius: 999, fontFamily: 'Georgia,serif' } : { color: '#3a2814', border: '1px solid rgba(58,40,20,.4)', borderRadius: 999, fontFamily: 'Georgia,serif' },
+  }[k.presets];
+  return (
+    <div className="flex items-center gap-1.5">
+      {TEMPO_PRESETS.map(v => (
+        <button key={v} onClick={() => { setBpm(v); haptic(8); }} className="flex-1 py-1.5 text-[11px] font-black active:scale-95" style={st(bpm === v)}>{v}</button>
+      ))}
+    </div>
+  );
+};
+
+const SkinMiniMetronome = ({ metro }) => {
+  const k = useSkin();
   const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
           toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
-  const vintage = useVintage();
-  const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
-  const text = vintage ? '#f4e3b5' : 'var(--ink)';
-  const dim = vintage ? 'rgba(244,227,181,.55)' : '#6b7280';
+  const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd });
+  const dense = beatSounds.length > 8;
+  return (
+    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 rounded-[18px]" style={k.frame}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {beatSounds.map((snd, i) => <SkinLamp key={i} k={k} snd={snd} dense={dense} fired={isPlayingMetro && i === currentBeat && visualFlash === 'main'}/>)}
+        </div>
+        <span className="shrink-0" style={{ color: k.label, fontFamily: 'Georgia,serif', fontSize: k.italic ? 12 : 10, fontStyle: k.italic ? 'italic' : 'normal', letterSpacing: k.italic ? 0 : '0.15em', fontWeight: 700 }}>
+          {k.italic ? `${timeSig.num}/${timeSig.den} · ${getTempoMarking(bpm)}` : `${timeSig.num}/${timeSig.den} · ${getTempoMarking(bpm).toUpperCase()}`}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <button onClick={tapTempo} className="w-12 h-12 flex items-center justify-center active:scale-95 shrink-0 text-xs font-black" style={k.tap}>TAP</button>
+        <button {...press(-1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 내리기" style={{ touchAction: 'none', ...k.knob }}>
+          <Minus size={18} className="pointer-events-none" style={{ color: k.knob.color }}/>
+        </button>
+        <div className="flex-1 flex justify-center min-w-0">
+          {k.quarter
+            ? <span style={{ fontFamily: 'Georgia,serif', fontSize: 30, lineHeight: 1, color: k.ink }}>♩ = <b style={{ fontSize: 40 }}>{bpm}</b></span>
+            : <SkinNumber skin={k} text={String(bpm)} unit="BPM" size={42}/>}
+        </div>
+        <button {...press(1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 올리기" style={{ touchAction: 'none', ...k.knob }}>
+          <Plus size={18} className="pointer-events-none" style={{ color: k.knob.color }}/>
+        </button>
+        <button onClick={toggleMetronome} className="w-12 h-12 flex items-center justify-center shrink-0 active:scale-95 transition-all" style={isPlayingMetro ? k.playOn : k.play}>
+          {isPlayingMetro ? <Square size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
+        </button>
+      </div>
+      <SkinPresets k={k} bpm={bpm} setBpm={setBpm}/>
+    </div>
+  );
+};
+
+// 우드 계열 디자인은 SkinMiniMetronome, 다크·라이트는 아래 PlainMiniMetronome
+const MiniMetronome = ({ metro }) => useVintage() ? <SkinMiniMetronome metro={metro}/> : <PlainMiniMetronome metro={metro}/>;
+
+const PlainMiniMetronome = ({ metro }) => {
+  const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
+          toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
+  const pal = METRO_PALETTE.tape;
+  const dim = '#6b7280';
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
   const dense = beatSounds.length > 8;
   return (
-    <div className={`w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 ${vintage ? 'rounded-[18px]' : 't-panel rounded-3xl'}`} style={vintage ? RADIO.frame : undefined}>
+    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 t-panel rounded-3xl">
       {/* 박 표시 + 박자표 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -530,13 +636,6 @@ const MiniMetronome = ({ metro }) => {
             const fired = isPlayingMetro && i === currentBeat && visualFlash === 'main';
             const col = pal[snd];
             return (
-              vintage ? (
-                // 라디오: 마름모 표시등
-                <span key={i} className={`${dense ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'} transition-all duration-75`}
-                  style={{ transform: `rotate(45deg) scale(${fired ? 1.25 : 1})`, border: '1px solid #b88a35',
-                    background: snd === 0 ? 'transparent' : fired ? RADIO.cream : snd === 2 ? 'rgba(244,215,138,.45)' : '#2a1a0e',
-                    boxShadow: fired ? `0 0 8px ${RADIO.cream}` : 'none' }}/>
-              ) :
               <span key={i} className={`${dense ? 'w-3 h-3' : 'w-4 h-4'} rounded-full transition-all duration-75`}
                 style={snd === 0
                   ? { border: `1.5px solid ${pal[0]}` }
@@ -545,35 +644,31 @@ const MiniMetronome = ({ metro }) => {
             );
           })}
         </div>
-        <span className="text-[10px] font-black tracking-widest shrink-0" style={{ color: vintage ? RADIO.cream : dim, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        <span className="text-[10px] font-black tracking-widest shrink-0" style={{ color: dim }}>
           {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm).toUpperCase()}
         </span>
       </div>
       {/* BPM (가운데) — 왼쪽 TAP·−, 오른쪽 +·시작 으로 좌우 대칭 */}
       <div className="flex items-center gap-2">
-        <button onClick={tapTempo} className={`w-12 h-12 flex flex-col items-center justify-center active:scale-95 shrink-0 ${vintage ? 'rounded-full' : 'rounded-2xl t-chip'}`} style={vintage ? { ...RADIO.knob, borderWidth: 2 } : undefined}>
-          <span className="text-xs font-black" style={{ color: vintage ? '#f6dd94' : 'var(--ink)' }}>TAP</span>
+        <button onClick={tapTempo} className="w-12 h-12 flex flex-col items-center justify-center active:scale-95 shrink-0 rounded-2xl t-chip">
+          <span className="text-xs font-black" style={{ color: 'var(--ink)' }}>TAP</span>
         </button>
-        <button {...press(-1)} className={`w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`} aria-label="BPM 내리기" style={{ ...press(-1).style, ...(vintage ? RADIO.knob : {}) }}>
-          <Minus size={18} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : dim }}/>
+        <button {...press(-1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 t-chip" aria-label="BPM 내리기">
+          <Minus size={18} className="pointer-events-none" style={{ color: dim }}/>
         </button>
         <div className="flex-1 flex flex-col items-center justify-center min-w-0">
-          {vintage
-            ? <DrumDigits text={String(bpm).padStart(3, '0')} unit="BPM" size="lg" onDark/>
-            : <div className="flex items-baseline gap-1">
-                <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: text }}>{bpm}</span>
-                <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
-              </div>}
+          <div className="flex items-baseline gap-1">
+            <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: 'var(--ink)' }}>{bpm}</span>
+            <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
+          </div>
         </div>
-        <button {...press(1)} className={`w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`} aria-label="BPM 올리기" style={{ ...press(1).style, ...(vintage ? RADIO.knob : {}) }}>
-          <Plus size={18} className="pointer-events-none" style={{ color: vintage ? RADIO.cream : dim }}/>
+        <button {...press(1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 t-chip" aria-label="BPM 올리기">
+          <Plus size={18} className="pointer-events-none" style={{ color: dim }}/>
         </button>
         <button onClick={toggleMetronome}
-          className={`w-12 h-12 flex items-center justify-center shrink-0 active:scale-95 transition-all ${vintage ? 'rounded-full' : 'rounded-2xl'}`}
-          style={vintage
-            ? (isPlayingMetro ? { ...RADIO.knob, borderWidth: 2 } : RADIO.brassKnob)
-            : { background: isPlayingMetro ? 'rgba(255,204,0,.12)' : 'rgba(74,252,157,.12)',
-                color: isPlayingMetro ? '#ffcc00' : '#4afc9d', border: `2px solid ${isPlayingMetro ? 'rgba(255,204,0,.35)' : 'rgba(74,252,157,.35)'}` }}>
+          className="w-12 h-12 flex items-center justify-center shrink-0 active:scale-95 transition-all rounded-2xl"
+          style={{ background: isPlayingMetro ? 'rgba(255,204,0,.12)' : 'rgba(74,252,157,.12)',
+                   color: isPlayingMetro ? '#ffcc00' : '#4afc9d', border: `2px solid ${isPlayingMetro ? 'rgba(255,204,0,.35)' : 'rgba(74,252,157,.35)'}` }}>
           {isPlayingMetro ? <Square size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
         </button>
       </div>
@@ -583,10 +678,8 @@ const MiniMetronome = ({ metro }) => {
           const on = bpm === v;
           return (
             <button key={v} onClick={() => { setBpm(v); haptic(8); }}
-              className={`flex-1 py-1.5 text-[11px] font-black active:scale-95 ${vintage ? 'rounded-[4px]' : 'rounded-full font-mono'}`}
-              style={vintage
-                ? (on ? { background: RADIO.cream, color: '#3a2010', fontFamily: 'Georgia,serif' } : { color: RADIO.cream, border: '1px solid rgba(184,138,53,.6)', fontFamily: 'Georgia,serif' })
-                : on ? { background: '#4afc9d', color: '#000' } : { color: dim, border: '1px solid var(--chip-border)' }}>
+              className="flex-1 py-1.5 text-[11px] font-black active:scale-95 rounded-full font-mono"
+              style={on ? { background: '#4afc9d', color: '#000' } : { color: dim, border: '1px solid var(--chip-border)' }}>
               {v}
             </button>
           );

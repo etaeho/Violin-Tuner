@@ -76,6 +76,7 @@ const App = () => {
 
   return (
     <ThemeContext.Provider value={theme}>
+    <SkinContext.Provider value={designById(tuner.settings.design).skin || 'radio'}>
     <div
       className="fixed inset-0 t-app text-white flex flex-col items-center font-sans select-none overflow-hidden"
       style={{
@@ -168,6 +169,7 @@ const App = () => {
         })}
       </nav>
     </div>
+    </SkinContext.Provider>
     </ThemeContext.Provider>
   );
 };

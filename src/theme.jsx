@@ -6,11 +6,8 @@
 // 테마별로 모양 자체가 달라지는 부분만 useVintage()로 분기한다.
 // ==========================================
 
-const UI_MODES = [
-  { id:'tape',    name:'테이프', desc:'다크 · 기본' },
-  { id:'vintage', name:'빈티지', desc:'황동 · 원목' },
-  { id:'light',   name:'라이트', desc:'밝은 화면 · 야외' },
-];
+// 사용자가 고르는 건 DESIGNS(7종, 아래). 각 디자인의 base = 바탕 테마(tape | light | vintage),
+// 우드 계열(vintage)은 skin = SKINS 항목으로 숫자창·버튼·다이얼 모양이 달라진다.
 
 const ThemeContext = React.createContext('tape');
 const useTheme = () => React.useContext(ThemeContext);
@@ -40,6 +37,145 @@ const DrumDigits = ({ text, unit = 'Hz', size = 'md', onDark = false }) => {   /
   </div>
 );
 };
+
+// ==========================================
+// 디자인 7가지 (설정 · 첫 실행 안내에서 하나만 고름)
+//  base = 바탕 테마(theme.css의 data-theme), skin = 우드 계열의 계기판 모양(SKINS)
+//  우드 계열은 원목 배경을 같이 쓰고 Hz 표시줄 · 템포 패널 · 2번 탭 다이얼만 모양이 다름
+// ==========================================
+const DESIGNS = [
+  { id: 'dark',    group: '기본',          name: '다크',     desc: '기본',          base: 'tape' },
+  { id: 'light',   group: '기본',          name: '라이트',   desc: '야외 · 밝은 곳', base: 'light' },
+  { id: 'piano',   group: '우드 · 아날로그', name: '피아노',   desc: '블랙 · 아이보리', base: 'vintage', skin: 'piano' },
+  { id: 'leather', group: '우드 · 아날로그', name: '가죽',     desc: '케이스 · 스티치', base: 'vintage', skin: 'leather' },
+  { id: 'radio',   group: '우드 · 아날로그', name: '라디오',   desc: '아르데코',       base: 'vintage', skin: 'radio' },
+  { id: 'violin',  group: '우드 · 아날로그', name: '바이올린', desc: '단풍나무 · 흑단', base: 'vintage', skin: 'violin' },
+  { id: 'sheet',   group: '우드 · 아날로그', name: '악보',     desc: '양피지 · 잉크',  base: 'vintage', skin: 'sheet' },
+];
+const designById = (id) => DESIGNS.find(d => d.id === id) || DESIGNS[0];
+
+// 우드 계열 계기판 토큰 — 새 디자인 = 여기 항목 하나 + DESIGNS 한 줄
+const SKINS = {
+  piano: {
+    frame: { background: 'linear-gradient(180deg,#2a2a2a,#0a0a0a 45%,#000)', border: '1px solid #c9a14a', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18),0 6px 16px rgba(0,0,0,.5)' },
+    win: {}, ink: '#f4ecd8', unit: '#c9a14a', label: '#c9a14a', italic: false, emboss: false,
+    knob: { background: '#111', border: '1px solid #444', color: '#f4ecd8' },
+    tap: { background: '#111', border: '1px solid #c9a14a', color: '#f4ecd8', borderRadius: 12 },
+    play: { background: 'linear-gradient(#f4ecd8,#d8ccb0)', color: '#111', border: '1px solid #c9a14a', borderRadius: 12 },
+    playOn: { background: '#111', color: '#f4ecd8', border: '1px solid #c9a14a', borderRadius: 12 },
+    presets: 'keys', lamp: { shape: 'circle', on: '#f4ecd8', strong: '#bfb39a', off: '#4a4a4a', border: 'transparent' },
+    dial: { outer: '#0a0a0a', ring: '#c9a14a', face: '#111', on: '#f4ecd8', strong: '#8a826f', off: '#333', text: '#f4ecd8', sub: '#c9a14a', ticks: false },
+    good: '#4afc9d', live: '#4afc9d',
+  },
+  leather: {
+    frame: { background: 'radial-gradient(ellipse at 30% 15%,#6a3c22,#3a2012 72%)', outline: '1.5px dashed rgba(240,210,160,.45)', outlineOffset: '-6px', boxShadow: '0 6px 16px rgba(0,0,0,.5)' },
+    win: {}, ink: '#e8c46a', unit: '#d9b878', label: '#e8c46a', italic: false, emboss: true,
+    knob: { background: '#2a170c', border: '1px solid #8a6a3a', color: '#e8c46a' },
+    tap: { background: 'radial-gradient(circle at 35% 30%,#fff3c4,#c9a14a 55%,#6b4a12)', color: '#3b2a1a', borderRadius: 999 },
+    play: { background: 'radial-gradient(circle at 35% 30%,#fff3c4,#c9a14a 55%,#6b4a12)', color: '#3b2a1a', borderRadius: 999 },
+    playOn: { background: '#2a170c', border: '1px solid #8a6a3a', color: '#e8c46a', borderRadius: 999 },
+    presets: 'stitch', lamp: { shape: 'stud', on: '#fff3c4', strong: '#c9a14a', off: '#2a170c', border: '#8a6a3a' },
+    dial: { outer: '#3a2012', ring: 'rgba(240,210,160,.45)', ringDash: true, face: '#4a2915', on: '#e8c46a', strong: 'rgba(232,196,106,.55)', off: 'rgba(232,196,106,.18)', text: '#e8c46a', sub: '#d9b878', ticks: false },
+    good: '#9be3b0', live: '#7fd89c',
+  },
+  radio: {
+    frame: { background: 'linear-gradient(180deg,#5a3a1e,#3a2410)', border: '2px solid #b88a35', boxShadow: '0 6px 16px rgba(0,0,0,.5)' },
+    win: { background: 'linear-gradient(180deg,#e9dcbc,#f8f0dc 40%,#e2d3ad)', boxShadow: 'inset 0 2px 5px rgba(0,0,0,.35)', borderRadius: 8 },
+    ink: '#2a1a0e', unit: '#5a3a1e', label: '#f4d78a', italic: false, emboss: false, hzDial: true,
+    knob: { background: 'radial-gradient(circle at 40% 35%,#7a4a26,#3a2010)', border: '1px solid #b88a35', color: '#f4d78a' },
+    tap: { background: 'radial-gradient(circle at 40% 35%,#7a4a26,#3a2010)', border: '2px solid #b88a35', color: '#f4d78a', borderRadius: 999 },
+    play: { background: 'radial-gradient(circle at 40% 35%,#f4d78a,#b88a35)', border: '2px solid #6b4a12', color: '#3a2010', borderRadius: 999 },
+    playOn: { background: 'radial-gradient(circle at 40% 35%,#7a4a26,#3a2010)', border: '2px solid #b88a35', color: '#f4d78a', borderRadius: 999 },
+    presets: 'radio', lamp: { shape: 'diamond', on: '#f4d78a', strong: 'rgba(244,215,138,.45)', off: '#2a1a0e', border: '#b88a35' },
+    dial: { outer: '#3a2410', ring: '#b88a35', face: 'cream', on: '#f4d78a', strong: 'rgba(244,215,138,.55)', off: 'rgba(184,138,53,.45)', text: '#2a1a0e', sub: '#5a3a1e', ticks: true, needle: '#c0392b' },
+    good: '#7fd89c', live: '#7fd89c',
+  },
+  violin: {
+    frame: { background: 'linear-gradient(100deg,#a9561a,#d98f3f 35%,#c87a30 60%,#9a4c16)', boxShadow: 'inset 0 1px 0 rgba(255,230,180,.45),0 6px 16px rgba(0,0,0,.5)' },
+    win: { background: 'linear-gradient(180deg,#1a1a1a,#050505)', borderRadius: 8, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.1)' },
+    ink: '#efe6d0', unit: '#c9a14a', label: '#2a1205', italic: false, emboss: false, fhole: true,
+    knob: { background: 'radial-gradient(circle at 40% 35%,#2a2a2a,#050505)', border: '2px solid #f5f0e6', color: '#efe6d0' },   // 줄감개(페그): 흑단 + 자개 테두리
+    tap: { background: 'linear-gradient(180deg,#2a2a2a,#050505)', color: '#efe6d0', borderRadius: 999, boxShadow: '0 2px 4px rgba(0,0,0,.5)' },
+    play: { background: 'linear-gradient(180deg,#2a2a2a,#050505)', color: '#efe6d0', borderRadius: 999, boxShadow: '0 2px 4px rgba(0,0,0,.5)' },
+    playOn: { background: '#efe6d0', color: '#111', borderRadius: 999 },
+    presets: 'ebony', lamp: { shape: 'circle', on: '#fff4dc', strong: '#e8b06a', off: '#3a1a08', border: '#2a1205' },
+    dial: { outer: '#c87a30', ring: '#9a4c16', face: '#0d0d0d', on: '#fff4dc', strong: 'rgba(255,244,220,.5)', off: 'rgba(255,244,220,.18)', text: '#efe6d0', sub: '#c9a14a', ticks: false },
+    good: '#0f4d22', live: '#0f4d22', centsOnFrame: true,
+  },
+  sheet: {
+    frame: { background: 'repeating-linear-gradient(180deg,transparent 0 9px,rgba(80,50,20,.14) 9px 10px),linear-gradient(180deg,#efe2c0,#e2cfa0)', border: '1px solid #b89a5e', borderRadius: 8, boxShadow: '0 6px 16px rgba(0,0,0,.45)' },
+    win: {}, ink: '#1f140a', unit: '#5a3d1e', label: '#5a3d1e', italic: true, emboss: false, quarter: true,
+    knob: { background: '#f8f1de', border: '1.5px solid #5a3d1e', color: '#1f140a' },
+    tap: { background: 'radial-gradient(circle at 40% 35%,#d84a3a,#8e1f16)', color: '#f6e2c8', borderRadius: 999, boxShadow: '0 2px 3px rgba(0,0,0,.4)' },
+    play: { background: 'radial-gradient(circle at 40% 35%,#d84a3a,#8e1f16)', color: '#f6e2c8', borderRadius: 999, boxShadow: '0 2px 3px rgba(0,0,0,.4)' },
+    playOn: { background: '#1f140a', color: '#efe2c0', borderRadius: 999 },
+    presets: 'ink', lamp: { shape: 'note', on: '#1f140a', strong: 'rgba(31,20,10,.6)', off: 'rgba(31,20,10,.3)' },
+    dial: { outer: '#e2cfa0', ring: '#b89a5e', face: '#efe2c0', on: '#1f140a', strong: 'rgba(31,20,10,.45)', off: 'rgba(31,20,10,.18)', text: '#1f140a', sub: '#5a3d1e', ticks: false },
+    good: '#2e6b3a', live: '#2e6b3a', centsOnFrame: true,
+  },
+};
+const SkinContext = React.createContext('radio');
+const useSkin = () => SKINS[React.useContext(SkinContext)] || SKINS.radio;
+
+// 계기판 숫자 (디자인별 창·글자)
+const SkinNumber = ({ skin, text, unit, size = 22 }) => (
+  <span className="inline-flex items-baseline" style={{ ...skin.win, padding: skin.win.background ? `1px ${Math.round(size / 2.4)}px` : 0 }}>
+    <span style={{ fontFamily: 'Georgia,serif', fontSize: size, lineHeight: 1.08, color: skin.ink, fontStyle: skin.italic ? 'italic' : 'normal',
+      textShadow: skin.emboss ? '0 1px 0 #1e0f06, 0 -1px 0 rgba(255,230,160,.35)' : 'none' }}>{text}</span>
+    {unit && <span style={{ fontFamily: 'Georgia,serif', fontSize: Math.max(9, size * 0.26), color: skin.unit, marginLeft: 4 }}>{unit}</span>}
+  </span>
+);
+
+// 디자인 고르기 카드 (설정 · 첫 실행 안내 공용) — 실제 Hz·BPM 모양을 작게 미리 보여줌
+const WOOD_BG = 'repeating-linear-gradient(92deg,rgba(0,0,0,.12) 0 2px,transparent 2px 6px),linear-gradient(180deg,#6e4220,#3a200d)';
+const DesignPreview = ({ d }) => {
+  if (!d.skin) {
+    const light = d.id === 'light';
+    return (
+      <div className="w-full h-full p-1.5 flex flex-col justify-center gap-1" style={{ background: light ? '#f4f3ee' : '#000' }}>
+        <div className="h-4 rounded flex items-center justify-center text-[10px] font-bold" style={{ background: '#111', color: '#e5e5e5' }}>443.5</div>
+        <div className="h-[22px] rounded-md flex items-center justify-center text-[15px] font-black" style={light ? { background: '#fff', color: '#111', border: '1px solid #ddd' } : { background: '#111', color: '#fff' }}>92</div>
+      </div>
+    );
+  }
+  const k = SKINS[d.skin];
+  return (
+    <div className="w-full h-full p-1.5 flex flex-col justify-center gap-1" style={{ background: WOOD_BG }}>
+      <div className="h-4 rounded flex items-center justify-center overflow-hidden" style={{ ...k.frame, outlineOffset: '-3px', padding: 0, borderRadius: 5 }}>
+        <SkinNumber skin={k} text="443.5" size={10}/>
+      </div>
+      <div className="h-[22px] rounded-md flex items-center justify-center overflow-hidden" style={{ ...k.frame, outlineOffset: '-3px', padding: 0 }}>
+        <SkinNumber skin={k} text={k.quarter ? '♩ = 92' : '92'} size={k.quarter ? 11 : 14}/>
+      </div>
+    </div>
+  );
+};
+
+const DesignPicker = ({ value, onChange, compact }) => (
+  <div className="flex flex-col gap-2">
+    {['기본', '우드 · 아날로그'].map(g => (
+      <div key={g}>
+        <div className="text-[10px] font-bold text-gray-500 mb-1.5 ml-0.5">{g}</div>
+        <div className="grid grid-cols-3 gap-2">
+          {DESIGNS.filter(d => d.group === g).map(d => {
+            const on = value === d.id;
+            return (
+              <button key={d.id} onClick={() => { onChange(d); haptic(10); }}
+                className="rounded-xl overflow-hidden border-2 transition-all active:scale-95 text-center"
+                style={{ borderColor: on ? 'var(--accent)' : 'var(--chip-border)', boxShadow: on ? '0 0 10px rgba(74,252,157,.3)' : 'none' }}>
+                <div className="h-[60px] w-full"><DesignPreview d={d}/></div>
+                <div className="py-1 t-chip" style={{ border: 'none', borderRadius: 0 }}>
+                  <div className="text-xs font-black" style={{ color: on ? 'var(--accent)' : 'var(--ink)' }}>{d.name}</div>
+                  {!compact && <div className="text-[8.5px] text-gray-500">{d.desc}</div>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ))}
+  </div>
+);
 
 // ── 빈티지 = 아르데코 라디오 (시안 ③) ──
 // 갈색 판 + 황동 테두리 · 크림색 눈금 창 · 베이클라이트 손잡이 버튼
@@ -110,33 +246,3 @@ const BrassPlate = ({ children, className = '' }) => (
     {children}
   </div>
 );
-
-// 설정 시트의 모드 선택 카드 미리보기
-const ModePreview = ({ id }) => {
-  if (id === 'light') return (
-    <div className="w-full h-full flex items-end p-1.5" style={{ background: '#f4f3ee' }}>
-      <div className="w-full rounded p-[3px] bg-white" style={{ border: '1px solid #e4e4e7' }}>
-        <div className="relative h-6 rounded-sm overflow-hidden flex items-end justify-around pb-[2px]" style={{ background: '#111', borderTop: '6px solid #0b0b0b' }}>
-          {['G','A','B'].map(n => <span key={n} className="text-[9px] font-black leading-none" style={{ color: n === 'A' ? '#4afc9d' : '#555' }}>{n}</span>)}
-          <div className="absolute inset-y-0 left-1/2 w-[1.5px] bg-red-600"/>
-        </div>
-      </div>
-    </div>
-  );
-  const v = id === 'vintage';
-  return (
-    <div className="w-full h-full flex items-end p-1.5"
-      style={{ background: v ? 'linear-gradient(180deg,#6e4220,#3a200d)' : '#000' }}>
-      <div className="w-full rounded p-[3px]" style={{ background: v ? 'linear-gradient(#f3dc93,#b88a35)' : 'transparent' }}>
-        <div className="relative h-6 rounded-sm overflow-hidden flex items-end justify-around pb-[2px]"
-          style={{ background: v ? '#f6f1e4' : '#111', borderTop: `6px solid ${v ? '#2a2a2a' : '#0b0b0b'}` }}>
-          {['G','A','B'].map(n => (
-            <span key={n} className="text-[9px] font-black leading-none"
-              style={{ color: v ? '#3b2a1a' : (n === 'A' ? '#fff' : '#555'), fontFamily: v ? 'Georgia,serif' : undefined }}>{n}</span>
-          ))}
-          <div className="absolute inset-y-0 left-1/2 w-[1.5px] bg-red-600"/>
-        </div>
-      </div>
-    </div>
-  );
-};

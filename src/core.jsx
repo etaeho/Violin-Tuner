@@ -153,7 +153,8 @@ const DEFAULT_SETTINGS = {
   holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
   minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
   maxFreq: 3500,     // 감지 최고 Hz
-  uiMode: 'tape',    // 화면 모드(테마): 'tape' | 'vintage'  → theme.jsx UI_MODES
+  uiMode: 'tape',    // 바탕 테마(theme.css data-theme) — design에서 자동으로 정해짐
+  design: 'dark',    // 디자인 7가지 중 하나 → theme.jsx DESIGNS (dark·light·piano·leather·radio·violin·sheet)
   tunerLayout: 'vtapeTempo', // 튜너 화면 구성: 'vtapeTempo'(현별 세로 테이프+템포) | 'tapeTempo' | 'tape' | 'center' | 'both'  → tuner.jsx TUNER_LAYOUTS
   layoutRev: 3,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
@@ -167,6 +168,10 @@ const loadSettings = () => {
     const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     const v = { ...DEFAULT_SETTINGS, ...stored };
     if (!['tape', 'vintage', 'light'].includes(v.uiMode)) v.uiMode = 'tape';   // 예전 'modern' 등 → 기본값
+    // 디자인: 예전 저장값은 테마에서 이어받음 (빈티지 → 라디오), 바탕 테마는 디자인에 맞춤
+    const DESIGN_BASE = { dark: 'tape', light: 'light', piano: 'vintage', leather: 'vintage', radio: 'vintage', violin: 'vintage', sheet: 'vintage' };
+    if (!stored.design || !DESIGN_BASE[v.design]) v.design = ({ tape: 'dark', light: 'light', vintage: 'radio' })[v.uiMode] || 'dark';
+    v.uiMode = DESIGN_BASE[v.design];
     if (stored.layoutRev !== 3) { v.tunerLayout = 'vtapeTempo'; v.layoutRev = 3; }   // 저장값 기준으로 판단
     if (!['vtapeTempo', 'tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'vtapeTempo';
     return v;
