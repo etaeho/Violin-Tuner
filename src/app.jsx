@@ -105,6 +105,18 @@ const App = () => {
       {/* 첫 실행 안내 */}
       {!tuner.settings.onboarded && <Onboarding tuner={tuner}/>}
 
+      {/* 앱 시작 때 자동 소음 측정 */}
+      {tuner.autoCal && !toast && (
+        <div className="absolute inset-x-0 z-[70] flex justify-center pointer-events-none"
+          style={{ top: 'max(4rem, calc(env(safe-area-inset-top, 0px) + 3rem))' }}>
+          <div className="px-4 py-2 rounded-full t-panel text-xs font-bold shadow-[0_10px_30px_rgba(0,0,0,0.7)] whitespace-nowrap tab-enter flex items-center gap-2" style={{ color: 'var(--ink)' }}>
+            {tuner.autoCal.done
+              ? <>✓ 주변 소음 {tuner.autoCal.noise}dB → 감도 {tuner.autoCal.gate}dB 자동 조정</>
+              : <><span className="w-2 h-2 rounded-full bg-[#ef4444] animate-pulse"/>주변 소음 맞추는 중… {tuner.autoCal.left}</>}
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="absolute inset-x-0 z-[70] flex justify-center pointer-events-none"
           style={{ top: 'max(4rem, calc(env(safe-area-inset-top, 0px) + 3rem))' }}>

@@ -48,7 +48,7 @@ const useTunerLogic = () => {
   const resetSettings = () => { const c = settingsRef.current; updateSettings({ ...DEFAULT_SETTINGS, design: c.design, uiMode: c.uiMode, onboarded: c.onboarded, tunerLayout: c.tunerLayout, layoutRev: c.layoutRev, layout1: c.layout1, layout2: c.layout2, parts: c.parts }); };
 
   useEffect(() => {
-    if (settingsRef.current.onboarded) ensureMic();    // 처음이면 안내 화면에서 허용받은 뒤 시작
+    if (settingsRef.current.onboarded) ensureMic().then(ok => { if (ok) autoCalibrate(); });    // 처음이면 안내 화면에서 허용받은 뒤 시작
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') stopTuner();
       else if (settingsRef.current.onboarded) ensureMic();
@@ -127,7 +127,9 @@ const useTunerLogic = () => {
     gateOpenRef.current = gateOpenRef.current ? db > S.gateDb - 3 : db > S.gateDb;
 
     let accepted = false;
-    if (gateOpenRef.current && raw > 0 && clarity >= S.clarity) {
+    // 낮은 음(G현 근처)은 폰 마이크에 약하게 들어와 신뢰도가 조금 낮게 나옴 → 기준을 살짝 완화
+    const minClarity = raw > 0 && raw < 260 ? S.clarity - 0.06 : S.clarity;
+    if (gateOpenRef.current && raw > 0 && clarity >= minClarity) {
       const c = candidateRef.current;
       if (c.freq && Math.abs(centsBetween(raw, c.freq)) < 50) c.count++;
       else c.count = 1;
@@ -243,6 +245,22 @@ const useTunerLogic = () => {
     return { noise: Math.round(noise), gate };
   };
 
+  // 앱을 켤 때 자동 소음 측정 (3초). 그 사이 연주해도 망가지지 않게 조용한 쪽(하위 30%) 레벨 + 10dB, −70~−35dB 사이로
+  const [autoCal, setAutoCal] = useState(null);    // {left} 측정 중 | {done, noise, gate} 결과 | null
+  const autoCalibrate = async () => {
+    if (!settingsRef.current.autoCalib || calibRef.current) return;
+    calibRef.current = [];
+    for (let left = 3; left > 0; left--) { setAutoCal({ left }); await new Promise(r => setTimeout(r, 1000)); }
+    const samples = (calibRef.current || []).sort((a, b) => a - b);
+    calibRef.current = null;
+    if (samples.length < 20) { setAutoCal(null); return; }
+    const noise = samples[Math.floor(samples.length * 0.3)];
+    const gate = Math.round(Math.min(-35, Math.max(-70, noise + 10)));
+    updateSettings({ gateDb: gate });
+    setAutoCal({ done: true, noise: Math.round(noise), gate });
+    setTimeout(() => setAutoCal(null), 2200);
+  };
+
   const stopTuner = () => {
     if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current=null; }
     streamRef.current?.getTracks().forEach(t=>t.stop());
@@ -282,7 +300,7 @@ const useTunerLogic = () => {
     isStarted, pitch, cents, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
     startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
-    settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise,
+    settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise, autoCal,
     noteTracker: trackerRef.current, practiceSinkRef, noteListeners
   };
 };
@@ -335,9 +353,9 @@ const StringBar = ({ dir, show, pos, color, tolerance, size }) => {
       ))}
       {show && (
         <>
-          <div className={`absolute left-1/2 -translate-x-1/2 w-full transition-all duration-75 z-10 ${up ? 'rounded-t-sm' : 'rounded-b-sm'}`}
+          <div className={`absolute left-1/2 -translate-x-1/2 w-full transition-all duration-200 ease-out z-10 ${up ? 'rounded-t-sm' : 'rounded-b-sm'}`}
             style={{ [anchor]: 0, height: `${pos}%`, backgroundColor: color, boxShadow: `0 0 10px ${color}` }}/>
-          <div className="absolute left-1/2 -translate-x-1/2 w-7 h-[4px] transition-all duration-75 rounded-full z-20"
+          <div className="absolute left-1/2 -translate-x-1/2 w-7 h-[4px] transition-all duration-200 ease-out rounded-full z-20"
             style={{ [anchor]: `calc(${pos}% - 1.5px)`, backgroundColor: color, boxShadow: `0 0 8px ${color}` }}/>
         </>
       )}
@@ -406,29 +424,49 @@ const StringBars = ({ tuner, size = 'normal' }) => {
 // ==========================================
 const VTAPE_SP = 56;   // 반음 간격(px) → 10센트 ≈ 5.6px
 
-const VTape = ({ center, active, perfect, tolerance, vintage }) => {
+const VTAPE_ZOOM_SP = 230;   // 확대(±15센트 안) 때 반음 간격 → 1센트 ≈ 2.3px, 5센트 눈금
+
+const VTape = ({ center, active, perfect, tolerance, vintage, cents = 99 }) => {
+  // center = A4 기준 반음 위치. 스프링으로 부드럽게 따라가고, 목표 ±15센트 안이면 자동 확대
   const base = Math.round(center);
   const keys = [];
   for (let k = base - 8; k <= base + 8; k++) keys.push(k);
   const needle = !active ? (vintage ? 'rgba(201,161,74,.45)' : '#3f3f46') : perfect ? '#4afc9d' : '#ef4444';
+  const zoomT = active && Math.abs(cents) <= 15 ? 1 : 0;
+  const rootRef = useRef(null), bandRef = useRef(null), keyRefs = useRef({});
+  const tolRef = useRef(tolerance); tolRef.current = tolerance;
+  const place = ([c, z]) => {
+    const sp = VTAPE_SP + (VTAPE_ZOOM_SP - VTAPE_SP) * z;
+    Object.entries(keyRefs.current).forEach(([k, el]) => {
+      if (!el) return;
+      el.style.height = sp + 'px'; el.style.marginTop = -sp / 2 + 'px';
+      el.style.transform = `translateY(${(c - Number(k)) * sp}px)`;
+    });
+    if (bandRef.current) bandRef.current.style.height = Math.max(2, (tolRef.current * 2 / 100) * sp) + 'px';
+    if (rootRef.current) rootRef.current.style.setProperty('--fine', z.toFixed(3));
+  };
+  const [c0, z0] = useSpring([center, zoomT], place, { k: 0.18, snap: 6 });
+  const sp0 = VTAPE_SP + (VTAPE_ZOOM_SP - VTAPE_SP) * z0;
   return (
-    <div className="relative w-full flex-1 min-h-[120px] overflow-hidden rounded-xl"
-      style={vintage
+    <div ref={rootRef} className="relative w-full flex-1 min-h-[120px] overflow-hidden rounded-xl"
+      style={{ '--fine': z0, ...(vintage
         ? { background: 'linear-gradient(90deg,#c9c0a8,#f6f1e4 30%,#f6f1e4 70%,#c9c0a8)', border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' }
-        : { background: '#070707', border: '1px solid rgba(255,255,255,.06)' }}>
+        : { background: '#070707', border: '1px solid rgba(255,255,255,.06)' }) }}>
       {/* 허용 범위 띠 (바늘 주위 고정) */}
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2"
-        style={{ height: Math.max(2, (tolerance * 2 / 100) * VTAPE_SP), background: perfect ? 'rgba(74,252,157,.35)' : (vintage ? 'rgba(90,170,80,.35)' : 'rgba(74,252,157,.12)') }}/>
+      <div ref={bandRef} className="absolute inset-x-0 top-1/2 -translate-y-1/2"
+        style={{ height: Math.max(2, (tolerance * 2 / 100) * sp0), background: perfect ? 'rgba(74,252,157,.35)' : (vintage ? 'rgba(90,170,80,.35)' : 'rgba(74,252,157,.12)') }}/>
       {keys.map(k => {
         const idx = ((k + 9) % 12 + 12) % 12, name = NOTE_NAMES[idx], oct = Math.floor((k + 57) / 12);
         const isCur = active && k === base;
         return (
-          <div key={k} className="absolute inset-x-0 top-1/2 transition-transform duration-100 ease-out"
-            style={{ height: VTAPE_SP, marginTop: -VTAPE_SP / 2, transform: `translateY(${(center - k) * VTAPE_SP}px)` }}>
-            {/* 10센트 눈금 (왼쪽) */}
-            {Array.from({ length: 10 }, (_, j) => (
-              <div key={j} className="absolute left-0" style={{ top: `${j * 10}%`, height: 1,
-                width: j === 5 ? 14 : j === 0 ? 0 : 6, background: vintage ? '#3b2a1a' : '#3f3f46', opacity: j === 5 ? 0.9 : 0.6 }}/>
+          <div key={k} ref={el => { if (el) keyRefs.current[k] = el; else delete keyRefs.current[k]; }}
+            className="absolute inset-x-0 top-1/2 will-change-transform"
+            style={{ height: sp0, marginTop: -sp0 / 2, transform: `translateY(${(c0 - k) * sp0}px)` }}>
+            {/* 눈금: 10센트(항상) + 5센트(확대 때만) */}
+            {Array.from({ length: 20 }, (_, j) => j === 0 ? null : (
+              <div key={j} className="absolute left-0" style={{ top: `${j * 5}%`, height: 1,
+                width: j === 10 ? 16 : j % 2 === 0 ? 8 : 5, background: vintage ? '#3b2a1a' : '#52525b',
+                opacity: j % 2 === 0 ? (j === 10 ? 0.9 : 0.6) : 'calc(var(--fine) * 0.55)' }}/>
             ))}
             <div className="absolute inset-y-0 left-4 right-1 flex items-center justify-center">
               <span className="font-black leading-none" style={{
@@ -444,6 +482,9 @@ const VTape = ({ center, active, perfect, tolerance, vintage }) => {
       <div className="absolute inset-0 pointer-events-none" style={{ background: vintage
         ? 'linear-gradient(180deg,rgba(40,25,10,.55),transparent 22%,transparent 78%,rgba(40,25,10,.55))'
         : 'linear-gradient(180deg,#000,transparent 25%,transparent 75%,#000)' }}/>
+      {/* 확대 표시 */}
+      <span className="absolute top-1.5 inset-x-0 text-center text-[9px] font-black tracking-wider pointer-events-none"
+        style={{ opacity: 'var(--fine)', color: vintage ? '#5a3a1e' : '#4afc9d' }}>×4 정밀</span>
       {/* 바늘 */}
       <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2.5px] z-10"
         style={{ background: needle, boxShadow: active ? `0 0 8px ${needle}` : 'none' }}/>
@@ -472,7 +513,7 @@ const StringVTapes = ({ tuner }) => {
             <span className="h-4 text-[11px] font-black font-mono leading-4" style={{ color: isClosest ? centsColor : 'transparent' }}>
               {isClosest ? (perfect ? 'OK' : `${stringCents > 0 ? '+' : ''}${stringCents}¢`) : '·'}
             </span>
-            <VTape center={isClosest ? semi : isPlaying ? s.semitone : s.semitone} active={isClosest} perfect={perfect} tolerance={tolerance} vintage={vintage}/>
+            <VTape center={isClosest ? semi : s.semitone} active={isClosest} perfect={perfect} tolerance={tolerance} vintage={vintage} cents={isClosest ? stringCents : 99}/>
             <button onClick={() => toggleTone(s.name, s.semitone)} aria-label={`${s.name} 기준음`}
               className="relative p-1 rounded-full active:scale-95 transition-transform shrink-0">
               <div className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-base font-black transition-all duration-200 ${circle}`}>
@@ -485,6 +526,82 @@ const StringVTapes = ({ tuner }) => {
           </div>
         );
       })}
+    </div>
+  );
+};
+
+// ==========================================
+// 정밀 게이지: A4(예: 442) 기준 가장 가까운 음의 목표 Hz · 지금 Hz · 차이(0.1Hz) · 센트(1¢)
+// 눈금은 평소 ±50¢, 목표 ±12¢ 안이면 ±10¢(1¢ 눈금)로 부드럽게 확대
+// ==========================================
+const FineGauge = ({ tuner }) => {
+  const vintage = useVintage();
+  const skin = useSkin();
+  const { isStarted, pitch, a4Freq, tolerance, ensureMic } = tuner;
+  const f = Number(pitch) || 0, live = isStarted && f > 0;
+  const semi = live ? Math.round(12 * Math.log2(f / a4Freq)) : 0;
+  const target = a4Freq * Math.pow(2, semi / 12);
+  const exact = live ? 1200 * Math.log2(f / target) : 0;       // 소수점 센트
+  const c = Math.round(exact), dHz = f - target;
+  const ok = live && Math.abs(c) <= tolerance;
+  const noteIdx = ((semi + 9) % 12 + 12) % 12, oct = Math.floor((semi + 57) / 12);
+  const nm = NOTE_NAMES[noteIdx];
+  const zoom = live && Math.abs(exact) <= 12 ? 1 : 0;
+  const boxRef = useRef(null);
+  const tolRef = useRef(tolerance); tolRef.current = tolerance;
+  const set = ([cv, z]) => {
+    const R = 50 - 40 * z, el = boxRef.current;          // 보이는 범위 ±R센트
+    if (!el) return;
+    el.style.setProperty('--u', (50 / R).toFixed(4));    // 1센트 = u% 폭
+    el.style.setProperty('--c', Math.max(-R - 1, Math.min(R + 1, cv)).toFixed(2));
+    el.style.setProperty('--z', z.toFixed(3));
+    el.style.setProperty('--tol', tolRef.current);
+  };
+  const [c0, z0] = useSpring([exact, zoom], set, { k: 0.2 });
+  const R0 = 50 - 40 * z0;
+  const face = !vintage ? '#0a0a0a' : skin.dial.ticks ? '#f3e8cc' : skin.dial.face;
+  const tick = !vintage ? '#71717a' : skin.dial.ticks ? '#5a3a1e' : skin.dial.sub;
+  const ink = !vintage ? 'var(--ink)' : skin.label, dim = !vintage ? '#6b7280' : skin.unit;
+  const cc = !live ? dim : ok ? (vintage ? skin.good : '#4afc9d') : c > 0 ? '#ef4444' : '#3b82f6';
+  const needle = !live ? '#52525b' : ok ? '#4afc9d' : c > 0 ? '#ef4444' : '#3b82f6';
+  const X = (v) => `calc(50% + var(--u) * ${v} * 1%)`;
+  return (
+    <div className={`w-full max-w-sm rounded-2xl px-3 py-2 flex flex-col gap-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+      <div className="flex items-end justify-between gap-2">
+        <button onClick={isStarted ? undefined : ensureMic} className="flex items-baseline gap-1.5 min-w-0">
+          <span className="font-black leading-none" style={{ fontSize: 22, color: live ? ink : dim, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+            {live ? <>{nm[0]}<span className="text-[13px]">{nm[1] ? '♯' : ''}</span><span className="text-[11px] opacity-60">{oct}</span></> : (isStarted ? '—' : 'MIC')}
+          </span>
+          <span className="text-[10px] font-bold leading-tight" style={{ color: dim }}>
+            목표 <b className="font-mono text-[12px]" style={{ color: ink }}>{live ? target.toFixed(1) : '—'}</b> Hz<br/>A4={a4Freq} 기준
+          </span>
+        </button>
+        <span className="flex items-baseline gap-2 shrink-0">
+          <span className="text-[11px] font-mono font-bold" style={{ color: live ? ink : dim }}>{live ? `${dHz >= 0 ? '+' : '−'}${Math.abs(dHz).toFixed(1)} Hz` : '±0.0 Hz'}</span>
+          <span className="font-black font-mono leading-none" style={{ fontSize: 28, color: cc }}>
+            {live ? (c === 0 ? '0' : `${c > 0 ? '+' : '−'}${Math.abs(c)}`) : '0'}<span className="text-[12px]">¢</span>
+          </span>
+        </span>
+      </div>
+      {/* 눈금 */}
+      <div ref={boxRef} className="relative h-9 rounded-lg overflow-hidden"
+        style={{ background: face, boxShadow: 'inset 0 2px 6px rgba(0,0,0,.5)', '--u': (50 / R0).toFixed(4), '--c': c0, '--z': z0, '--tol': tolerance }}>
+        <div className="absolute top-0 bottom-0" style={{ left: X('calc(var(--tol) * -1)'), width: 'calc(var(--u) * var(--tol) * 2%)', background: ok ? 'rgba(74,252,157,.4)' : 'rgba(74,180,110,.2)' }}/>
+        {Array.from({ length: 101 }, (_, i) => {
+          const v = i - 50, m10 = v % 10 === 0, m5 = v % 5 === 0;
+          return <i key={v} className="absolute top-0" style={{ left: X(v), width: 1, background: tick,
+            height: v === 0 ? 18 : m10 ? 13 : m5 ? 9 : 6,
+            opacity: m10 || (m5 && Math.abs(v) <= 25) ? 0.9 : m5 ? 0.6 : 'calc(var(--z) * 0.7)' }}/>;
+        })}
+        {[-10, -5, 5, 10].map(v => <span key={'f' + v} className="absolute font-mono font-bold text-[8px]" style={{ left: X(v), bottom: 2, transform: 'translateX(-50%)', color: tick, opacity: 'var(--z)' }}>{v > 0 ? `+${v}` : v}</span>)}
+        {[-50, -25, 25, 50].map(v => <span key={'c' + v} className="absolute font-mono font-bold text-[8px]" style={{ left: X(v), bottom: 2, transform: 'translateX(-50%)', color: tick, opacity: 'calc(1 - var(--z))' }}>{v > 0 ? `+${v}` : v}</span>)}
+        <span className="absolute left-1.5 top-0.5 text-[8px] font-black" style={{ color: '#3b82f6' }}>♭</span>
+        <span className="absolute right-1.5 top-0.5 text-[8px] font-black" style={{ color: '#ef4444' }}>♯</span>
+        <span className="absolute right-4 top-0.5 text-[8px] font-black" style={{ color: vintage ? tick : '#4afc9d', opacity: 'var(--z)' }}>1¢ 확대</span>
+        {/* 바늘 */}
+        <i className="absolute top-0 bottom-0 z-10" style={{ left: X('var(--c)'), width: 3, marginLeft: -1.5, borderRadius: 2, background: needle,
+          boxShadow: live ? `0 0 6px ${needle}` : 'none', opacity: live ? 1 : 0.35 }}/>
+      </div>
     </div>
   );
 };
@@ -598,8 +715,23 @@ const NoteTape = ({ tuner, showMic }) => {
   const semi = semiRef.current;
   const base = Math.round(semi);
   const keys = [];
-  for (let k = base - 3; k <= base + 3; k++) keys.push(k);
+  for (let k = base - 4; k <= base + 4; k++) keys.push(k);
   const inTune = active && Math.abs(cents) <= tolerance;
+  // 스프링으로 부드럽게 + 목표 ±15센트 안이면 3배 확대
+  const keyRefs = useRef({}), bandRef = useRef(null);
+  const tolRef = useRef(tolerance); tolRef.current = tolerance;
+  const zoomT = active && Math.abs(cents) <= 15 ? 1 : 0;
+  const place = ([sv, z]) => {
+    const sp = TAPE_SP * (1 + 2 * z);
+    Object.entries(keyRefs.current).forEach(([k, el]) => {
+      if (!el) return;
+      el.style.width = sp + 'px'; el.style.marginLeft = -sp / 2 + 'px';
+      el.style.transform = `translateX(${(Number(k) - sv) * sp}px)`;
+    });
+    if (bandRef.current) bandRef.current.style.width = (tolRef.current * 2 / 100) * sp + 'px';
+  };
+  const [s0, z0] = useSpring([semi, zoomT], place, { k: 0.18, snap: 6 });
+  const sp0 = TAPE_SP * (1 + 2 * z0);
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
   const ink = vintage ? '#3b2a1a' : '#e5e5e5';
 
@@ -611,8 +743,8 @@ const NoteTape = ({ tuner, showMic }) => {
       {/* 눈금 줄 (위) */}
       <div className="absolute inset-x-0 top-0 h-7" style={{ background: vintage ? 'linear-gradient(#3a3a3a,#1f1f1f)' : '#0b0b0b' }}/>
       {/* 허용 범위 밴드 (바늘 주위 고정) */}
-      <div className="absolute top-0 h-7 left-1/2 -translate-x-1/2 transition-all"
-        style={{ width: `${(tolerance * 2 / 100) * TAPE_SP}px`, background: inTune ? 'rgba(74,252,157,.55)' : (vintage ? 'rgba(90,170,80,.55)' : 'rgba(74,252,157,.18)') }}/>
+      <div ref={bandRef} className="absolute top-0 h-7 left-1/2 -translate-x-1/2"
+        style={{ width: `${(tolerance * 2 / 100) * sp0}px`, background: inTune ? 'rgba(74,252,157,.55)' : (vintage ? 'rgba(90,170,80,.55)' : 'rgba(74,252,157,.18)') }}/>
       {/* 음 이름 종이 띠 (아래) */}
       <div className="absolute inset-x-0 top-7 bottom-0"
         style={{ background: vintage ? 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)' : 'linear-gradient(180deg,#0e0e0e,#141414 50%,#0b0b0b)' }}/>
@@ -620,11 +752,11 @@ const NoteTape = ({ tuner, showMic }) => {
         const idx = ((k + 9) % 12 + 12) % 12;
         const name = NOTE_NAMES[idx];
         const oct = Math.floor((k + 57) / 12);
-        const x = (k - semi) * TAPE_SP;
         const isCur = active && k === base;
         return (
-          <div key={k} className="absolute top-0 bottom-0 transition-transform duration-100 ease-out"
-            style={{ left: '50%', width: TAPE_SP, marginLeft: -TAPE_SP / 2, transform: `translateX(${x}px)` }}>
+          <div key={k} ref={el => { if (el) keyRefs.current[k] = el; else delete keyRefs.current[k]; }}
+            className="absolute top-0 bottom-0 will-change-transform"
+            style={{ left: '50%', width: sp0, marginLeft: -sp0 / 2, transform: `translateX(${(k - s0) * sp0}px)` }}>
             {/* 10센트 눈금 */}
             {Array.from({ length: 10 }, (_, j) => (
               <div key={j} className="absolute top-0"
@@ -1046,6 +1178,16 @@ const SettingsSheet = ({ tuner, metro, onClose }) => {
               )}
             </>
           )}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs font-bold text-gray-300">앱 켤 때 자동 측정</span>
+              <span className="text-[10px] text-gray-600">켤 때마다 3초 동안 주변 소음에 맞춰 감도 조정</span>
+            </div>
+            <button onClick={() => { updateSettings({ autoCalib: !S.autoCalib }); haptic(8); }}
+              className={`w-12 h-7 rounded-full p-1 transition-colors shrink-0 ${S.autoCalib ? 'bg-[#4afc9d]' : 'bg-gray-700'}`}>
+              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${S.autoCalib ? 'translate-x-5' : ''}`}/>
+            </button>
+          </div>
           <Fold label="세부 조절 (소음 · 신뢰도 · 안정화)" open={open.sense} onToggle={() => setOpen(o => ({ ...o, sense: !o.sense }))}>
           <SliderRow label="소음 차단 임계값" value={S.gateDb} display={`${S.gateDb} dB`} min={-80} max={-10} step={1}
             onChange={v => updateSettings({ gateDb: v })}
@@ -1283,6 +1425,7 @@ const Tuner = ({ tuner, metro }) => {
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
             {b.id === 'bars' && <StringBars tuner={tuner} size="fill"/>}
             {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
+            {b.id === 'fine' && <FineGauge tuner={tuner}/>}
             {b.id === 'readout' && <TunerReadout tuner={tuner}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('readout') && !has('note')}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}

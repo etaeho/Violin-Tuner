@@ -403,24 +403,26 @@ const PitchStrip = ({ tuner }) => {
   const ang = (v) => (v / 50) * 52;                               // ±50센트 → ±52°
   const pt = (deg, r) => [cx + r * Math.sin(deg * Math.PI / 180), cy - r * Math.cos(deg * Math.PI / 180)];
   const arc = (d0, d1, r) => { const [x0, y0] = pt(d0, r), [x1, y1] = pt(d1, r); return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`; };
-  const [nx, ny] = pt(ang(c), R - 4);
+  const needleRef = useRef(null);
+  const [c0] = useSpring([c], ([v]) => { const el = needleRef.current; if (!el) return; const [x, y] = pt(ang(v), R - 4); el.setAttribute('x2', x); el.setAttribute('y2', y); }, { k: 0.2 });
+  const [nx, ny] = pt(ang(c0), R - 4);
   return (
-    <div className={`w-full rounded-2xl px-3 py-1.5 flex items-center gap-2 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+    <div className={`w-full rounded-2xl px-3 py-2 flex items-center gap-2.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
       {/* 마이크 상태 + 음이름 */}
-      <div className="flex flex-col items-start shrink-0 w-14">
+      <div className="flex flex-col items-start shrink-0 w-[68px]">
         <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest"
           style={{ color: isStarted ? (vintage ? skin.live : '#4afc9d') : '#ef4444' }}>
           <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>
           {isStarted ? 'LIVE' : 'OFF'}
         </button>
-        <span className="font-black leading-none mt-0.5" style={{ color: live ? ink : (vintage ? skin.unit : 'var(--ink-off)'), fontSize: 24, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-          {live ? currentNote.name : '—'}<span className="text-[12px]">{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
-          <span className="text-[10px] opacity-60">{live ? currentNote.octave : ''}</span>
+        <span className="font-black leading-none mt-0.5" style={{ color: live ? ink : (vintage ? skin.unit : 'var(--ink-off)'), fontSize: 36, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+          {live ? currentNote.name : '—'}<span className="text-[18px]">{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
+          <span className="text-[13px] opacity-60">{live ? currentNote.octave : ''}</span>
         </span>
       </div>
       {/* 바늘 계기판 */}
       <div className="flex-1 min-w-0 rounded-xl overflow-hidden" style={{ background: face, boxShadow: 'inset 0 2px 6px rgba(0,0,0,.45)' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" style={{ height: 56 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" style={{ height: 88 }}>
           <path d={arc(ang(-tolerance), ang(tolerance), R - 6)} fill="none" stroke={ok ? 'rgba(74,252,157,.75)' : 'rgba(74,180,110,.35)'} strokeWidth="9"/>
           {Array.from({ length: 21 }, (_, k) => {
             const v = -50 + k * 5, big = v % 25 === 0;
@@ -431,13 +433,13 @@ const PitchStrip = ({ tuner }) => {
           <text x={pt(0, R - 19)[0]} y={pt(0, R - 19)[1] + 3} textAnchor="middle" fontSize="9" fontWeight="800" fill={tick} fontFamily="Georgia,serif">0</text>
           <text x="4" y={H - 4} fontSize="11" fontWeight="800" fill="#3b82f6">♭</text>
           <text x={W - 11} y={H - 4} fontSize="11" fontWeight="800" fill="#ef4444">♯</text>
-          <line x1={cx} y1={cy} x2={nx} y2={ny} stroke={needle} strokeWidth="2.2" strokeLinecap="round" opacity={live ? 1 : 0.4}
-            style={{ transition: 'all 110ms ease-out', filter: live && !vintage ? `drop-shadow(0 0 3px ${needle})` : 'none' }}/>
+          <line ref={needleRef} x1={cx} y1={cy} x2={nx} y2={ny} stroke={needle} strokeWidth="2.2" strokeLinecap="round" opacity={live ? 1 : 0.4}
+            style={{ filter: live && !vintage ? `drop-shadow(0 0 3px ${needle})` : 'none' }}/>
           <circle cx={cx} cy={H} r="7" fill={tick}/>
         </svg>
       </div>
       {/* 센트 */}
-      <span className="w-12 shrink-0 text-right text-lg font-black" style={{ color: cc, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
+      <span className="w-14 shrink-0 text-right text-2xl font-black" style={{ color: cc, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
         {live ? (ok ? 'OK' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}{live && !ok && <span className="text-[9px]">¢</span>}
       </span>
     </div>
@@ -593,14 +595,26 @@ const Metronome = ({ metro, tuner }) => {
 // ==========================================
 // 우드 계열 템포 패널: 디자인 토큰(SKINS)으로 판·표시등·버튼·숫자·프리셋 모양이 바뀜
 const SkinLamp = ({ k, snd, fired, dense }) => {
-  const L = k.lamp, sz = dense ? 10 : 14;
+  // 칸 크기는 고정(박마다 화면이 흔들리지 않게) — 켜질 때는 transform(확대)·빛만 바뀜
+  const L = k.lamp, sz = dense ? 12 : 18, box = sz + 8;
   const col = snd === 0 ? 'transparent' : fired ? L.on : snd === 2 ? L.strong : L.off;
-  if (L.shape === 'note') return <span style={{ fontFamily: 'Georgia,serif', fontSize: fired ? sz + 8 : sz + 4, lineHeight: 1, color: snd === 0 ? L.off : fired ? L.on : L.off, transition: 'all 75ms' }}>♩</span>;
-  const base = { width: sz, height: sz, transition: 'all 75ms', boxShadow: fired && snd ? `0 0 8px ${L.on}` : 'none' };
-  if (L.shape === 'diamond') return <span style={{ ...base, transform: `rotate(45deg) scale(${fired ? 1.25 : 1})`, background: col, border: `1px solid ${L.border}` }}/>;
-  if (L.shape === 'stud') return <span className="rounded-full" style={{ ...base, transform: `scale(${fired ? 1.25 : 1})`,
+  const glow = fired && snd ? `0 0 10px ${L.on}, 0 0 3px ${L.on}` : 'none';
+  let inner;
+  if (L.shape === 'note') inner = <span style={{ fontFamily: 'Georgia,serif', fontSize: sz + 6, lineHeight: 1, display: 'inline-block',
+    transform: `scale(${fired ? 1.45 : 1})`, color: snd === 0 ? L.off : fired ? '#b3261e' : snd === 2 ? L.strong : L.off, transition: 'transform 70ms, color 70ms' }}>♩</span>;
+  else if (L.shape === 'diamond') inner = <span style={{ width: sz - 3, height: sz - 3, transform: `rotate(45deg) scale(${fired ? 1.3 : 1})`, background: col, border: `1px solid ${L.border}`, boxShadow: glow, transition: 'all 70ms' }}/>;
+  else if (L.shape === 'stud') inner = <span className="rounded-full" style={{ width: sz, height: sz, transform: `scale(${fired ? 1.3 : 1})`, boxShadow: glow, transition: 'all 70ms',
     background: fired || snd === 2 ? `radial-gradient(circle at 35% 30%,#fff3c4,${fired ? '#e8c46a' : '#b88a35'} 60%,#6b4a12)` : L.off, border: `1px solid ${L.border}` }}/>;
-  return <span className="rounded-full" style={{ ...base, transform: `scale(${fired ? 1.25 : 1})`, background: col, border: snd === 0 ? `1.5px solid ${L.off}` : `1px solid ${L.border}` }}/>;
+  else inner = <span className="rounded-full" style={{ width: sz, height: sz, transform: `scale(${fired ? 1.3 : 1})`, background: col, boxShadow: glow, transition: 'all 70ms', border: snd === 0 ? `1.5px solid ${L.off}` : `1px solid ${L.border}` }}/>;
+  return <span className="inline-flex items-center justify-center shrink-0" style={{ width: box, height: box }}>{inner}</span>;
+};
+
+// 박이 울릴 때 템포 판 테두리가 빛남 (크기는 그대로 → 화면 안 흔들림). 첫 박은 더 강하게
+const beatGlow = (metro, color) => {
+  const { isPlayingMetro, visualFlash, currentBeat, beatSounds } = metro;
+  if (!isPlayingMetro || visualFlash !== 'main' || beatSounds[currentBeat] === 0) return null;
+  const strong = beatSounds[currentBeat] === 2;
+  return `0 0 0 ${strong ? 3 : 2}px ${color}, 0 0 ${strong ? 22 : 12}px ${color}`;
 };
 
 const SkinPresets = ({ k, bpm, setBpm }) => {
@@ -636,9 +650,10 @@ const SkinMiniMetronome = ({ metro }) => {
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd });
   const dense = beatSounds.length > 8;
   return (
-    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 rounded-[18px]" style={k.frame}>
+    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 rounded-[18px]"
+      style={{ ...k.frame, transition: 'box-shadow 90ms', ...(beatGlow(metro, k.lamp.shape === 'note' ? '#b3261e' : k.lamp.on) ? { boxShadow: beatGlow(metro, k.lamp.shape === 'note' ? '#b3261e' : k.lamp.on) } : {}) }}>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
           {beatSounds.map((snd, i) => <SkinLamp key={i} k={k} snd={snd} dense={dense} fired={isPlayingMetro && i === currentBeat && visualFlash === 'main'}/>)}
         </div>
         <span className="shrink-0" style={{ color: k.label, fontFamily: 'Georgia,serif', fontSize: k.italic ? 12 : 10, fontStyle: k.italic ? 'italic' : 'normal', letterSpacing: k.italic ? 0 : '0.15em', fontWeight: 700 }}>
@@ -681,7 +696,7 @@ const PlainMiniMetronome = ({ metro }) => {
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
   const dense = beatSounds.length > 8;
   return (
-    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 t-panel rounded-3xl">
+    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 t-panel rounded-3xl" style={{ transition: 'box-shadow 90ms', boxShadow: beatGlow(metro, beatSounds[currentBeat] === 2 ? '#ffcc00' : '#4afc9d') || undefined }}>
       {/* 박 표시 + 박자표 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -689,10 +704,10 @@ const PlainMiniMetronome = ({ metro }) => {
             const fired = isPlayingMetro && i === currentBeat && visualFlash === 'main';
             const col = pal[snd];
             return (
-              <span key={i} className={`${dense ? 'w-3 h-3' : 'w-4 h-4'} rounded-full transition-all duration-75`}
+              <span key={i} className={`${dense ? 'w-3.5 h-3.5' : 'w-5 h-5'} rounded-full transition-all duration-75`}
                 style={snd === 0
                   ? { border: `1.5px solid ${pal[0]}` }
-                  : { background: col, opacity: fired ? 1 : 0.3, transform: fired ? 'scale(1.35)' : 'none',
+                  : { background: col, opacity: fired ? 1 : 0.3, transform: fired ? 'scale(1.4)' : 'none',
                       boxShadow: fired ? `0 0 ${10 * pal.glow}px ${col}` : 'none' }}/>
             );
           })}

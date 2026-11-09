@@ -152,6 +152,7 @@ const LAYOUT_BLOCKS = {
     { id: 'vtapes',  name: '현별 세로 테이프', grow: true },
     { id: 'bars',    name: '현별 막대',       grow: true },
     { id: 'note',    name: '큰 음이름',       grow: true },
+    { id: 'fine',    name: '정밀 게이지 (±1¢ · Hz)' },
     { id: 'readout', name: '음정 숫자창' },
     { id: 'tape',    name: '가로 음 테이프' },
     { id: 'mini',    name: '미니 메트로놈' },
@@ -166,9 +167,10 @@ const LAYOUT_BLOCKS = {
 };
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
-  { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'readout', 'mini'] },
-  { id: 'tapeTempo',  name: '막대 + 테이프 + 템포', on: ['bars', 'tape', 'mini'] },
-  { id: 'tape',       name: '막대 + 테이프', on: ['bars', 'tape'] },
+  { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'fine', 'readout', 'mini'] },
+  { id: 'tapeTempo',  name: '막대 + 테이프 + 템포', on: ['bars', 'fine', 'tape', 'mini'] },
+  { id: 'tape',       name: '막대 + 테이프', on: ['bars', 'fine', 'tape'] },
+  { id: 'fineOnly',   name: '정밀 튜닝', on: ['vtapes', 'fine'] },
   { id: 'center',     name: '막대 + 큰 음이름', on: ['bars', 'note'] },
   { id: 'both',       name: '큰 음이름 + 테이프', on: ['bars', 'note', 'tape'] },
 ];
@@ -214,7 +216,7 @@ const DEFAULT_SETTINGS = {
   stableFrames: 3,   // 같은 음이 N프레임 연속이어야 표시
   smoothing: 6,      // 평균낼 프레임 수 (클수록 부드럽고 느림)
   holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
-  minFreq: 180,      // 감지 최저 Hz (바이올린 G3 = 196Hz)
+  minFreq: 150,      // 감지 최저 Hz (바이올린 G3 = 196Hz, 낮게 풀린 G현도 잡히게 여유)
   maxFreq: 3500,     // 감지 최고 Hz
   uiMode: 'tape',    // 바탕 테마(theme.css data-theme) — design에서 자동으로 정해짐
   design: 'dark',    // 디자인 7가지 중 하나 → theme.jsx DESIGNS (dark·light·piano·leather·radio·violin·sheet)
@@ -222,7 +224,8 @@ const DEFAULT_SETTINGS = {
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
-  layoutRev: 3,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
+  layoutRev: 4,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -238,16 +241,49 @@ const loadSettings = () => {
     const DESIGN_BASE = { dark: 'tape', light: 'light', piano: 'vintage', leather: 'vintage', radio: 'vintage', violin: 'vintage', sheet: 'vintage' };
     if (!stored.design || !DESIGN_BASE[v.design]) v.design = ({ tape: 'dark', light: 'light', vintage: 'radio' })[v.uiMode] || 'dark';
     v.uiMode = DESIGN_BASE[v.design];
-    if (stored.layoutRev !== 3) { v.tunerLayout = 'vtapeTempo'; v.layoutRev = 3; }   // 저장값 기준으로 판단
+    const rev = stored.layoutRev || 0;
+    if (rev < 3) v.tunerLayout = 'vtapeTempo';   // 저장값 기준으로 판단
     if (!['vtapeTempo', 'tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'vtapeTempo';
     // 블록 배치: 저장값이 없으면 예전 '튜너 화면 구성'에서 만들어 줌
     v.layout1 = normLayout('t1', stored.layout1 || makeLayout('t1', LAYOUT_PRESETS.find(p => p.id === v.tunerLayout).on));
     v.layout2 = normLayout('t2', stored.layout2 || makeLayout('t2', DEFAULT_LAYOUT2_ON));
     v.parts = normParts(stored.parts);
+    if (rev < 4) {
+      // 4: 낮게 풀린 G현도 잡히게 최저 주파수 180 → 150, 1번 탭에 정밀 게이지 추가
+      if (v.minFreq === 180) v.minFreq = 150;
+      if (stored.layout1 && !stored.layout1.some(b => b.id === 'fine' && b.on)) {
+        const l = v.layout1.filter(b => b.id !== 'fine');
+        let at = l.findIndex(b => b.on && b.id === 'readout');
+        if (at < 0) at = l.findIndex(b => b.on && LAYOUT_BLOCKS.t1.find(k => k.id === b.id).grow) + 1;
+        l.splice(Math.max(0, at), 0, { id: 'fine', on: true, size: 'm' });
+        v.layout1 = l;
+      }
+    }
+    v.layoutRev = 4;
     return v;
   }
   catch (_) { return { ...DEFAULT_SETTINGS }; }
 };
+// 부드러운 움직임: 목표값들을 매 프레임 조금씩 따라감 (지수 감쇠 스프링).
+// onFrame(values)에서 DOM을 직접 바꿈 → React 리렌더 없이 60fps. snap 이상 차이 나면 바로 이동
+const useSpring = (targets, onFrame, { k = 0.2, snap = Infinity } = {}) => {
+  const st = useRef(null);
+  if (!st.current) st.current = { v: [...targets], t: targets };
+  st.current.t = targets;
+  const cb = useRef(onFrame); cb.current = onFrame;
+  useEffect(() => {
+    const s = st.current; let raf;
+    const tick = () => {
+      s.v = s.v.map((v, i) => { const d = s.t[i] - v; return Math.abs(d) > snap || Math.abs(d) < 1e-4 ? s.t[i] : v + d * k; });
+      cb.current(s.v);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return st.current.v;     // 렌더 시점의 현재 값 (처음 그릴 때 위치용)
+};
+
 // 저장 잠금: 백업을 가져올 때 새로고침 직전에 메모리의 옛 값이 덮어쓰지 않게
 const VT_STORAGE = { locked: false };
 const vtSave = (k, v) => { if (VT_STORAGE.locked) return; try { localStorage.setItem(k, v); } catch (_) {} };
