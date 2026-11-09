@@ -26,6 +26,9 @@
   - **정밀 튜닝**: `FineGauge`(1번 탭 'fine' 블록) = A4 기준 목표 Hz · 차이 0.1Hz · 1¢, ±12¢ 안이면 눈금 ±10¢로 확대. 세로/가로 테이프도 ±15¢ 안이면 확대(×4/×3)
   - **부드러운 움직임**: core.jsx `useSpring(목표값들, onFrame)` — 매 프레임 DOM을 직접 바꿈(리렌더 없음). 테이프·게이지 바늘에 사용
   - **흔들림 주의**: 박마다 바뀌는 표시는 크기(폰트·width)를 바꾸지 말고 transform·box-shadow만 (레이아웃이 밀려 화면 전체가 흔들림)
+  - 저음 감지: `cleanBuffer`(직류·80Hz 이하 제거) 후 detectPitch. 330Hz 아래는 게이트 −6dB·신뢰도 −0.08 완화. 최저 주파수는 `MIN_FREQ_CAP`(170Hz) 넘게 못 올림
+  - 2번 탭 박 표시: `parts.beat` = 'dial'(다이얼, 쪼갠 박은 `beatPieces`로 조각 나눔) | 'boxes'(`BeatBoxes` 네모 칸 원 + 쪼갠 박 점). metro.`currentSub` = 지금 쪼갠 박 번호
+  - 지판: `FB_POSITIONS`=21(5포지션+), 위에 `PitchStrip compact`, 연주 음 옆에 ▲/▼ 센트
   - 앱 시작 때 3초 자동 소음 측정 `autoCalibrate`(설정 `autoCalib`), 결과는 하위 30% 레벨 + 10dB, −70~−35dB
 - `vendor/` — React/ReactDOM/Lucide/Babel 고정 버전. Tailwind만 CDN.
 - `manifest.json`, `sw.js`, `icons/` — PWA 리소스

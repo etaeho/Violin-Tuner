@@ -205,10 +205,16 @@ const PART_PLATE_STYLES = [
   { id: 'auto',  name: '디자인 기본' },
   { id: 'brass', name: '황동판 (나사)' },
 ];
+const PART_BEAT_STYLES = [
+  { id: 'dial',  name: '원형 다이얼' },
+  { id: 'boxes', name: '네모 칸 원' },
+];
 const normParts = (p) => ({
   num: PART_NUM_STYLES.some(x => x.id === p?.num) ? p.num : 'auto',
   plate: PART_PLATE_STYLES.some(x => x.id === p?.plate) ? p.plate : 'auto',
+  beat: PART_BEAT_STYLES.some(x => x.id === p?.beat) ? p.beat : 'dial',
 });
+const MIN_FREQ_CAP = 170;   // 최저 주파수는 이보다 높게 못 올림 (G3 196Hz가 잘리면 G현이 안 잡힘)
 
 const DEFAULT_SETTINGS = {
   gateDb: -40,       // 이 레벨(dB) 미만 소리는 무시 (노이즈 게이트)
@@ -223,7 +229,7 @@ const DEFAULT_SETTINGS = {
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
-  parts: { num: 'auto', plate: 'auto' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
+  parts: { num: 'auto', plate: 'auto', beat: 'dial' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
   layoutRev: 4,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
@@ -251,6 +257,7 @@ const loadSettings = () => {
     if (rev < 4) {
       // 4: 낮게 풀린 G현도 잡히게 최저 주파수 180 → 150, 1번 탭에 정밀 게이지 추가
       if (v.minFreq === 180) v.minFreq = 150;
+
       if (stored.layout1 && !stored.layout1.some(b => b.id === 'fine' && b.on)) {
         const l = v.layout1.filter(b => b.id !== 'fine');
         let at = l.findIndex(b => b.on && b.id === 'readout');
@@ -260,6 +267,7 @@ const loadSettings = () => {
       }
     }
     v.layoutRev = 4;
+    if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }
   catch (_) { return { ...DEFAULT_SETTINGS }; }
@@ -318,7 +326,20 @@ const centsBetween = (a, b) => 1200 * Math.log2(a / b);
 
 /* McLeod 피치 검출(NSDF). 바이올린 음역의 lag만 계산해서 가볍다.
    반환: { freq(-1=없음), clarity(0~1), rms } */
+// 직류 성분(마이크 치우침)·웅웅거림 제거: 평균 빼고 고역통과(~80Hz, 2단)
+const cleanBuffer = (buf, sr) => {
+  const N = buf.length; let mean = 0;
+  for (let i = 0; i < N; i++) mean += buf[i];
+  mean /= N;
+  const a = Math.exp(-2 * Math.PI * 80 / sr);
+  for (let pass = 0; pass < 2; pass++) {          // 두 번 통과 → 더 가파르게 (G3 196Hz는 거의 그대로)
+    let px = 0, py = 0;
+    for (let i = 0; i < N; i++) { const x = pass ? buf[i] : buf[i] - mean; const y = a * (py + x - px); px = x; py = y; buf[i] = y; }
+  }
+  return buf;
+};
 const detectPitch = (buf, sr, minFreq, maxFreq) => {
+  cleanBuffer(buf, sr);
   const N = buf.length;
   let sum = 0;
   for (let i = 0; i < N; i++) sum += buf[i] * buf[i];

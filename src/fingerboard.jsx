@@ -6,7 +6,7 @@
 //  - 스케일 연습: 다음 음 안내 → 그 음을 0.15초 이상 연주하면 센트 기록하고 다음으로
 // ==========================================
 
-const FB_POSITIONS = 16;     // 개방현 + 15칸 (대략 4포지션까지)
+const FB_POSITIONS = 21;     // 개방현 + 20칸 (5포지션 4번 손가락 + 여유, E현은 C7까지)
 const FB_CHROMATIC = [['C','B#'],['C#','Db'],['D'],['D#','Eb'],['E','Fb'],['F','E#'],['F#','Gb'],['G'],['G#','Ab'],['A'],['A#','Bb'],['B','Cb']];
 const FB_KEYS = [
   { id: 'C',  label: 'C장조 (0)',   tonic: 0,  notes: ['C','D','E','F','G','A','B'] },
@@ -129,6 +129,9 @@ const Fingerboard = ({ tuner, metro, log }) => {
         </button>
       </div>
 
+      {/* 지금 음정: 높은지 낮은지 실시간 */}
+      <PitchStrip tuner={tuner} compact/>
+
       {/* 스케일 연습 안내 */}
       {scale.active && (
         <div className="t-panel rounded-3xl px-4 py-2.5 flex items-center gap-3 shrink-0">
@@ -183,13 +186,13 @@ const Fingerboard = ({ tuner, metro, log }) => {
                 let style = { background: 'var(--chip-bg)', borderColor: 'var(--chip-border)', color: 'var(--ink)' };
                 let extra = '';
                 if (isPlay) { style = { background: '#8b5a2b', borderColor: '#e9c46a', color: '#fff', boxShadow: '0 0 16px rgba(233,196,106,.5)' }; extra = 'scale-125 z-30'; }
-                else if (isDet) { const c = detOk ? '#4afc9d' : '#ef4444'; style = { background: c, borderColor: c, color: detOk ? '#000' : '#fff', boxShadow: `0 0 16px ${c}` }; extra = 'scale-125 z-20'; }
+                else if (isDet) { const c = detOk ? '#4afc9d' : tuner.cents > 0 ? '#ef4444' : '#3b82f6'; style = { background: c, borderColor: c, color: detOk ? '#000' : '#fff', boxShadow: `0 0 16px ${c}` }; extra = 'scale-125 z-20'; }
                 else if (isTarget) { style = { background: 'transparent', borderColor: 'var(--accent)', color: 'var(--accent)' }; extra = 'scale-110 animate-pulse'; }
                 else if (mean !== null) {
                   const k = Math.min(1, Math.abs(mean) / 25), rgb = mean > 0 ? '239,68,68' : '59,130,246';
                   style = { background: `rgba(${rgb},${0.18 + k * 0.6})`, borderColor: `rgb(${rgb})`, color: 'var(--ink)' };
                 }
-                const line = pos === 12 ? 'border-t-2 border-[#4afc9d]/40' : pos === 5 || pos === 7 ? 'border-t border-gray-700/60' : '';
+                const line = pos === 12 ? 'border-t-2 border-[#4afc9d]/40' : pos === 5 || pos === 7 || pos === 17 ? 'border-t border-gray-700/60' : '';
                 return (
                   <div key={pos} className={`flex-1 flex items-center justify-center relative ${line}`}>
                     {spelled || isDet || isPlay || isTarget ? (
@@ -198,7 +201,15 @@ const Fingerboard = ({ tuner, metro, log }) => {
                         style={{ ...style, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
                         {name}{mean !== null && !isDet && !isPlay && <span className="text-[8px] ml-0.5">{mean > 0 ? '▲' : '▼'}</span>}
                       </button>
-                    ) : (
+                    ) : null}
+                    {/* 지금 연주 중인 음: 높음 ▲ / 낮음 ▼ 센트 */}
+                    {isDet && (
+                      <span className="absolute z-30 left-1/2 ml-6 px-1 rounded text-[10px] font-black font-mono whitespace-nowrap pointer-events-none"
+                        style={{ background: 'rgba(0,0,0,.75)', color: detOk ? '#4afc9d' : tuner.cents > 0 ? '#ff6b6b' : '#60a5fa' }}>
+                        {detOk ? '✓' : tuner.cents > 0 ? '▲' : '▼'}{tuner.cents > 0 ? '+' : ''}{tuner.cents}
+                      </span>
+                    )}
+                    {spelled || isDet || isPlay || isTarget ? null : (
                       <button onClick={() => tuner.toggleTone(label, semi)} className="w-2 h-2 rounded-full" style={{ background: 'var(--chip-border)' }} aria-label={label}/>
                     )}
                   </div>

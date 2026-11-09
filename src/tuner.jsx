@@ -124,11 +124,13 @@ const useTunerLogic = () => {
     if (calibRef.current) calibRef.current.push(db);
 
     // 노이즈 게이트 (3dB 히스테리시스: 열릴 땐 임계값, 닫힐 땐 -3dB)
-    gateOpenRef.current = gateOpenRef.current ? db > S.gateDb - 3 : db > S.gateDb;
+    // 낮은 음(G·D현 근처)은 폰 마이크가 작게 받음 → 게이트를 6dB 낮춰 줌
+    const gateDb = raw > 0 && raw < 330 ? S.gateDb - 6 : S.gateDb;
+    gateOpenRef.current = gateOpenRef.current ? db > gateDb - 3 : db > gateDb;
 
     let accepted = false;
     // 낮은 음(G현 근처)은 폰 마이크에 약하게 들어와 신뢰도가 조금 낮게 나옴 → 기준을 살짝 완화
-    const minClarity = raw > 0 && raw < 260 ? S.clarity - 0.06 : S.clarity;
+    const minClarity = raw > 0 && raw < 330 ? S.clarity - 0.08 : S.clarity;
     if (gateOpenRef.current && raw > 0 && clarity >= minClarity) {
       const c = candidateRef.current;
       if (c.freq && Math.abs(centsBetween(raw, c.freq)) < 50) c.count++;
@@ -964,6 +966,19 @@ const PartsEditor = ({ parts, onChange }) => {
           ))}
         </div>
       </div>
+      <div>
+        <div className="text-[10px] font-bold text-gray-500 mb-1.5">박 표시 (메트로놈 탭)</div>
+        <div className="grid grid-cols-2 gap-2">
+          {PART_BEAT_STYLES.map(o => (
+            <Opt key={o.id} on={parts.beat === o.id} onClick={() => onChange({ beat: o.id })}>
+              {o.id === 'dial'
+                ? <svg viewBox="0 0 40 40" width="30" height="30"><circle cx="20" cy="20" r="15" fill="none" stroke="var(--ink2)" strokeWidth="4" strokeDasharray="20 3.5"/></svg>
+                : <span className="flex gap-1">{[1, 0, 0, 0].map((on, i) => <span key={i} className="w-4 h-4 rounded-full" style={{ background: on ? '#ffcc00' : 'var(--ink2)', opacity: on ? 1 : 0.4 }}/>)}</span>}
+              {label(o.name, parts.beat === o.id)}
+            </Opt>
+          ))}
+        </div>
+      </div>
       {partsCustom(parts) && <button onClick={() => { onChange({ num: 'auto', plate: 'auto' }); haptic(8); }} className="self-start text-[11px] font-bold text-gray-400">↺ 디자인 기본으로</button>}
     </div>
   );
@@ -1134,7 +1149,7 @@ const SettingsSheet = ({ tuner, metro, onClose }) => {
 
         <Section title="① 디자인">
           <DesignPicker value={S.design} onChange={d => updateSettings({ design: d.id, uiMode: d.base })}/>
-          <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 모양)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
+          <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 · 박 표시)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
             <PartsEditor parts={S.parts} onChange={p => updateSettings({ parts: { ...S.parts, ...p } })}/>
           </Fold>
         </Section>
@@ -1215,9 +1230,9 @@ const SettingsSheet = ({ tuner, metro, onClose }) => {
           <SliderRow label="표시 유지 시간" value={S.holdMs} display={`${S.holdMs}ms`} min={0} max={1500} step={50}
             onChange={v => updateSettings({ holdMs: v })}
             hint="소리가 끊긴 뒤 마지막 음을 보여주는 시간."/>
-          <SliderRow label="최저 주파수" value={S.minFreq} display={`${S.minFreq} Hz`} min={60} max={300} step={5}
+          <SliderRow label="최저 주파수" value={S.minFreq} display={`${S.minFreq} Hz`} min={60} max={MIN_FREQ_CAP} step={5}
             onChange={v => updateSettings({ minFreq: v })}
-            hint="바이올린 최저음 G3 = 196Hz. 180Hz면 저음 웅웅거림을 걸러냅니다."/>
+            hint={`바이올린 최저음 G3 = 196Hz. G현이 잡히도록 ${MIN_FREQ_CAP}Hz보다 높게는 올릴 수 없습니다.`}/>
           <SliderRow label="최고 주파수" value={S.maxFreq} display={`${S.maxFreq} Hz`} min={1000} max={5000} step={100}
             onChange={v => updateSettings({ maxFreq: v })}/>
           </Fold>

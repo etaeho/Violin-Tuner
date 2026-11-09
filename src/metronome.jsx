@@ -14,6 +14,7 @@ const useMetronomeLogic = () => {
   const [beatSounds, setBeatSounds] = usePersistentState('metro.beatSounds', [2,1,1,1], v => Array.isArray(v) && v.length >= 1);
   const [beatSubdivisions, setBeatSubdivisions] = usePersistentState('metro.beatSubdivisions', [1,1,1,1], v => Array.isArray(v) && v.length >= 1);
   const [visualFlash, setVisualFlash] = useState(false);
+  const [currentSub, setCurrentSub] = useState(0);     // 지금 박 안의 몇 번째 쪼갠 박인지 (다이얼·네모 칸 표시용)
   const isPlayingRef     = useRef(false);
   const bpmRef           = useRef(bpm);
   const metroAudioCtxRef = useRef(null);
@@ -114,13 +115,13 @@ const useMetronomeLogic = () => {
     if (subBeatNumber===0) {
       setTimeout(()=>{
         if (!isPlayingRef.current) return;
-        setCurrentBeat(beatNumber); setVisualFlash('main');
+        setCurrentBeat(beatNumber); setCurrentSub(0); setVisualFlash('main');
         setTimeout(()=>{ if (isPlayingRef.current) setVisualFlash(false); },150);
       }, Math.max(0,delay));
     } else {
       setTimeout(()=>{
         if (!isPlayingRef.current) return;
-        setVisualFlash('sub');
+        setCurrentSub(subBeatNumber); setVisualFlash('sub');
         setTimeout(()=>{ if (isPlayingRef.current) setVisualFlash(false); },100);
       }, Math.max(0,delay));
     }
@@ -208,7 +209,7 @@ const useMetronomeLogic = () => {
   };
 
   return {
-    bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
+    bpm, setBpm, isPlayingMetro, currentBeat, currentSub, timeSig, beatSounds, beatSubdivisions, visualFlash,
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
     handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome
   };
@@ -245,6 +246,21 @@ const useFitSquare = (pad = 0, max = 320) => {
   return [ref, size];
 };
 
+// 다이얼 조각: 박마다 한 구간, 박을 쪼개면 그 구간을 다시 나눔. cur = 지금 소리 나는 조각
+const beatPieces = (metro, gapDeg) => {
+  const { beatSounds, beatSubdivisions, currentBeat, currentSub, isPlayingMetro } = metro;
+  const n = beatSounds.length, out = [];
+  beatSounds.forEach((snd, i) => {
+    const sub = beatSubdivisions[i] || 1, b0 = (360 / n) * i + gapDeg / 2, b1 = (360 / n) * (i + 1) - gapDeg / 2;
+    const sg = sub > 1 ? Math.min(4, (b1 - b0) * 0.08) : 0, w = (b1 - b0 - sg * (sub - 1)) / sub;
+    for (let j = 0; j < sub; j++) {
+      const a0 = b0 + j * (w + sg);
+      out.push({ i, j, snd, a0, a1: a0 + w, beatCur: isPlayingMetro && i === currentBeat, cur: isPlayingMetro && i === currentBeat && j === (currentSub || 0) });
+    }
+  });
+  return out;
+};
+
 // 빈티지: 아르데코 라디오 다이얼 — 크림색 문자판, 눈금 링, 박마다 빨간 바늘이 그 박 위치로 이동
 const RadioBeatDial = ({ metro, size, center }) => {
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
@@ -259,13 +275,11 @@ const RadioBeatDial = ({ metro, size, center }) => {
         </defs>
         <circle cx="100" cy="100" r="97" fill="#3a2410" stroke="#b88a35" strokeWidth="3"/>
         {/* 박 구간 (바깥 링) */}
-        {beatSounds.map((snd, i) => {
-          const a0 = (360 / n) * i + gap / 2, a1 = (360 / n) * (i + 1) - gap / 2;
-          const cur = isPlayingMetro && i === currentBeat;
-          return <path key={i} d={arcPath(100, 100, 90, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur && firing ? 6 : 4}
-            stroke={snd === 0 ? 'rgba(244,215,138,.15)' : cur ? RADIO.cream : snd === 2 ? 'rgba(244,215,138,.55)' : 'rgba(184,138,53,.45)'}
-            style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && firing ? `drop-shadow(0 0 4px ${RADIO.cream})` : 'none' }}/>;
-        })}
+        {beatPieces(metro, gap).map(({ i, j, snd, a0, a1, cur, beatCur }) => (
+          <path key={i + '-' + j} d={arcPath(100, 100, 90, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur ? (visualFlash ? 7 : 5.5) : j ? 2.5 : 4}
+            stroke={cur ? RADIO.cream : j ? (beatCur ? 'rgba(244,215,138,.5)' : 'rgba(244,215,138,.25)') : snd === 0 ? 'rgba(244,215,138,.15)' : snd === 2 ? 'rgba(244,215,138,.55)' : 'rgba(184,138,53,.45)'}
+            style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && visualFlash ? `drop-shadow(0 0 5px ${RADIO.cream})` : 'none' }}/>
+        ))}
         {/* 눈금 */}
         {Array.from({ length: 40 }, (_, k) => {
           const a = (k * 9 - 90) * Math.PI / 180, r1 = 82, r2 = k % 5 === 0 ? 72 : 77;
@@ -296,13 +310,11 @@ const SkinBeatDial = ({ metro, size, k, center }) => {
     <div className="relative" style={{ width: size, height: size }}>
       <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
         <circle cx="100" cy="100" r="97" fill={d.outer} stroke={d.ring} strokeWidth="2.5" strokeDasharray={d.ringDash ? '5 4' : undefined}/>
-        {beatSounds.map((snd, i) => {
-          const a0 = (360 / n) * i + gap / 2, a1 = (360 / n) * (i + 1) - gap / 2;
-          const cur = isPlayingMetro && i === currentBeat;
-          return <path key={i} d={arcPath(100, 100, 85, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur && firing ? 11 : 8}
-            stroke={snd === 0 ? d.off : cur ? d.on : snd === 2 ? d.strong : d.off}
-            style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && firing ? `drop-shadow(0 0 5px ${d.on})` : 'none' }}/>;
-        })}
+        {beatPieces(metro, gap).map(({ i, j, snd, a0, a1, cur, beatCur }) => (
+          <path key={i + '-' + j} d={arcPath(100, 100, 85, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur ? (visualFlash ? 12 : 10) : j ? 5 : 8}
+            stroke={cur ? d.on : j ? (beatCur ? d.strong : d.off) : snd === 0 ? d.off : snd === 2 ? d.strong : d.off}
+            style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && visualFlash ? `drop-shadow(0 0 6px ${d.on})` : 'none' }}/>
+        ))}
         <circle cx="100" cy="100" r="68" fill={d.face} stroke={d.ring} strokeWidth="1.5" strokeDasharray={d.ringDash ? '4 3' : undefined}/>
         <circle cx="100" cy="100" r="63" fill="none" stroke={d.sub} strokeWidth="0.8" opacity={visualFlash === 'sub' ? 0.9 : 0.15} style={{ transition: 'opacity 60ms' }}/>
       </svg>
@@ -327,8 +339,58 @@ const DialCenter = ({ bpm, size, parts, sub }) => {
   return <>{num}{mark(sub)}</>;
 };
 
+// 네모 칸 원: 정사각형 판 안에 박을 큰 원으로 나열 + 원 아래에 쪼갠 박 점 (설정 → 세부 꾸미기 → 박 표시)
+const BeatBoxes = ({ metro, size, vintage, skin, pal }) => {
+  const { bpm, beatSounds, beatSubdivisions, currentBeat, currentSub, visualFlash, isPlayingMetro } = metro;
+  const parts = useParts();
+  // 다이얼 자리(정사각형)보다 넓게: 칸 너비를 직접 재서 원 크기 결정
+  const ref = useRef(null); const [w, setW] = useState(size);
+  useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setW(el.clientWidth)); ro.observe(el); return () => ro.disconnect(); }, []);
+  const n = beatSounds.length, cols = n <= 4 ? n : n <= 8 ? Math.ceil(n / 2) : Math.ceil(n / 3), rows = Math.ceil(n / cols);
+  const d = Math.max(26, Math.min(84, (w - 28 - (cols - 1) * 12) / cols, (size * 0.62 - (rows - 1) * 22) / rows - 14));
+  const k = vintage ? skin.dial : null;
+  const ink = vintage ? k.text : 'var(--ink)', sub = vintage ? k.sub : '#9ca3af';
+  const colOf = (snd, on) => vintage ? (on ? k.on : snd === 2 ? k.strong : snd === 0 ? 'transparent' : k.off) : (snd === 0 ? 'transparent' : pal[snd]);
+  const ns = parts.num !== 'auto' ? parts.num : null;
+  return (
+    <div ref={ref} className={`relative flex-1 mx-2 flex flex-col items-center justify-between rounded-[26px] py-3 px-3.5 ${vintage ? '' : 't-panel'}`}
+      style={{ height: size, ...(vintage ? { background: k.outer, border: `2px solid ${k.ring}`, boxShadow: '0 8px 20px rgba(0,0,0,.45)' } : {}) }}>
+      <div className="flex flex-col items-center leading-none">
+        {ns ? <PartNumber style={ns} text={ns === 'flip' || ns === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={Math.round(size * 0.12)} unitColor={sub}/>
+          : <span className="flex items-baseline gap-1"><span className="font-black" style={{ fontSize: size * 0.17, color: ink, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
+              <span className="text-[10px] font-black tracking-widest" style={{ color: sub }}>BPM</span></span>}
+        <span className="text-[10px] font-bold tracking-widest uppercase mt-1" style={{ color: sub, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{getTempoMarking(bpm)}</span>
+      </div>
+      <div className="grid justify-center content-center gap-x-3 gap-y-2 flex-1 w-full" style={{ gridTemplateColumns: `repeat(${cols}, ${d}px)` }}>
+        {beatSounds.map((snd, i) => {
+          const isCur = isPlayingMetro && i === currentBeat, fire = isCur && visualFlash === 'main';
+          const c = colOf(snd, isCur);
+          const nsub = beatSubdivisions[i] || 1;
+          return (
+            <div key={i} className="flex flex-col items-center gap-1.5">
+              <div className="rounded-full flex items-center justify-center font-black transition-all duration-75" style={{
+                width: d, height: d, fontSize: d * 0.36, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace',
+                background: snd === 0 ? 'transparent' : c, border: snd === 0 ? `2px dashed ${sub}` : `2px solid ${isCur ? c : 'transparent'}`,
+                opacity: snd === 0 ? 0.6 : isCur ? 1 : 0.32, color: vintage ? (isCur ? k.face : ink) : '#000',
+                transform: `scale(${fire ? 1.12 : 1})`, boxShadow: isCur && snd ? `0 0 ${fire ? 26 : 12}px ${c}` : 'none' }}>{i + 1}</div>
+              <div className="flex gap-1 h-2">
+                {nsub > 1 && Array.from({ length: nsub }, (_, j) => {
+                  const on = isCur && (currentSub || 0) === j;
+                  return <span key={j} className="rounded-full transition-all duration-75" style={{ width: 7, height: 7, transform: `scale(${on ? 1.3 : 1})`,
+                    background: on ? (vintage ? k.on : pal.sub) : sub, opacity: on ? 1 : 0.35, boxShadow: on ? `0 0 6px ${vintage ? k.on : pal.sub}` : 'none' }}/>;
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 const BeatDial = ({ metro, size, pal, vintage, skin }) => {
   const parts = useParts();
+  if (parts.beat === 'boxes') return <BeatBoxes metro={metro} size={size} vintage={vintage} skin={skin} pal={pal}/>;
   const center = partsCustom(parts) ? <DialCenter bpm={metro.bpm} size={size} parts={parts} sub={vintage ? (skin.dial.ticks ? '#f4d78a' : skin.dial.sub) : '#9ca3af'}/> : null;
   if (vintage) return skin && !skin.dial.ticks ? <SkinBeatDial metro={metro} size={size} k={skin} center={center}/> : <RadioBeatDial metro={metro} size={size} center={center}/>;
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
@@ -339,15 +401,13 @@ const BeatDial = ({ metro, size, pal, vintage, skin }) => {
     <div className="relative" style={{ width: size, height: size }}>
       <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
         {vintage && <circle cx="100" cy="100" r="96" fill="none" stroke="#6b4a12" strokeWidth="3"/>}
-        {beatSounds.map((snd, i) => {
-          const a0 = (360 / n) * i + gap / 2, a1 = (360 / n) * (i + 1) - gap / 2;
-          const isCur = isPlayingMetro && i === currentBeat;
-          const col = pal[snd];
+        {beatPieces(metro, gap).map(({ i, j, snd, a0, a1, cur, beatCur }) => {
+          const col = j ? pal.sub : pal[snd];
           return (
-            <path key={i} d={arcPath(100, 100, 86, a0, a1)} fill="none" strokeLinecap="round"
-              stroke={col} strokeWidth={isCur && firing ? 13 : 9}
-              opacity={snd === 0 ? 1 : isCur ? 1 : 0.28}
-              style={{ transition: 'stroke-width 80ms, opacity 80ms', filter: isCur && firing && snd ? `drop-shadow(0 0 ${8 * pal.glow}px ${col})` : 'none' }}/>
+            <path key={i + '-' + j} d={arcPath(100, 100, 86, a0, a1)} fill="none" strokeLinecap="round"
+              stroke={col} strokeWidth={cur ? (visualFlash ? 14 : 11) : j ? 6 : 9}
+              opacity={cur ? 1 : snd === 0 && !j ? 1 : beatCur ? 0.55 : 0.25}
+              style={{ transition: 'stroke-width 80ms, opacity 80ms', filter: cur && visualFlash ? `drop-shadow(0 0 ${8 * pal.glow}px ${col})` : 'none' }}/>
           );
         })}
         {/* 세분박 깜빡임 */}
@@ -384,7 +444,7 @@ const Stepper = ({ value, onUp, onDown, accent }) => {
 };
 
 // 메트로놈 탭 위쪽 한 줄 음정 표시 (튜너와 같은 값): LIVE · 음이름 · ±50센트 바늘 · 센트
-const PitchStrip = ({ tuner }) => {
+const PitchStrip = ({ tuner, compact }) => {
   // 바늘 게이지: 반원 눈금(−50~+50센트) 위를 바늘이 움직임. 가운데 초록 띠 = 허용 범위
   const { isStarted, pitch, cents, tolerance, currentNote, ensureMic } = tuner;
   const vintage = useVintage();
@@ -407,22 +467,22 @@ const PitchStrip = ({ tuner }) => {
   const [c0] = useSpring([c], ([v]) => { const el = needleRef.current; if (!el) return; const [x, y] = pt(ang(v), R - 4); el.setAttribute('x2', x); el.setAttribute('y2', y); }, { k: 0.2 });
   const [nx, ny] = pt(ang(c0), R - 4);
   return (
-    <div className={`w-full rounded-2xl px-3 py-2 flex items-center gap-2.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+    <div className={`w-full rounded-2xl px-3 ${compact ? 'py-1' : 'py-2'} flex items-center gap-2.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
       {/* 마이크 상태 + 음이름 */}
-      <div className="flex flex-col items-start shrink-0 w-[68px]">
+      <div className={`flex flex-col items-start shrink-0 ${compact ? 'w-12' : 'w-[68px]'}`}>
         <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest"
           style={{ color: isStarted ? (vintage ? skin.live : '#4afc9d') : '#ef4444' }}>
           <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>
           {isStarted ? 'LIVE' : 'OFF'}
         </button>
-        <span className="font-black leading-none mt-0.5" style={{ color: live ? ink : (vintage ? skin.unit : 'var(--ink-off)'), fontSize: 36, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        <span className="font-black leading-none mt-0.5" style={{ color: live ? ink : (vintage ? skin.unit : 'var(--ink-off)'), fontSize: compact ? 24 : 36, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
           {live ? currentNote.name : '—'}<span className="text-[18px]">{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
           <span className="text-[13px] opacity-60">{live ? currentNote.octave : ''}</span>
         </span>
       </div>
       {/* 바늘 계기판 */}
       <div className="flex-1 min-w-0 rounded-xl overflow-hidden" style={{ background: face, boxShadow: 'inset 0 2px 6px rgba(0,0,0,.45)' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" style={{ height: 88 }}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" style={{ height: compact ? 50 : 88 }}>
           <path d={arc(ang(-tolerance), ang(tolerance), R - 6)} fill="none" stroke={ok ? 'rgba(74,252,157,.75)' : 'rgba(74,180,110,.35)'} strokeWidth="9"/>
           {Array.from({ length: 21 }, (_, k) => {
             const v = -50 + k * 5, big = v % 25 === 0;
@@ -488,6 +548,13 @@ const Metronome = ({ metro, tuner }) => {
             style={{ color: vintage ? '#f6dd94' : document.documentElement.dataset.theme === 'light' ? '#b45309' : '#ffcc00', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
             {getTempoMarking(bpm)}
           </span>
+          {/* 박 표시 바꾸기: 원형 다이얼 ↔ 네모 칸 원 */}
+          {tuner && (
+            <button onClick={() => { const p = tuner.settings.parts; tuner.updateSettings({ parts: { ...p, beat: p.beat === 'boxes' ? 'dial' : 'boxes' } }); haptic(8); }}
+              aria-label="박 표시 바꾸기" className="rounded-full t-chip p-2 active:scale-95" style={{ color: '#9ca3af' }}>
+              {tuner.settings.parts.beat === 'boxes' ? <Activity size={14}/> : <LayoutGrid size={14}/>}
+            </button>
+          )}
           {/* 초기화: 두 번 눌러야 실행 */}
           <button onClick={onReset} aria-label="메트로놈 초기화"
             className={`flex items-center gap-1 rounded-full t-chip transition-all active:scale-95 ${confirmReset ? 'px-2.5 py-1.5' : 'p-2'}`}
