@@ -132,7 +132,7 @@ const Fingerboard = ({ tuner, metro, log }) => {
       </div>
 
       {/* 지금 음정: 높은지 낮은지 실시간 */}
-      <PitchStrip tuner={tuner} compact swapColors/>
+      <MainPitchMeter tuner={tuner} compact swapColors/>
 
       {/* 스케일 연습 안내 */}
       {scale.active && (

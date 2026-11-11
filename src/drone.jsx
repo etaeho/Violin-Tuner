@@ -240,7 +240,7 @@ const Segmented = ({ items, value, onChange }) => {
   );
 };
 
-const Drone = ({ drone, metro }) => {
+const Drone = ({ drone, metro, tuner }) => {
   const { cfg, update, toggleInterval, playing, rootFreq } = drone;
   const vintage = useVintage();
   const [wheelRef, wheelSize] = useFitSquare(0, 300);
@@ -261,6 +261,9 @@ const Drone = ({ drone, metro }) => {
           {rootFreq.toFixed(1)} Hz
         </span>
       </div>
+
+      {/* 지금 음정 (설정에서 고른 음정 표시기) — 드론에 맞춰 음정 연습 */}
+      {tuner && <MainPitchMeter tuner={tuner} compact/>}
 
       {/* 근음 휠 (남는 공간 채움) */}
       <div ref={wheelRef} className="w-full flex-1 min-h-0 flex items-center justify-center">

@@ -536,7 +536,8 @@ const StringVTapes = ({ tuner }) => {
 // 정밀 게이지: A4(예: 442) 기준 가장 가까운 음의 목표 Hz · 지금 Hz · 차이(0.1Hz) · 센트(1¢)
 // 눈금은 평소 ±50¢, 목표 ±12¢ 안이면 ±10¢(1¢ 눈금)로 부드럽게 확대
 // ==========================================
-const FineGauge = ({ tuner }) => {
+const FineGauge = ({ tuner, swapColors }) => {
+  const HI = swapColors ? '#3b82f6' : '#ef4444', LO = swapColors ? '#ef4444' : '#3b82f6';   // swapColors: 지판 탭 규칙
   const vintage = useVintage();
   const skin = useSkin();
   const { isStarted, pitch, a4Freq, tolerance, ensureMic } = tuner;
@@ -564,8 +565,8 @@ const FineGauge = ({ tuner }) => {
   const face = !vintage ? '#0a0a0a' : skin.dial.ticks ? '#f3e8cc' : skin.dial.face;
   const tick = !vintage ? '#71717a' : skin.dial.ticks ? '#5a3a1e' : skin.dial.sub;
   const ink = !vintage ? 'var(--ink)' : skin.label, dim = !vintage ? '#6b7280' : skin.unit;
-  const cc = !live ? dim : ok ? (vintage ? skin.good : '#4afc9d') : c > 0 ? '#ef4444' : '#3b82f6';
-  const needle = !live ? '#52525b' : ok ? '#4afc9d' : c > 0 ? '#ef4444' : '#3b82f6';
+  const cc = !live ? dim : ok ? (vintage ? skin.good : '#4afc9d') : c > 0 ? HI : LO;
+  const needle = !live ? '#52525b' : ok ? '#4afc9d' : c > 0 ? HI : LO;
   const X = (v) => `calc(50% + var(--u) * ${v} * 1%)`;
   return (
     <div className={`w-full max-w-sm rounded-2xl px-3 py-2 flex flex-col gap-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
@@ -597,8 +598,8 @@ const FineGauge = ({ tuner }) => {
         })}
         {[-10, -5, 5, 10].map(v => <span key={'f' + v} className="absolute font-mono font-bold text-[8px]" style={{ left: X(v), bottom: 2, transform: 'translateX(-50%)', color: tick, opacity: 'var(--z)' }}>{v > 0 ? `+${v}` : v}</span>)}
         {[-50, -25, 25, 50].map(v => <span key={'c' + v} className="absolute font-mono font-bold text-[8px]" style={{ left: X(v), bottom: 2, transform: 'translateX(-50%)', color: tick, opacity: 'calc(1 - var(--z))' }}>{v > 0 ? `+${v}` : v}</span>)}
-        <span className="absolute left-1.5 top-0.5 text-[8px] font-black" style={{ color: '#3b82f6' }}>♭</span>
-        <span className="absolute right-1.5 top-0.5 text-[8px] font-black" style={{ color: '#ef4444' }}>♯</span>
+        <span className="absolute left-1.5 top-0.5 text-[8px] font-black" style={{ color: LO }}>♭</span>
+        <span className="absolute right-1.5 top-0.5 text-[8px] font-black" style={{ color: HI }}>♯</span>
         <span className="absolute right-4 top-0.5 text-[8px] font-black" style={{ color: vintage ? tick : '#4afc9d', opacity: 'var(--z)' }}>1¢ 확대</span>
         {/* 바늘 */}
         <i className="absolute top-0 bottom-0 z-10" style={{ left: X('var(--c)'), width: 3, marginLeft: -1.5, borderRadius: 2, background: needle,
@@ -979,6 +980,21 @@ const PartsEditor = ({ parts, onChange }) => {
           ))}
         </div>
       </div>
+      <div>
+        <div className="text-[10px] font-bold text-gray-500 mb-1.5">음정 표시기 (메트로놈 · 지판 · 드론 탭, 1번 탭 블록)</div>
+        <div className="grid grid-cols-3 gap-2">
+          {PART_METER_STYLES.map(o => (
+            <Opt key={o.id} on={parts.meter === o.id} onClick={() => onChange({ meter: o.id })}>
+              {o.id === 'needle'
+                ? <svg viewBox="0 0 40 24" width="40" height="24"><path d="M4 22 A18 18 0 0 1 36 22" fill="none" stroke="var(--ink2)" strokeWidth="2"/><line x1="20" y1="22" x2="26" y2="7" stroke="#4afc9d" strokeWidth="2"/></svg>
+                : o.id === 'fine'
+                ? <svg viewBox="0 0 40 24" width="40" height="24"><rect x="2" y="8" width="36" height="12" rx="2" fill="none" stroke="var(--ink2)"/>{[6,10,14,18,22,26,30,34].map(x => <line key={x} x1={x} y1="8" x2={x} y2="13" stroke="var(--ink2)"/>)}<line x1="22" y1="6" x2="22" y2="21" stroke="#4afc9d" strokeWidth="2"/></svg>
+                : <span className="text-base font-black leading-none" style={{ color: 'var(--ink2)' }}>A <span style={{ color: '#4afc9d' }}>+3</span></span>}
+              {label(o.name, parts.meter === o.id)}
+            </Opt>
+          ))}
+        </div>
+      </div>
       {partsCustom(parts) && <button onClick={() => { onChange({ num: 'auto', plate: 'auto' }); haptic(8); }} className="self-start text-[11px] font-bold text-gray-400">↺ 디자인 기본으로</button>}
     </div>
   );
@@ -1149,7 +1165,7 @@ const SettingsSheet = ({ tuner, metro, onClose }) => {
 
         <Section title="① 디자인">
           <DesignPicker value={S.design} onChange={d => updateSettings({ design: d.id, uiMode: d.base })}/>
-          <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 · 박 표시)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
+          <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 · 박 · 음정 표시기)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
             <PartsEditor parts={S.parts} onChange={p => updateSettings({ parts: { ...S.parts, ...p } })}/>
           </Fold>
         </Section>
@@ -1441,6 +1457,7 @@ const Tuner = ({ tuner, metro }) => {
             {b.id === 'bars' && <StringBars tuner={tuner} size="fill"/>}
             {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
             {b.id === 'fine' && <FineGauge tuner={tuner}/>}
+            {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
             {b.id === 'readout' && <TunerReadout tuner={tuner}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('readout') && !has('note')}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}

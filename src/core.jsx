@@ -153,12 +153,13 @@ const LAYOUT_BLOCKS = {
     { id: 'bars',    name: '현별 막대',       grow: true },
     { id: 'note',    name: '큰 음이름',       grow: true },
     { id: 'fine',    name: '정밀 게이지 (±1¢ · Hz)' },
+    { id: 'meter',   name: '음정 표시기 (설정에서 고른 모양)' },
     { id: 'readout', name: '음정 숫자창' },
     { id: 'tape',    name: '가로 음 테이프' },
     { id: 'mini',    name: '미니 메트로놈' },
   ],
   t2: [
-    { id: 'pitch',    name: '음정 바늘 게이지' },
+    { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)' },
     { id: 'beats',    name: '박 설정' },
     { id: 'dial',     name: '박자 다이얼', grow: true },
     { id: 'tempo',    name: '템포 슬라이더 · 프리셋' },
@@ -209,10 +210,17 @@ const PART_BEAT_STYLES = [
   { id: 'dial',  name: '원형 다이얼' },
   { id: 'boxes', name: '네모 칸 원' },
 ];
+// 메인 음정 표시기: 1번 탭 외 탭(메트로놈·지판·드론)과 1번 탭 'meter' 블록에 붙는 음정 표시 모양
+const PART_METER_STYLES = [
+  { id: 'needle', name: '바늘 게이지' },
+  { id: 'fine',   name: '정밀 게이지' },
+  { id: 'digits', name: '큰 숫자' },
+];
 const normParts = (p) => ({
   num: PART_NUM_STYLES.some(x => x.id === p?.num) ? p.num : 'auto',
   plate: PART_PLATE_STYLES.some(x => x.id === p?.plate) ? p.plate : 'auto',
   beat: PART_BEAT_STYLES.some(x => x.id === p?.beat) ? p.beat : 'dial',
+  meter: PART_METER_STYLES.some(x => x.id === p?.meter) ? p.meter : 'needle',
 });
 const MIN_FREQ_CAP = 170;   // 최저 주파수는 이보다 높게 못 올림 (G3 196Hz가 잘리면 G현이 안 잡힘)
 
@@ -229,7 +237,7 @@ const DEFAULT_SETTINGS = {
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
-  parts: { num: 'auto', plate: 'auto', beat: 'dial' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
+  parts: { num: 'auto', plate: 'auto', beat: 'dial', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
   layoutRev: 5,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함

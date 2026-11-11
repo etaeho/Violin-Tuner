@@ -445,9 +445,9 @@ const Stepper = ({ value, onUp, onDown, accent }) => {
 
 // 메트로놈 탭 위쪽 한 줄 음정 표시 (튜너와 같은 값): LIVE · 음이름 · ±50센트 바늘 · 센트
 const PitchStrip = ({ tuner, compact, swapColors }) => {
+  // 바늘 게이지: 부채꼴 눈금(−50~+50센트) — 가운데(±10¢)를 넓게 펼친 눈금이라 작은 차이도 잘 보임
   // swapColors: 지판 탭 규칙 (높음 = 파랑, 낮음 = 빨강)
   const HI = swapColors ? '#3b82f6' : '#ef4444', LO = swapColors ? '#ef4444' : '#3b82f6';
-  // 바늘 게이지: 반원 눈금(−50~+50센트) 위를 바늘이 움직임. 가운데 초록 띠 = 허용 범위
   const { isStarted, pitch, cents, tolerance, currentNote, ensureMic } = tuner;
   const vintage = useVintage();
   const skin = useSkin();
@@ -457,55 +457,93 @@ const PitchStrip = ({ tuner, compact, swapColors }) => {
   // 색: 우드 = 디자인 다이얼 색(라디오는 크림 문자판), 다크·라이트 = 검은 계기판
   const radio = vintage && skin.dial.ticks;
   const face = !vintage ? '#0a0a0a' : radio ? '#f3e8cc' : skin.dial.face;
-  const tick = !vintage ? '#52525b' : radio ? '#5a3a1e' : skin.dial.sub;
-  const ink = !vintage ? 'var(--ink)' : skin.label;
+  const tick = !vintage ? '#71717a' : radio ? '#5a3a1e' : skin.dial.sub;
+  const ink = !vintage ? '#f4f4f5' : radio ? '#2a1a0e' : skin.dial.text;
   const needle = !vintage ? (!live ? '#3f3f46' : ok ? '#4afc9d' : Math.abs(cents) <= tolerance + 15 ? '#ffcc00' : cents > 0 ? HI : LO) : (skin.dial.needle || '#c0392b');
-  const cc = !live ? (vintage ? skin.unit : 'var(--ink-off)') : ok ? (vintage ? skin.good : '#4afc9d') : cents > 0 ? HI : LO;
-  const W = 160, H = 64, cx = 80, cy = 90, R = 82;               // 원 중심을 아래로 → 얕고 넓은 부채꼴
-  const ang = (v) => (v / 50) * 52;                               // ±50센트 → ±52°
+  const cc = !live ? tick : ok ? (vintage ? skin.good : '#4afc9d') : cents > 0 ? HI : LO;
+  const W = 200, H = 100, cx = 100, cy = 112, R = 104;
+  const ang = (v) => Math.sign(v) * 62 * Math.pow(Math.min(50, Math.abs(v)) / 50, 0.55);   // 가운데를 넓게
   const pt = (deg, r) => [cx + r * Math.sin(deg * Math.PI / 180), cy - r * Math.cos(deg * Math.PI / 180)];
   const arc = (d0, d1, r) => { const [x0, y0] = pt(d0, r), [x1, y1] = pt(d1, r); return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`; };
   const needleRef = useRef(null);
-  const [c0] = useSpring([c], ([v]) => { const el = needleRef.current; if (!el) return; const [x, y] = pt(ang(v), R - 4); el.setAttribute('x2', x); el.setAttribute('y2', y); }, { k: 0.2 });
-  const [nx, ny] = pt(ang(c0), R - 4);
+  const [c0] = useSpring([c], ([v]) => { const el = needleRef.current; if (!el) return; const [x, y] = pt(ang(v), R - 3); el.setAttribute('x2', x); el.setAttribute('y2', y); }, { k: 0.2 });
+  const [nx, ny] = pt(ang(c0), R - 3);
+  const ticks = [];
+  for (let v = -50; v <= 50; v++) {
+    const a = Math.abs(v);
+    if (a > 10 && v % 5) continue;                    // ±10 안은 1센트마다, 밖은 5센트마다
+    const big = v % 10 === 0 || a === 5 || a === 25, len = v === 0 ? 16 : big ? 11 : a <= 10 ? 5 : 7;
+    const [x0, y0] = pt(ang(v), R), [x1, y1] = pt(ang(v), R - len);
+    ticks.push(<line key={v} x1={x0} y1={y0} x2={x1} y2={y1} stroke={tick} strokeWidth={big ? 1.5 : 0.7} opacity={big ? 0.95 : 0.6}/>);
+  }
+  const fs = compact ? 0.62 : 1;
   return (
-    <div className={`w-full rounded-2xl px-3 ${compact ? 'py-1' : 'py-2'} flex items-center gap-2.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      {/* 마이크 상태 + 음이름 */}
-      <div className={`flex flex-col items-start shrink-0 ${compact ? 'w-12' : 'w-[68px]'}`}>
-        <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest"
+    <div className={`w-full rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+      <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[70px]' : 'h-[136px]'}`} style={{ background: face, boxShadow: 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full">
+          <path d={arc(ang(-tolerance), ang(tolerance), R - 7)} fill="none" stroke={ok ? 'rgba(74,252,157,.8)' : 'rgba(74,180,110,.38)'} strokeWidth="11"/>
+          {ticks}
+          {[-50, -20, -10, -5, 5, 10, 20, 50].map(v => { const [x, y] = pt(ang(v), R - 21); return <text key={v} x={x} y={y + 3} textAnchor="middle" fontSize={Math.abs(v) <= 10 ? 8 : 7} fontWeight="700" fill={tick} fontFamily="Georgia,serif">{v > 0 ? `+${v}` : v}</text>; })}
+          <text x={pt(0, R - 23)[0]} y={pt(0, R - 23)[1] + 3} textAnchor="middle" fontSize="10" fontWeight="800" fill={tick} fontFamily="Georgia,serif">0</text>
+          <line ref={needleRef} x1={cx} y1={cy} x2={nx} y2={ny} stroke={needle} strokeWidth="2.6" strokeLinecap="round" opacity={live ? 1 : 0.4}
+            style={{ filter: live && !vintage ? `drop-shadow(0 0 3px ${needle})` : 'none' }}/>
+          <circle cx={cx} cy={H} r="8" fill={tick}/>
+        </svg>
+        {/* 왼쪽: 마이크 · 음이름 / 오른쪽: 센트 — 계기판 아래 모서리 */}
+        <button onClick={isStarted ? undefined : ensureMic} className="absolute left-2.5 top-2 flex items-center gap-1 text-[9px] font-black tracking-widest"
           style={{ color: isStarted ? (vintage ? skin.live : '#4afc9d') : '#ef4444' }}>
           <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>
           {isStarted ? 'LIVE' : 'OFF'}
         </button>
-        <span className="font-black leading-none mt-0.5" style={{ color: live ? ink : (vintage ? skin.unit : 'var(--ink-off)'), fontSize: compact ? 24 : 36, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-          {live ? currentNote.name : '—'}<span className="text-[18px]">{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
-          <span className="text-[13px] opacity-60">{live ? currentNote.octave : ''}</span>
+        <span className="absolute left-2.5 bottom-1.5 font-black leading-none" style={{ color: live ? ink : tick, fontSize: 40 * fs, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+          {live ? currentNote.name : '—'}<span style={{ fontSize: 20 * fs }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
+          <span style={{ fontSize: 14 * fs, opacity: 0.6 }}>{live ? currentNote.octave : ''}</span>
         </span>
+        <span className="absolute right-2.5 bottom-1.5 font-black leading-none text-right" style={{ color: cc, fontSize: 32 * fs, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
+          {live ? (ok ? 'OK' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}{live && !ok && <span style={{ fontSize: 12 * fs }}>¢</span>}
+        </span>
+        <span className="absolute right-3 top-2 text-[11px] font-black" style={{ color: HI }}>♯</span>
+        <span className="absolute right-7 top-2 text-[11px] font-black" style={{ color: LO }}>♭</span>
       </div>
-      {/* 바늘 계기판 */}
-      <div className="flex-1 min-w-0 rounded-xl overflow-hidden" style={{ background: face, boxShadow: 'inset 0 2px 6px rgba(0,0,0,.45)' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full block" style={{ height: compact ? 50 : 88 }}>
-          <path d={arc(ang(-tolerance), ang(tolerance), R - 6)} fill="none" stroke={ok ? 'rgba(74,252,157,.75)' : 'rgba(74,180,110,.35)'} strokeWidth="9"/>
-          {Array.from({ length: 21 }, (_, k) => {
-            const v = -50 + k * 5, big = v % 25 === 0;
-            const [x0, y0] = pt(ang(v), R), [x1, y1] = pt(ang(v), R - (big ? 11 : 6));
-            return <line key={k} x1={x0} y1={y0} x2={x1} y2={y1} stroke={tick} strokeWidth={big ? 1.6 : 0.8} opacity={big ? 0.95 : 0.6}/>;
-          })}
-          {[-50, -25, 25, 50].map(v => { const [x, y] = pt(ang(v), R - 19); return <text key={v} x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="700" fill={tick} fontFamily="Georgia,serif">{v > 0 ? `+${v}` : v}</text>; })}
-          <text x={pt(0, R - 19)[0]} y={pt(0, R - 19)[1] + 3} textAnchor="middle" fontSize="9" fontWeight="800" fill={tick} fontFamily="Georgia,serif">0</text>
-          <text x="4" y={H - 4} fontSize="11" fontWeight="800" fill={LO}>♭</text>
-          <text x={W - 11} y={H - 4} fontSize="11" fontWeight="800" fill={HI}>♯</text>
-          <line ref={needleRef} x1={cx} y1={cy} x2={nx} y2={ny} stroke={needle} strokeWidth="2.2" strokeLinecap="round" opacity={live ? 1 : 0.4}
-            style={{ filter: live && !vintage ? `drop-shadow(0 0 3px ${needle})` : 'none' }}/>
-          <circle cx={cx} cy={H} r="7" fill={tick}/>
-        </svg>
-      </div>
-      {/* 센트 */}
-      <span className="w-14 shrink-0 text-right text-2xl font-black" style={{ color: cc, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
-        {live ? (ok ? 'OK' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}{live && !ok && <span className="text-[9px]">¢</span>}
+    </div>
+  );
+};
+
+// 큰 숫자 음정 표시: 음이름 · 센트 · 방향 (메인 음정 표시기 '큰 숫자')
+const PitchDigits = ({ tuner, compact, swapColors }) => {
+  const HI = swapColors ? '#3b82f6' : '#ef4444', LO = swapColors ? '#ef4444' : '#3b82f6';
+  const { isStarted, pitch, cents, tolerance, currentNote, ensureMic } = tuner;
+  const vintage = useVintage();
+  const skin = useSkin();
+  const live = isStarted && pitch > 0, ok = live && Math.abs(cents) <= tolerance;
+  const cc = !live ? (vintage ? skin.unit : 'var(--ink-off)') : ok ? (vintage ? skin.good : '#4afc9d') : cents > 0 ? HI : LO;
+  const ink = vintage ? skin.label : 'var(--ink)';
+  return (
+    <div className={`w-full rounded-2xl px-4 ${compact ? 'py-1.5' : 'py-3'} flex items-center gap-3 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+      <button onClick={isStarted ? undefined : ensureMic} className="flex items-center gap-1 text-[9px] font-black tracking-widest shrink-0"
+        style={{ color: isStarted ? (vintage ? skin.live : '#4afc9d') : '#ef4444' }}>
+        <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>{isStarted ? 'LIVE' : 'OFF'}
+      </button>
+      <span className="font-black leading-none" style={{ color: live ? ink : cc, fontSize: compact ? 30 : 52, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        {live ? currentNote.name : '—'}<span style={{ fontSize: compact ? 16 : 26 }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
+        <span style={{ fontSize: compact ? 12 : 18, opacity: 0.6 }}>{live ? currentNote.octave : ''}</span>
+      </span>
+      <span className="ml-auto flex flex-col items-end leading-none">
+        <span className="font-black" style={{ color: cc, fontSize: compact ? 28 : 48, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
+          {live ? (ok ? '✓' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}{live && !ok && <span style={{ fontSize: compact ? 12 : 18 }}>¢</span>}
+        </span>
+        {!compact && <span className="text-[11px] font-black mt-1" style={{ color: cc }}>{!live ? '' : ok ? '맞음' : cents > 0 ? '높음 → 내리기' : '낮음 → 올리기'}</span>}
       </span>
     </div>
   );
+};
+
+// 메인 음정 표시기: 설정(세부 꾸미기 → 음정 표시기)에서 고른 모양으로 — 메트로놈·지판·드론 탭, 1번 탭 'meter' 블록 공용
+const MainPitchMeter = ({ tuner, compact, swapColors }) => {
+  const { meter } = useParts();
+  if (meter === 'fine') return <FineGauge tuner={tuner} swapColors={swapColors}/>;
+  if (meter === 'digits') return <PitchDigits tuner={tuner} compact={compact} swapColors={swapColors}/>;
+  return <PitchStrip tuner={tuner} compact={compact} swapColors={swapColors}/>;
 };
 
 // 다이얼 칸: 남는 공간에 맞춰 정사각형 크기 계산 (배치에서 숨기면 통째로 빠짐)
@@ -569,7 +607,7 @@ const Metronome = ({ metro, tuner }) => {
 
       {visibleBlocks('t2', layout).map(b => (
         <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
-          {b.id === 'pitch' && tuner && <PitchStrip tuner={tuner}/>}
+          {b.id === 'pitch' && tuner && <MainPitchMeter tuner={tuner}/>}
           {b.id === 'beats' && (
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">
         <div className={`grid justify-center justify-items-center w-full ${isDense ? 'gap-x-1.5 gap-y-2' : 'gap-x-3'}`}
