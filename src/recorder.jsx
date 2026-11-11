@@ -495,38 +495,57 @@ const RecordTab = ({ recorder, tuner, metro }) => {
         <div className="flex-1 min-w-0 flex flex-col gap-1">
           <span className="font-mono font-black text-4xl leading-none" style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
           <span className="text-[11px] font-bold text-gray-500 leading-snug">
-            {rec ? '녹음 중 · 다른 탭으로 가도 계속 녹음' : recorder.count ? `${recorder.count.left}초 뒤 녹음 시작 (누르면 취소)` : `누르면 녹음 시작${S.recDelay ? ` · ${S.recDelay}초 뒤` : ''}`}
+            {rec ? (metro.isPlayingMetro ? `녹음 중 · 메트로놈 ${metro.bpm} BPM에 맞춰 깜빡임` : '녹음 중 · 다른 탭으로 가도 계속 녹음') : recorder.count ? `${recorder.count.left}초 뒤 녹음 시작 (누르면 취소)` : `누르면 녹음 시작${S.recDelay ? ` · ${S.recDelay}초 뒤` : ''}`}
           </span>
         </div>
+        {(() => {
+          // 녹음 + 메트로놈이 같이 돌면 정지 버튼이 박에 맞춰 뛰고 빛남 (첫 박은 더 크게) — 크기는 transform만
+          const beat = rec && metro.isPlayingMetro && metro.visualFlash === 'main' && metro.beatSounds[metro.currentBeat] !== 0;
+          const down = beat && metro.currentBeat === 0;
+          return (
         <button onClick={recorder.toggle} disabled={!supported} aria-label={rec ? '녹음 정지' : recorder.count ? '녹음 대기 취소' : '녹음 시작'}
-          className="w-20 h-20 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0"
-          style={{ background: rec ? 'rgba(239,68,68,.12)' : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)', border: `4px solid ${rec ? '#ef4444' : 'rgba(255,255,255,.15)'}`,
-            boxShadow: rec ? '0 0 26px rgba(239,68,68,.5)' : '0 8px 24px rgba(0,0,0,.4)' }}>
+          className="w-20 h-20 rounded-full flex items-center justify-center active:scale-95 shrink-0"
+          style={{ background: rec ? (beat ? 'rgba(239,68,68,.32)' : 'rgba(239,68,68,.12)') : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)',
+            border: `4px solid ${rec ? (down ? '#fff' : '#ef4444') : 'rgba(255,255,255,.15)'}`,
+            transform: `scale(${down ? 1.1 : beat ? 1.05 : 1})`, transition: beat ? 'transform 40ms, box-shadow 40ms' : 'transform 160ms ease-out, box-shadow 160ms, background 160ms',
+            boxShadow: rec ? `0 0 ${down ? 44 : beat ? 34 : 22}px rgba(239,68,68,${beat ? 0.85 : 0.45})` : '0 8px 24px rgba(0,0,0,.4)' }}>
           {rec ? <Square size={30} fill="#ef4444" color="#ef4444"/>
             : recorder.count ? <span className="text-4xl font-black text-white font-mono">{recorder.count.left}</span>
             : <span className="w-8 h-8 rounded-full bg-white"/>}
         </button>
+          );
+        })()}
       </div>
     </div>
   );
 };
 
-// 녹음 지연 숫자: 어느 탭에 있든 화면 가운데 크게 (누르면 지나감 — 취소는 녹음 버튼)
+// 녹음 지연 숫자: 어느 탭에 있든 화면 가운데 크게 — 디자인 바탕에 맞춘 반투명 유리
 const RecDelayOverlay = ({ recorder }) => {
+  const theme = useTheme(), skin = useSkin();
   const c = recorder.count;
   if (!c) return null;
   const frac = c.left / c.total;
+  // 바탕: 다크 = 어두운 유리, 라이트 = 밝은 유리, 우드 = 디자인 다이얼 바탕색을 반투명으로
+  const look = theme === 'light'
+    ? { bg: 'rgba(255,255,255,.55)', border: 'rgba(0,0,0,.08)', ink: '#18181b', sub: '#b91c1c', track: 'rgba(0,0,0,.08)', ring: '#dc2626', font: undefined }
+    : theme === 'vintage'
+    ? { bg: (skin.dial.outer.length === 7 ? skin.dial.outer + '99' : 'rgba(40,24,10,.6)'), border: skin.dial.ring, ink: skin.dial.text === '#2a1a0e' ? '#f4e3b5' : skin.dial.text, sub: skin.dial.on, track: 'rgba(255,255,255,.12)', ring: skin.dial.needle || skin.dial.on, font: 'Georgia,serif' }
+    : { bg: 'rgba(20,20,20,.3)', border: 'rgba(255,255,255,.16)', ink: '#ffffff', sub: '#f87171', track: 'rgba(255,255,255,.1)', ring: '#ef4444', font: undefined };
   return (
     <div className="absolute inset-0 z-[65] flex items-center justify-center pointer-events-none">
-      <div className="relative w-56 h-56 rounded-full flex flex-col items-center justify-center tab-enter"
-        style={{ background: 'rgba(0,0,0,.72)', boxShadow: '0 0 60px rgba(239,68,68,.35)', backdropFilter: 'blur(4px)' }}>
+      <div className="relative w-48 h-48 rounded-full flex flex-col items-center justify-center tab-enter"
+        style={{ background: look.bg, border: `1px solid ${look.border}`, backdropFilter: 'blur(14px) saturate(140%)', WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+          boxShadow: '0 20px 50px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.18)' }}>
         <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full -rotate-90">
-          <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="4"/>
-          <circle cx="50" cy="50" r="46" fill="none" stroke="#ef4444" strokeWidth="4" strokeLinecap="round"
-            strokeDasharray={`${289 * frac} 289`} style={{ transition: 'stroke-dasharray 1s linear' }}/>
+          <circle cx="50" cy="50" r="47" fill="none" stroke={look.track} strokeWidth="2"/>
+          <circle cx="50" cy="50" r="47" fill="none" stroke={look.ring} strokeWidth="2.5" strokeLinecap="round"
+            strokeDasharray={`${295 * frac} 295`} style={{ transition: 'stroke-dasharray 1s linear' }}/>
         </svg>
-        <span key={c.left} className="font-black font-mono text-white leading-none tab-enter" style={{ fontSize: 110 }}>{c.left}</span>
-        <span className="text-xs font-black tracking-widest mt-1" style={{ color: '#ef4444' }}>● 녹음 대기</span>
+        <span key={c.left} className="font-black leading-none tab-enter" style={{ fontSize: 88, color: look.ink, fontFamily: look.font, letterSpacing: '-0.02em', textShadow: '0 2px 12px rgba(0,0,0,.25)' }}>{c.left}</span>
+        <span className="text-[10px] font-black tracking-[0.25em] mt-1.5 flex items-center gap-1" style={{ color: look.sub }}>
+          <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: look.ring }}/>녹음 대기
+        </span>
       </div>
     </div>
   );
