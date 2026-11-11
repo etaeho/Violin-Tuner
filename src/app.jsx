@@ -113,6 +113,8 @@ const App = () => {
 
       {settingsTab && <div className="absolute inset-0 z-[60]"><SettingsSheet tuner={tuner} metro={metro} layoutTab={settingsTab} onClose={() => setSettingsTab(null)}/></div>}
 
+      <RecDelayOverlay recorder={recorder}/>
+
       {/* 앱 시작 때 자동 소음 측정 */}
       {tuner.autoCal && !toast && (
         <div className="absolute inset-x-0 z-[70] flex justify-center pointer-events-none"

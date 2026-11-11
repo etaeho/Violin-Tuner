@@ -9,7 +9,7 @@
 //  - 녹음과 메트로놈은 따로 동작 (메트로놈을 켜도 녹음은 시작되지 않음)
 //  - 녹음하며 음정(튜너 확정 음, 30ms마다)·소리 시작·메트로놈 박을 같이 저장 → analyzeRec로 음정 %·박자 오차
 //  - 재생기(RecPlayer): 음정 그래프 · 전체 막대 · 0.5/0.75/1배(음높이 유지) · A-B 구간 반복
-//  - 카운트인(recCountIn): 녹음 전 N마디 세기 (메트로놈 꺼져 있으면 metro.playClick으로 딸깍)
+//  - 녹음 지연(recDelay): 녹음 버튼 누르고 0·3·5·10초 뒤 시작, 어느 탭이든 화면 가운데 큰 숫자
 //  - 저장: 폰 안 IndexedDB('vt-rec'). 내보내기 = 안드로이드 VTNative.saveAudio(이름, 형식, base64) → 저장 위치 고르기
 // ==========================================
 
@@ -73,7 +73,7 @@ const useRecorder = (tuner, metro, notify) => {
   const S = tuner.settings;
   const supported = typeof window.MediaRecorder !== 'undefined';
   const [rec, setRec] = useState(null);              // 녹음 중: { start, withClicks }
-  const [count, setCount] = useState(null);          // 카운트인 중: { left, total }
+  const [count, setCount] = useState(null);          // 녹음 지연 중: { left(남은 초), total }
   const [, setTick] = useState(0);
   const [items, setItems] = useState([]);
   const [player, setPlayer] = useState(null);        // { id, pos, dur, paused, rate, A, B }
@@ -180,22 +180,19 @@ const useRecorder = (tuner, metro, notify) => {
   };
   const stop = () => { if (mrRef.current && mrRef.current.state !== 'inactive') { mrRef.current.stop(); haptic(20); } };
 
-  // ── 카운트인: 녹음 전에 N마디 세기 (메트로놈이 꺼져 있으면 딸깍도 냄) ──
+  // ── 녹음 지연: 녹음 버튼을 누르고 N초 뒤 시작 (화면 가운데 큰 숫자, app.jsx RecDelayOverlay) ──
   const cancelCount = () => { const c = countRef.current; if (c) c.timers.forEach(clearTimeout); countRef.current = null; setCount(null); };
-  const startWithCountIn = () => {
-    const bars = tuner.settings.recCountIn || 0;
-    if (!bars) return start();
-    const m = metroRef.current, beats = bars * (m.timeSig?.num || 4), ms = 60000 / m.bpm * (4 / (m.timeSig?.den || 4));
-    const ctx = m.getMetroCtx(), t0 = ctx.currentTime + 0.1, timers = [];
-    for (let i = 0; i < beats; i++) {
-      if (!m.isPlayingMetro) m.playClick(t0 + i * ms / 1000, i % (m.timeSig?.num || 4) === 0);
-      timers.push(setTimeout(() => { setCount({ left: beats - i, total: beats }); haptic(i % (m.timeSig?.num || 4) === 0 ? 25 : 10); }, 100 + i * ms));
-    }
-    timers.push(setTimeout(() => { countRef.current = null; setCount(null); start(); }, 100 + beats * ms - 30));
+  const startWithDelay = () => {
+    const sec = tuner.settings.recDelay || 0;
+    if (!sec) return start();
+    const timers = [];
+    for (let i = 1; i < sec; i++) timers.push(setTimeout(() => { setCount({ left: sec - i, total: sec }); haptic(10); }, i * 1000));
+    timers.push(setTimeout(() => { countRef.current = null; setCount(null); start(); }, sec * 1000));
     countRef.current = { timers };
-    setCount({ left: beats, total: beats });
+    setCount({ left: sec, total: sec });
+    haptic(10);
   };
-  const toggle = () => (mrRef.current ? stop() : countRef.current ? cancelCount() : startWithCountIn());
+  const toggle = () => (mrRef.current ? stop() : countRef.current ? cancelCount() : startWithDelay());
 
   // 녹음 중 메트로놈을 켰다면 BPM 기록
   useEffect(() => { if (rec && metro.isPlayingMetro && metaRef.current && !metaRef.current.bpm) metaRef.current.bpm = metro.bpm; }, [rec, metro.isPlayingMetro]);
@@ -292,14 +289,14 @@ const RecSettings = ({ S, updateSettings }) => (
       title="메트로놈 녹음" desc="메트로놈을 켜고 녹음하면 박 소리를 박자에 딱 맞춰 깨끗하게 넣습니다"/>
     <div className="flex items-center justify-between gap-2">
       <div className="flex flex-col">
-        <span className="text-xs font-bold text-gray-300">카운트인</span>
-        <span className="text-[10px] text-gray-600 leading-snug">녹음 전에 딸깍으로 박을 세고 시작 (메트로놈 탭 빠르기 · 메트로놈이 꺼져 있어도 셈)</span>
+        <span className="text-xs font-bold text-gray-300">녹음 지연</span>
+        <span className="text-[10px] text-gray-600 leading-snug">녹음을 누르고 이 시간 뒤에 시작 (악기 잡을 시간)</span>
       </div>
       <div className="flex gap-1 p-1 rounded-full t-chip shrink-0">
-        {[[0, '없음'], [1, '1마디'], [2, '2마디']].map(([v, name]) => (
-          <button key={v} onClick={() => { updateSettings({ recCountIn: v }); haptic(6); }}
-            className="px-2.5 py-1 rounded-full text-[11px] font-black"
-            style={(S.recCountIn || 0) === v ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{name}</button>
+        {[[0, '없음'], [3, '3초'], [5, '5초'], [10, '10초']].map(([v, name]) => (
+          <button key={v} onClick={() => { updateSettings({ recDelay: v }); haptic(6); }}
+            className="px-2 py-1 rounded-full text-[11px] font-black"
+            style={(S.recDelay || 0) === v ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{name}</button>
         ))}
       </div>
     </div>
@@ -498,10 +495,10 @@ const RecordTab = ({ recorder, tuner, metro }) => {
         <div className="flex-1 min-w-0 flex flex-col gap-1">
           <span className="font-mono font-black text-4xl leading-none" style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
           <span className="text-[11px] font-bold text-gray-500 leading-snug">
-            {rec ? '녹음 중 · 다른 탭으로 가도 계속 녹음' : recorder.count ? `카운트인… ${metro.bpm} BPM (누르면 취소)` : `누르면 녹음 시작${S.recCountIn ? ` · ${S.recCountIn}마디 세고 시작` : ''}`}
+            {rec ? '녹음 중 · 다른 탭으로 가도 계속 녹음' : recorder.count ? `${recorder.count.left}초 뒤 녹음 시작 (누르면 취소)` : `누르면 녹음 시작${S.recDelay ? ` · ${S.recDelay}초 뒤` : ''}`}
           </span>
         </div>
-        <button onClick={recorder.toggle} disabled={!supported} aria-label={rec ? '녹음 정지' : recorder.count ? '카운트인 취소' : '녹음 시작'}
+        <button onClick={recorder.toggle} disabled={!supported} aria-label={rec ? '녹음 정지' : recorder.count ? '녹음 대기 취소' : '녹음 시작'}
           className="w-20 h-20 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0"
           style={{ background: rec ? 'rgba(239,68,68,.12)' : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)', border: `4px solid ${rec ? '#ef4444' : 'rgba(255,255,255,.15)'}`,
             boxShadow: rec ? '0 0 26px rgba(239,68,68,.5)' : '0 8px 24px rgba(0,0,0,.4)' }}>
@@ -509,6 +506,27 @@ const RecordTab = ({ recorder, tuner, metro }) => {
             : recorder.count ? <span className="text-4xl font-black text-white font-mono">{recorder.count.left}</span>
             : <span className="w-8 h-8 rounded-full bg-white"/>}
         </button>
+      </div>
+    </div>
+  );
+};
+
+// 녹음 지연 숫자: 어느 탭에 있든 화면 가운데 크게 (누르면 지나감 — 취소는 녹음 버튼)
+const RecDelayOverlay = ({ recorder }) => {
+  const c = recorder.count;
+  if (!c) return null;
+  const frac = c.left / c.total;
+  return (
+    <div className="absolute inset-0 z-[65] flex items-center justify-center pointer-events-none">
+      <div className="relative w-56 h-56 rounded-full flex flex-col items-center justify-center tab-enter"
+        style={{ background: 'rgba(0,0,0,.72)', boxShadow: '0 0 60px rgba(239,68,68,.35)', backdropFilter: 'blur(4px)' }}>
+        <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full -rotate-90">
+          <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="4"/>
+          <circle cx="50" cy="50" r="46" fill="none" stroke="#ef4444" strokeWidth="4" strokeLinecap="round"
+            strokeDasharray={`${289 * frac} 289`} style={{ transition: 'stroke-dasharray 1s linear' }}/>
+        </svg>
+        <span key={c.left} className="font-black font-mono text-white leading-none tab-enter" style={{ fontSize: 110 }}>{c.left}</span>
+        <span className="text-xs font-black tracking-widest mt-1" style={{ color: '#ef4444' }}>● 녹음 대기</span>
       </div>
     </div>
   );

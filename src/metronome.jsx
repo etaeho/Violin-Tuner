@@ -218,7 +218,7 @@ const useMetronomeLogic = () => {
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
     handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome,
     getMetroCtx: () => { initMetroAudioContext(); return metroAudioCtxRef.current; },   // 녹음 믹스용
-    // 녹음 카운트인용 딸깍 한 번 (메트로놈 재생과 별개). when = AudioContext 시각
+    // 딸깍 한 번 (메트로놈 재생과 별개, 지금은 안 씀 — 예전 녹음 카운트인용). when = AudioContext 시각
     playClick: (when, strong) => {
       initMetroAudioContext();
       const ctx = metroAudioCtxRef.current, osc = ctx.createOscillator(), g = ctx.createGain(), t = when ?? ctx.currentTime + 0.02;

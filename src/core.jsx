@@ -235,7 +235,7 @@ const DEFAULT_SETTINGS = {
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
-  recCountIn: 0,     // 녹음 전 카운트인 마디 수 (0·1·2)
+  recDelay: 0,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10)
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
   layoutRev: 8,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
