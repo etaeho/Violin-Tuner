@@ -205,15 +205,21 @@ const useRecorder = (tuner, metro, notify) => {
   }, []);
 
   // ── 재생기: 일시정지 · 건너뛰기 · 속도(음높이 유지) · A-B 구간 반복 ──
-  const closePlayer = () => {
+  // 녹음 재생 중엔 메트로놈을 잠시 멈추고, 재생이 끝나거나 재생기를 닫으면 다시 켬 (내가 멈춘 경우만)
+  const metroHeldRef = useRef(false);
+  const holdMetro = () => { const m = metroRef.current; if (m.isPlayingMetro) { m.toggleMetronome(); metroHeldRef.current = true; } };
+  const releaseMetro = () => { const m = metroRef.current; if (metroHeldRef.current) { metroHeldRef.current = false; if (!m.isPlayingMetro) m.toggleMetronome(); } };
+  const closePlayer = (keepHold = false) => {
     const r = audioRef.current;
     if (r) { clearInterval(r.iv); r.a.pause(); URL.revokeObjectURL(r.url); }
     audioRef.current = null; abRef.current = { A: null, B: null }; setPlayer(null);
     tuner.setListenGuard(false);
+    if (keepHold !== true) releaseMetro();
   };
   const open = (item) => {
     if (player?.id === item.id) { togglePause(); return; }
-    closePlayer();
+    closePlayer(true);          // 다른 녹음으로 바로 넘어가면 메트로놈은 계속 멈춘 채로
+    holdMetro();
     const url = URL.createObjectURL(item.blob), a = new Audio(url);
     a.preservesPitch = true; a.mozPreservesPitch = true; a.webkitPreservesPitch = true;
     a.onended = () => {
@@ -221,6 +227,7 @@ const useRecorder = (tuner, metro, notify) => {
       if (A !== null && B !== null) { a.currentTime = A / 1000; a.play().catch(() => {}); return; }
       tuner.setListenGuard(false);
       setPlayer(p => p && { ...p, paused: true, pos: 0 });
+      releaseMetro();          // 끝까지 들었으면 메트로놈 다시 켬
     };
     const iv = setInterval(() => {
       const pos = a.currentTime * 1000, { A, B } = abRef.current;
@@ -235,7 +242,7 @@ const useRecorder = (tuner, metro, notify) => {
   };
   const togglePause = () => {
     const r = audioRef.current; if (!r) return;
-    if (r.a.paused) { r.a.play().catch(() => {}); tuner.setListenGuard(true); setPlayer(p => p && { ...p, paused: false }); }
+    if (r.a.paused) { holdMetro(); r.a.play().catch(() => {}); tuner.setListenGuard(true); setPlayer(p => p && { ...p, paused: false }); }
     else { r.a.pause(); tuner.setListenGuard(false); setPlayer(p => p && { ...p, paused: true }); }
     haptic(8);
   };
