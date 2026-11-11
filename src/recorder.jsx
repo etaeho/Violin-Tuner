@@ -173,7 +173,7 @@ const RecToggle = ({ on, onClick, title, desc }) => (
 const RecSettings = ({ S, updateSettings }) => (
   <div className="flex flex-col gap-3">
     <RecToggle on={S.recClicks} onClick={() => updateSettings({ recClicks: !S.recClicks })}
-      title="메트로놈 소리도 녹음" desc="녹음 중에 메트로놈이 울리고 있으면 딸깍 소리를 깨끗하게 섞어 넣음 (스피커 소리도 마이크에 들어갈 수 있어 이어폰 추천)"/>
+      title="메트로놈 소리 직접 넣기 (이어폰용)" desc="이어폰으로 메트로놈을 들을 때만 켜세요. 스피커로 들으면 마이크에도 들어가서 딸깍이 두 번씩 녹음됩니다. 꺼도 스피커 소리는 마이크로 녹음돼요."/>
     <div className="flex items-center justify-between">
       <span className="text-xs font-bold text-gray-300">음질</span>
       <div className="flex gap-1 p-1 rounded-full t-chip">
