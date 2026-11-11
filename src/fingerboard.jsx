@@ -2,11 +2,13 @@
 // fingerboard — 지판 탭 (v2 디자인)
 // (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 //  - 조표별 음 표시, 지금 연주하는 음, 누르면 기준음, 박마다 테두리 빛남
-//  - 히트맵: 최근 30일 음별 평균 센트 (자주 높으면 빨강 ▼ 내리기, 낮으면 파랑 ▲ 올리기 — 화살표 = 고칠 방향) — 연습 기록(practice.jsx)의 음별 정확도 사용
+//  - 히트맵: 최근 30일 음별 평균 센트 (자주 높으면 파랑 ▼ 내리기, 낮으면 빨강 ▲ 올리기 — 화살표 = 고칠 방향) — 연습 기록(practice.jsx)의 음별 정확도 사용
 //  - 스케일 연습: 다음 음 안내 → 그 음을 0.15초 이상 연주하면 센트 기록하고 다음으로
 // ==========================================
 
-const FB_POSITIONS = 21;     // 개방현 + 20칸 (5포지션 4번 손가락 + 여유, E현은 C7까지)
+const FB_POSITIONS = 30;     // 개방현 + 29칸 = 최상단 포지션까지 (E현 A7, 약 3.5kHz). 위로 갈수록 칸이 좁아짐(실제 지판처럼)
+// 색: 높음 = 파랑(▼ 내리기), 낮음 = 빨강(▲ 올리기)
+const FB_HIGH = '#3b82f6', FB_LOW = '#ef4444';
 const FB_CHROMATIC = [['C','B#'],['C#','Db'],['D'],['D#','Eb'],['E','Fb'],['F','E#'],['F#','Gb'],['G'],['G#','Ab'],['A'],['A#','Bb'],['B','Cb']];
 const FB_KEYS = [
   { id: 'C',  label: 'C장조 (0)',   tonic: 0,  notes: ['C','D','E','F','G','A','B'] },
@@ -130,7 +132,7 @@ const Fingerboard = ({ tuner, metro, log }) => {
       </div>
 
       {/* 지금 음정: 높은지 낮은지 실시간 */}
-      <PitchStrip tuner={tuner} compact/>
+      <PitchStrip tuner={tuner} compact swapColors/>
 
       {/* 스케일 연습 안내 */}
       {scale.active && (
@@ -161,7 +163,7 @@ const Fingerboard = ({ tuner, metro, log }) => {
       )}
 
       {/* 지판 */}
-      <div className="w-full flex-1 min-h-0 rounded-2xl t-board relative px-1.5 py-2 flex flex-col transition-shadow duration-75"
+      <div className="w-full flex-1 min-h-0 rounded-2xl t-board relative px-1.5 py-1.5 flex flex-col transition-shadow duration-75"
         style={{ boxShadow: flashCol ? `inset 0 0 0 ${downbeat ? 3 : 2}px ${flashCol}, 0 0 ${(downbeat ? 24 : 14) * pal.glow + 4}px ${flashCol}` : 'none' }}>
         <div className="flex mb-1 shrink-0">
           {strings.map(s => <div key={s.name} className="flex-1 flex justify-center">
@@ -186,31 +188,31 @@ const Fingerboard = ({ tuner, metro, log }) => {
                 let style = { background: 'var(--chip-bg)', borderColor: 'var(--chip-border)', color: 'var(--ink)' };
                 let extra = '';
                 if (isPlay) { style = { background: '#8b5a2b', borderColor: '#e9c46a', color: '#fff', boxShadow: '0 0 16px rgba(233,196,106,.5)' }; extra = 'scale-125 z-30'; }
-                else if (isDet) { const c = detOk ? '#4afc9d' : tuner.cents > 0 ? '#ef4444' : '#3b82f6'; style = { background: c, borderColor: c, color: detOk ? '#000' : '#fff', boxShadow: `0 0 16px ${c}` }; extra = 'scale-125 z-20'; }
+                else if (isDet) { const c = detOk ? '#4afc9d' : tuner.cents > 0 ? FB_HIGH : FB_LOW; style = { background: c, borderColor: c, color: detOk ? '#000' : '#fff', boxShadow: `0 0 16px ${c}` }; extra = 'scale-125 z-20'; }
                 else if (isTarget) { style = { background: 'transparent', borderColor: 'var(--accent)', color: 'var(--accent)' }; extra = 'scale-110 animate-pulse'; }
                 else if (mean !== null) {
-                  const k = Math.min(1, Math.abs(mean) / 25), rgb = mean > 0 ? '239,68,68' : '59,130,246';
+                  const k = Math.min(1, Math.abs(mean) / 25), rgb = mean > 0 ? '59,130,246' : '239,68,68';
                   style = { background: `rgba(${rgb},${0.18 + k * 0.6})`, borderColor: `rgb(${rgb})`, color: 'var(--ink)' };
                 }
-                const line = pos === 12 ? 'border-t-2 border-[#4afc9d]/40' : pos === 5 || pos === 7 || pos === 17 ? 'border-t border-gray-700/60' : '';
+                const line = pos === 12 || pos === 24 ? 'border-t-2 border-[#4afc9d]/40' : pos === 5 || pos === 7 || pos === 17 || pos === 19 ? 'border-t border-gray-700/60' : '';
                 return (
-                  <div key={pos} className={`flex-1 flex items-center justify-center relative ${line}`}>
+                  <div key={pos} className={`flex items-center justify-center relative min-h-0 ${line}`} style={{ flex: `${1.3 - pos * 0.025} 1 0` }}>
                     {spelled || isDet || isPlay || isTarget ? (
                       <button onClick={() => tuner.toggleTone(label, semi)}
-                        className={`min-w-[30px] px-1.5 py-[1px] border text-[11px] font-black leading-tight transition-all duration-100 ${pos === 0 ? 'rounded-md' : 'rounded-full'} ${extra}`}
+                        className={`min-w-[24px] px-1 border font-black leading-none transition-all duration-100 ${pos === 0 ? 'rounded-md text-[10px] py-[2px]' : 'rounded-full text-[9px] py-[1px]'} ${extra}`}
                         style={{ ...style, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
                         {name}{mean !== null && !isDet && !isPlay && <span className="text-[8px] ml-0.5">{mean > 0 ? '▼' : '▲'}</span>}
                       </button>
                     ) : null}
                     {/* 지금 연주 중인 음: 화살표 = 고칠 방향 (높으면 ▼ 내리기, 낮으면 ▲ 올리기) + 센트 */}
                     {isDet && (
-                      <span className="absolute z-30 left-1/2 ml-6 px-1 rounded text-[10px] font-black font-mono whitespace-nowrap pointer-events-none"
-                        style={{ background: 'rgba(0,0,0,.75)', color: detOk ? '#4afc9d' : tuner.cents > 0 ? '#ff6b6b' : '#60a5fa' }}>
+                      <span className="absolute z-30 left-1/2 ml-5 px-1 rounded text-[10px] font-black font-mono whitespace-nowrap pointer-events-none"
+                        style={{ background: 'rgba(0,0,0,.8)', color: detOk ? '#4afc9d' : tuner.cents > 0 ? '#60a5fa' : '#ff6b6b' }}>
                         {detOk ? '✓' : tuner.cents > 0 ? '▼' : '▲'}{tuner.cents > 0 ? '+' : ''}{tuner.cents}
                       </span>
                     )}
                     {spelled || isDet || isPlay || isTarget ? null : (
-                      <button onClick={() => tuner.toggleTone(label, semi)} className="w-2 h-2 rounded-full" style={{ background: 'var(--chip-border)' }} aria-label={label}/>
+                      <button onClick={() => tuner.toggleTone(label, semi)} className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--chip-border)' }} aria-label={label}/>
                     )}
                   </div>
                 );
@@ -220,7 +222,7 @@ const Fingerboard = ({ tuner, metro, log }) => {
         </div>
       </div>
       {heat && <p className="text-[10px] text-gray-500 text-center shrink-0">
-        <span className="font-black" style={{ color: '#ef4444' }}>▼ 빨강</span> = 자주 높음(내리기) · <span className="font-black" style={{ color: '#3b82f6' }}>▲ 파랑</span> = 자주 낮음(올리기) (최근 30일, 3번 이상 연주한 음)
+        <span className="font-black" style={{ color: FB_HIGH }}>▼ 파랑</span> = 자주 높음(내리기) · <span className="font-black" style={{ color: FB_LOW }}>▲ 빨강</span> = 자주 낮음(올리기) (최근 30일, 3번 이상 연주한 음)
       </p>}
 
       {tuner.error && (

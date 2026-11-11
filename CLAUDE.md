@@ -28,7 +28,7 @@
   - **흔들림 주의**: 박마다 바뀌는 표시는 크기(폰트·width)를 바꾸지 말고 transform·box-shadow만 (레이아웃이 밀려 화면 전체가 흔들림)
   - 저음 감지: `cleanBuffer`(직류·80Hz 이하 제거) 후 detectPitch. 330Hz 아래는 게이트 −6dB·신뢰도 −0.08 완화. 최저 주파수는 `MIN_FREQ_CAP`(170Hz) 넘게 못 올림
   - 2번 탭 박 표시: `parts.beat` = 'dial'(다이얼, 쪼갠 박은 `beatPieces`로 조각 나눔) | 'boxes'(`BeatBoxes` 네모 칸 원 + 쪼갠 박 점). metro.`currentSub` = 지금 쪼갠 박 번호
-  - 지판: `FB_POSITIONS`=21(5포지션+), 위에 `PitchStrip compact`, 연주 음 옆에 센트 + 화살표(고칠 방향: 높으면 ▼, 낮으면 ▲ — 히트맵도 같은 규칙)
+  - 지판: `FB_POSITIONS`=30(최상단, E현 A7까지, 위로 갈수록 칸이 좁아짐), 위에 `PitchStrip compact swapColors`, 연주 음 옆에 센트 + 화살표(고칠 방향: 높으면 ▼ 파랑, 낮으면 ▲ 빨강 — `FB_HIGH`/`FB_LOW`, 히트맵도 같은 규칙). 감지 최고 4200Hz
   - 앱 시작 때 3초 자동 소음 측정 `autoCalibrate`(설정 `autoCalib`), 결과는 하위 30% 레벨 + 10dB, −70~−35dB
 - `vendor/` — React/ReactDOM/Lucide/Babel 고정 버전. Tailwind만 CDN.
 - `manifest.json`, `sw.js`, `icons/` — PWA 리소스

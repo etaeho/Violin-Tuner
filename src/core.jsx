@@ -223,7 +223,7 @@ const DEFAULT_SETTINGS = {
   smoothing: 6,      // 평균낼 프레임 수 (클수록 부드럽고 느림)
   holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
   minFreq: 150,      // 감지 최저 Hz (바이올린 G3 = 196Hz, 낮게 풀린 G현도 잡히게 여유)
-  maxFreq: 3500,     // 감지 최고 Hz
+  maxFreq: 4200,     // 감지 최고 Hz (E현 최상단 A7 ≈ 3.5kHz 포함)
   uiMode: 'tape',    // 바탕 테마(theme.css data-theme) — design에서 자동으로 정해짐
   design: 'dark',    // 디자인 7가지 중 하나 → theme.jsx DESIGNS (dark·light·piano·leather·radio·violin·sheet)
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
@@ -231,7 +231,7 @@ const DEFAULT_SETTINGS = {
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto', beat: 'dial' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 4,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 5,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -266,7 +266,8 @@ const loadSettings = () => {
         v.layout1 = l;
       }
     }
-    v.layoutRev = 4;
+    if (rev < 5 && v.maxFreq === 3500) v.maxFreq = 4200;   // 5: 지판 최상단 포지션(A7)까지 감지
+    v.layoutRev = 5;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }

@@ -444,7 +444,9 @@ const Stepper = ({ value, onUp, onDown, accent }) => {
 };
 
 // 메트로놈 탭 위쪽 한 줄 음정 표시 (튜너와 같은 값): LIVE · 음이름 · ±50센트 바늘 · 센트
-const PitchStrip = ({ tuner, compact }) => {
+const PitchStrip = ({ tuner, compact, swapColors }) => {
+  // swapColors: 지판 탭 규칙 (높음 = 파랑, 낮음 = 빨강)
+  const HI = swapColors ? '#3b82f6' : '#ef4444', LO = swapColors ? '#ef4444' : '#3b82f6';
   // 바늘 게이지: 반원 눈금(−50~+50센트) 위를 바늘이 움직임. 가운데 초록 띠 = 허용 범위
   const { isStarted, pitch, cents, tolerance, currentNote, ensureMic } = tuner;
   const vintage = useVintage();
@@ -457,8 +459,8 @@ const PitchStrip = ({ tuner, compact }) => {
   const face = !vintage ? '#0a0a0a' : radio ? '#f3e8cc' : skin.dial.face;
   const tick = !vintage ? '#52525b' : radio ? '#5a3a1e' : skin.dial.sub;
   const ink = !vintage ? 'var(--ink)' : skin.label;
-  const needle = !vintage ? (!live ? '#3f3f46' : ok ? '#4afc9d' : Math.abs(cents) <= tolerance + 15 ? '#ffcc00' : cents > 0 ? '#ef4444' : '#3b82f6') : (skin.dial.needle || '#c0392b');
-  const cc = !live ? (vintage ? skin.unit : 'var(--ink-off)') : ok ? (vintage ? skin.good : '#4afc9d') : cents > 0 ? '#ef4444' : '#3b82f6';
+  const needle = !vintage ? (!live ? '#3f3f46' : ok ? '#4afc9d' : Math.abs(cents) <= tolerance + 15 ? '#ffcc00' : cents > 0 ? HI : LO) : (skin.dial.needle || '#c0392b');
+  const cc = !live ? (vintage ? skin.unit : 'var(--ink-off)') : ok ? (vintage ? skin.good : '#4afc9d') : cents > 0 ? HI : LO;
   const W = 160, H = 64, cx = 80, cy = 90, R = 82;               // 원 중심을 아래로 → 얕고 넓은 부채꼴
   const ang = (v) => (v / 50) * 52;                               // ±50센트 → ±52°
   const pt = (deg, r) => [cx + r * Math.sin(deg * Math.PI / 180), cy - r * Math.cos(deg * Math.PI / 180)];
@@ -491,8 +493,8 @@ const PitchStrip = ({ tuner, compact }) => {
           })}
           {[-50, -25, 25, 50].map(v => { const [x, y] = pt(ang(v), R - 19); return <text key={v} x={x} y={y + 3} textAnchor="middle" fontSize="8" fontWeight="700" fill={tick} fontFamily="Georgia,serif">{v > 0 ? `+${v}` : v}</text>; })}
           <text x={pt(0, R - 19)[0]} y={pt(0, R - 19)[1] + 3} textAnchor="middle" fontSize="9" fontWeight="800" fill={tick} fontFamily="Georgia,serif">0</text>
-          <text x="4" y={H - 4} fontSize="11" fontWeight="800" fill="#3b82f6">♭</text>
-          <text x={W - 11} y={H - 4} fontSize="11" fontWeight="800" fill="#ef4444">♯</text>
+          <text x="4" y={H - 4} fontSize="11" fontWeight="800" fill={LO}>♭</text>
+          <text x={W - 11} y={H - 4} fontSize="11" fontWeight="800" fill={HI}>♯</text>
           <line ref={needleRef} x1={cx} y1={cy} x2={nx} y2={ny} stroke={needle} strokeWidth="2.2" strokeLinecap="round" opacity={live ? 1 : 0.4}
             style={{ filter: live && !vintage ? `drop-shadow(0 0 3px ${needle})` : 'none' }}/>
           <circle cx={cx} cy={H} r="7" fill={tick}/>
