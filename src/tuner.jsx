@@ -971,19 +971,6 @@ const PartsEditor = ({ parts, onChange }) => {
         </div>
       </div>
       <div>
-        <div className="text-[10px] font-bold text-gray-500 mb-1.5">박 표시 (메트로놈 탭)</div>
-        <div className="grid grid-cols-2 gap-2">
-          {PART_BEAT_STYLES.map(o => (
-            <Opt key={o.id} on={parts.beat === o.id} onClick={() => onChange({ beat: o.id })}>
-              {o.id === 'dial'
-                ? <svg viewBox="0 0 40 40" width="30" height="30"><circle cx="20" cy="20" r="15" fill="none" stroke="var(--ink2)" strokeWidth="4" strokeDasharray="20 3.5"/></svg>
-                : <span className="flex gap-1">{[1, 0, 0, 0].map((on, i) => <span key={i} className="w-4 h-4 rounded-full" style={{ background: on ? '#ffcc00' : 'var(--ink2)', opacity: on ? 1 : 0.4 }}/>)}</span>}
-              {label(o.name, parts.beat === o.id)}
-            </Opt>
-          ))}
-        </div>
-      </div>
-      <div>
         <div className="text-[10px] font-bold text-gray-500 mb-1.5">음정 표시기 (메트로놈 · 지판 · 드론 탭, 1번 탭 블록)</div>
         <div className="grid grid-cols-3 gap-2">
           {PART_METER_STYLES.map(o => (
@@ -1022,8 +1009,8 @@ const LayoutPreview = ({ tab, tuner, metro, sel }) => {
 
 // ── 화면 배치: 탭별 블록을 손잡이(⋮⋮)로 끌어 위아래 이동 · 크기 · 보이기 ──
 const SIZE_NAMES = { s: '작게', m: '보통', l: '크게' };
-const LayoutEditor = ({ S, updateSettings, tuner, metro }) => {
-  const [tab, setTab] = useState('t1');
+const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) => {
+  const [tab, setTab] = useState(initialTab);
   const [sel, setSel] = useState(null);          // 미리보기에서 테두리로 표시할 블록
   const [showPrev, setShowPrev] = useState(true);
   const key = tab === 't1' ? 'layout1' : 'layout2';
@@ -1107,7 +1094,7 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro }) => {
   );
 };
 
-const SettingsSheet = ({ tuner, metro, onClose }) => {
+const SettingsSheet = ({ tuner, metro, onClose, layoutTab = 't1' }) => {
   const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise, noteTracker } = tuner;
   const [lv, setLv] = useState(levelRef.current);
   const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
@@ -1168,13 +1155,13 @@ const SettingsSheet = ({ tuner, metro, onClose }) => {
 
         <Section title="① 디자인">
           <DesignPicker value={S.design} onChange={d => updateSettings({ design: d.id, uiMode: d.base })}/>
-          <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 · 박 · 음정 표시기)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
+          <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 · 음정 표시기)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
             <PartsEditor parts={S.parts} onChange={p => updateSettings({ parts: { ...S.parts, ...p } })}/>
           </Fold>
         </Section>
 
         <Section title="② 화면 배치">
-          <LayoutEditor S={S} updateSettings={updateSettings} tuner={tuner} metro={metro}/>
+          <LayoutEditor S={S} updateSettings={updateSettings} tuner={tuner} metro={metro} initialTab={layoutTab}/>
         </Section>
 
         <Section title="③ 소리 감지">
@@ -1413,13 +1400,12 @@ const BigNote = ({ tuner, showCents }) => {
   );
 };
 
-const Tuner = ({ tuner, metro }) => {
+const Tuner = ({ tuner, metro, openSettings }) => {
   const {
     isStarted, pitch, cents, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
     ensureMic, handleReset, cycleA4Freq, cycleTolerance, toggleTone
   } = tuner;
-  const [showSettings, setShowSettings] = useState(false);
   const blocks = visibleBlocks('t1', tuner.settings.layout1);
   const has = (id) => blocks.some(b => b.id === id);
 
@@ -1441,7 +1427,7 @@ const Tuner = ({ tuner, metro }) => {
           </button>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => { setShowSettings(true); haptic(8); }}
+          <button onClick={() => { openSettings?.('t1'); haptic(8); }}
             className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md text-gray-300">
             <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 설정
           </button>
@@ -1469,7 +1455,6 @@ const Tuner = ({ tuner, metro }) => {
         {!blocks.some(b => b.grow) && <div className="flex-1"/>}
       </div>
 
-      {showSettings && <SettingsSheet tuner={tuner} metro={metro} onClose={() => setShowSettings(false)}/>}
 
       {/* Error modal */}
       {error && (

@@ -32,6 +32,8 @@ const App = () => {
 
   // 연습 녹음 (recorder.jsx) — 모든 탭 위 녹음 줄
   const recorder = useRecorder(tuner, metro, showToast);
+  // 설정창: 튜너·메트로놈 탭 어디서든 같은 설정 (화면 배치는 연 탭이 먼저 보임)
+  const [settingsTab, setSettingsTab] = useState(null);   // null | 't1' | 't2'
 
   // 연주 명령(commands.jsx) → 메트로놈 켜기/끄기. 켤 때는 메트로놈 탭으로 이동
   useEffect(() => {
@@ -97,8 +99,8 @@ const App = () => {
           paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro}/></div>
-        <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner}/></div>
+        <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro} openSettings={setSettingsTab}/></div>
+        <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner} openSettings={setSettingsTab}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
         {/* 드론 탭은 일단 숨김 (drone.jsx 그대로) → 4번째 탭 = 녹음 */}
         <div className={activeTab==='record'      ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><RecordTab   recorder={recorder} tuner={tuner} metro={metro}/></div>
@@ -108,6 +110,8 @@ const App = () => {
       {/* 연주 명령 알림 */}
       {/* 첫 실행 안내 */}
       {!tuner.settings.onboarded && <Onboarding tuner={tuner}/>}
+
+      {settingsTab && <div className="absolute inset-0 z-[60]"><SettingsSheet tuner={tuner} metro={metro} layoutTab={settingsTab} onClose={() => setSettingsTab(null)}/></div>}
 
       {/* 앱 시작 때 자동 소음 측정 */}
       {tuner.autoCal && !toast && (

@@ -161,7 +161,8 @@ const LAYOUT_BLOCKS = {
   t2: [
     { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)' },
     { id: 'beats',    name: '박 설정' },
-    { id: 'dial',     name: '박자 다이얼', grow: true },
+    { id: 'dial',     name: '박자 원형 다이얼', grow: true },
+    { id: 'boxes',    name: '박자 네모 칸 원', grow: true },
     { id: 'tempo',    name: '템포 슬라이더 · 프리셋' },
     { id: 'controls', name: 'TAP · 시작', lock: true },
   ],
@@ -206,10 +207,6 @@ const PART_PLATE_STYLES = [
   { id: 'auto',  name: '디자인 기본' },
   { id: 'brass', name: '황동판 (나사)' },
 ];
-const PART_BEAT_STYLES = [
-  { id: 'dial',  name: '원형 다이얼' },
-  { id: 'boxes', name: '네모 칸 원' },
-];
 // 메인 음정 표시기: 1번 탭 외 탭(메트로놈·지판·드론)과 1번 탭 'meter' 블록에 붙는 음정 표시 모양
 const PART_METER_STYLES = [
   { id: 'needle', name: '바늘 게이지' },
@@ -219,7 +216,6 @@ const PART_METER_STYLES = [
 const normParts = (p) => ({
   num: PART_NUM_STYLES.some(x => x.id === p?.num) ? p.num : 'auto',
   plate: PART_PLATE_STYLES.some(x => x.id === p?.plate) ? p.plate : 'auto',
-  beat: PART_BEAT_STYLES.some(x => x.id === p?.beat) ? p.beat : 'dial',
   meter: PART_METER_STYLES.some(x => x.id === p?.meter) ? p.meter : 'needle',
 });
 const MIN_FREQ_CAP = 170;   // 최저 주파수는 이보다 높게 못 올림 (G3 196Hz가 잘리면 G현이 안 잡힘)
@@ -237,12 +233,12 @@ const DEFAULT_SETTINGS = {
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
-  parts: { num: 'auto', plate: 'auto', beat: 'dial', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
+  parts: { num: 'auto', plate: 'auto', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   recClicks: true,   // 녹음에 메트로놈 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx)
   recQuality: 'std', // 'std' 64kbps | 'high' 128kbps
   recCountIn: 0,     // 녹음 전 카운트인 마디 수 (0·1·2)
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 7,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 8,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -279,7 +275,14 @@ const loadSettings = () => {
     }
     if (rev < 5 && v.maxFreq === 3500) v.maxFreq = 4200;   // 5: 지판 최상단 포지션(A7)까지 감지
     if (rev < 7) v.recClicks = true;    // 7: 박 소리 넣기 + 에코 제거 마이크로 다시 켬 (6에서 껐던 값 되돌림)
-    v.layoutRev = 7;
+    if (rev < 8 && stored.parts?.beat === 'boxes') {
+      // 8: 박 표시(원형/네모)를 화면 배치 블록으로 — 네모를 쓰던 사람은 다이얼 자리에 네모 칸 블록
+      const l = v.layout2.filter(b => b.id !== 'boxes'), at = l.findIndex(b => b.id === 'dial');
+      const dial = l[at];
+      if (dial) { l.splice(at, 1, { ...dial, on: false }); l.splice(at, 0, { id: 'boxes', on: dial.on, size: dial.size }); }
+      v.layout2 = l;
+    }
+    v.layoutRev = 8;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }

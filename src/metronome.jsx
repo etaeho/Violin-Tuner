@@ -354,7 +354,7 @@ const DialCenter = ({ bpm, size, parts, sub }) => {
   return <>{num}{mark(sub)}</>;
 };
 
-// 네모 칸 원: 정사각형 판 안에 박을 큰 원으로 나열 + 원 아래에 쪼갠 박 점 (설정 → 세부 꾸미기 → 박 표시)
+// 네모 칸 원: 판 안에 박을 큰 원으로 나열 + 원 아래에 쪼갠 박 점 (화면 배치의 '박자 네모 칸 원' 블록)
 const BeatBoxes = ({ metro, size, vintage, skin, pal }) => {
   const { bpm, beatSounds, beatSubdivisions, currentBeat, currentSub, visualFlash, isPlayingMetro } = metro;
   const parts = useParts();
@@ -405,7 +405,6 @@ const BeatBoxes = ({ metro, size, vintage, skin, pal }) => {
 
 const BeatDial = ({ metro, size, pal, vintage, skin }) => {
   const parts = useParts();
-  if (parts.beat === 'boxes') return <BeatBoxes metro={metro} size={size} vintage={vintage} skin={skin} pal={pal}/>;
   const center = partsCustom(parts) ? <DialCenter bpm={metro.bpm} size={size} parts={parts} sub={vintage ? (skin.dial.ticks ? '#f4d78a' : skin.dial.sub) : '#9ca3af'}/> : null;
   if (vintage) return skin && !skin.dial.ticks ? <SkinBeatDial metro={metro} size={size} k={skin} center={center}/> : <RadioBeatDial metro={metro} size={size} center={center}/>;
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
@@ -567,7 +566,7 @@ const DialBlock = ({ children }) => {
   return <div ref={ref} className="w-full flex-1 min-h-0 flex items-center justify-between">{children(size)}</div>;
 };
 
-const Metronome = ({ metro, tuner }) => {
+const Metronome = ({ metro, tuner, openSettings }) => {
   const skin = useSkin();
   const {
     bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
@@ -592,27 +591,23 @@ const Metronome = ({ metro, tuner }) => {
   return (
     <div className="w-full h-full flex flex-col items-center tab-enter gap-2.5">
       {/* 1. 박자표 */}
-      <div className="w-full flex items-center justify-between shrink-0 h-10">
-        <div className="flex items-center gap-2">
+      <div className="w-full flex items-center justify-between gap-2 shrink-0 h-10">
+        <div className="flex items-center gap-1.5 shrink-0">
           <Stepper value={timeSig.num} onUp={() => changeNumerator(1)} onDown={() => changeNumerator(-1)}/>
           <span className="text-xl font-black text-gray-600 italic">/</span>
           <Stepper value={timeSig.den} onUp={() => changeDenominator(1)} onDown={() => changeDenominator(-1)} accent/>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-black tracking-widest uppercase"
-            style={{ color: vintage ? '#f6dd94' : document.documentElement.dataset.theme === 'light' ? '#b45309' : '#ffcc00', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-            {getTempoMarking(bpm)}
-          </span>
-          {/* 박 표시 바꾸기: 원형 다이얼 ↔ 네모 칸 원 */}
-          {tuner && (
-            <button onClick={() => { const p = tuner.settings.parts; tuner.updateSettings({ parts: { ...p, beat: p.beat === 'boxes' ? 'dial' : 'boxes' } }); haptic(8); }}
-              aria-label="박 표시 바꾸기" className="rounded-full t-chip p-2 active:scale-95" style={{ color: '#9ca3af' }}>
-              {tuner.settings.parts.beat === 'boxes' ? <Activity size={14}/> : <LayoutGrid size={14}/>}
+        <div className="flex items-center gap-1.5 min-w-0">
+          {/* 설정 (1번 탭과 같은 설정창 — 화면 배치는 메트로놈 탭이 먼저 열림) */}
+          {openSettings && (
+            <button onClick={() => { openSettings('t2'); haptic(8); }}
+              className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md text-gray-300 whitespace-nowrap shrink-0">
+              <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 설정
             </button>
           )}
           {/* 초기화: 두 번 눌러야 실행 */}
           <button onClick={onReset} aria-label="메트로놈 초기화"
-            className={`flex items-center gap-1 rounded-full t-chip transition-all active:scale-95 ${confirmReset ? 'px-2.5 py-1.5' : 'p-2'}`}
+            className={`flex items-center gap-1 rounded-full t-chip transition-all active:scale-95 shrink-0 ${confirmReset ? 'px-2.5 py-1.5' : 'p-2'}`}
             style={confirmReset ? { color: '#ef4444', borderColor: '#ef4444' } : { color: '#9ca3af' }}>
             <RotateCcw size={14}/>
             {confirmReset && <span className="text-[10px] font-black whitespace-nowrap">한 번 더</span>}
@@ -666,6 +661,19 @@ const Metronome = ({ metro, tuner }) => {
       </>)}</DialBlock>
 
           )}
+          {b.id === 'boxes' && (
+            <DialBlock>{(boxSize) => (<>
+              <button {...pressProps(-1)} style={{ ...pressProps(-1).style, ...(vintage ? skin.knob : {}) }} aria-label="BPM 내리기"
+                className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
+                <Minus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
+              </button>
+              <BeatBoxes metro={metro} size={boxSize} vintage={vintage} skin={skin} pal={pal}/>
+              <button {...pressProps(1)} style={{ ...pressProps(1).style, ...(vintage ? skin.knob : {}) }} aria-label="BPM 올리기"
+                className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
+                <Plus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
+              </button>
+            </>)}</DialBlock>
+          )}
           {b.id === 'tempo' && (
       <div className="w-full t-inset rounded-[1.5rem] px-4 pt-3 pb-2.5 shrink-0 flex flex-col gap-2.5">
         <input type="range" min="30" max="250" value={bpm} onChange={handleBpmChange} className="w-full cursor-pointer"/>
@@ -707,7 +715,7 @@ const Metronome = ({ metro, tuner }) => {
           )}
         </LayoutBlock>
       ))}
-      {!layout.some(b => b.on && b.id === 'dial') && <div className="flex-1"/>}
+      {!layout.some(b => b.on && (b.id === 'dial' || b.id === 'boxes')) && <div className="flex-1"/>}
     </div>
   );
 };
