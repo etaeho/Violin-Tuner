@@ -238,10 +238,10 @@ const DEFAULT_SETTINGS = {
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto', beat: 'dial', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
-  recClicks: false,  // 녹음에 메트로놈 딸깍 소리를 디지털로 섞기 (recorder.jsx) — 스피커 소리가 마이크로도 들어가 두 번 들리므로 기본 끔, 이어폰 쓸 때만
+  recClicks: true,   // 녹음에 메트로놈 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx)
   recQuality: 'std', // 'std' 64kbps | 'high' 128kbps
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 6,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 7,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -277,8 +277,8 @@ const loadSettings = () => {
       }
     }
     if (rev < 5 && v.maxFreq === 3500) v.maxFreq = 4200;   // 5: 지판 최상단 포지션(A7)까지 감지
-    if (rev < 6) v.recClicks = false;   // 6: 딸깍이 두 번 녹음되던 문제 → 디지털 섞기 끔
-    v.layoutRev = 6;
+    if (rev < 7) v.recClicks = true;    // 7: 박 소리 넣기 + 에코 제거 마이크로 다시 켬 (6에서 껐던 값 되돌림)
+    v.layoutRev = 7;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }

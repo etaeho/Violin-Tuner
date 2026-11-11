@@ -3,7 +3,9 @@
 // (드론 탭은 일단 숨김 — drone.jsx 코드·useDroneLogic은 그대로 둠)
 // (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 //  - 튜너가 연 마이크를 그대로 씀 (권한 추가 없음). MediaRecorder → webm/opus
-//  - 메트로놈 소리 넣기: 메트로놈 오디오에서 마이크 + 딸깍 소리를 디지털로 섞음 (metro.getMetroCtx / setRecordTap)
+//  - 메트로놈 박 소리 넣기: 녹음용 마이크를 '에코 제거'로 따로 열어(스피커에서 나온 메트로놈 소리가 지워짐)
+//    메트로놈 오디오에서 그 마이크 + 박에 맞춘 딸깍을 디지털로 섞음 (metro.getMetroCtx / setRecordTap).
+//    튜너는 원래 마이크(처리 없음)를 그대로 씀
 //  - 녹음과 메트로놈은 따로 동작 (메트로놈을 켜도 녹음은 시작되지 않음)
 //  - 저장: 폰 안 IndexedDB('vt-rec'). 내보내기 = 안드로이드 VTNative.saveAudio(이름, 형식, base64) → 저장 위치 고르기
 // ==========================================
@@ -59,6 +61,7 @@ const useRecorder = (tuner, metro, notify) => {
   const cleanupMix = () => {
     metroRef.current.setRecordTap(null);
     try { mixRef.current?.src.disconnect(); } catch (_) {}
+    mixRef.current?.own?.getTracks().forEach(t => t.stop());   // 녹음용으로 따로 연 에코 제거 마이크 닫기
     mixRef.current = null;
   };
 
@@ -69,15 +72,20 @@ const useRecorder = (tuner, metro, notify) => {
     if (!mic) return false;
     let stream = mic, withClicks = false;
     if (tuner.settings.recClicks) {
+      // 에코 제거 마이크: 폰 스피커로 나간 메트로놈 소리를 녹음에서 지움 (못 열면 원래 마이크 사용)
+      let own = null;
+      try {
+        own = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false } });
+      } catch (_) { own = null; }
       try {
         const ctx = metroRef.current.getMetroCtx();
         const dest = ctx.createMediaStreamDestination();
-        const src = ctx.createMediaStreamSource(mic);
+        const src = ctx.createMediaStreamSource(own || mic);
         src.connect(dest);
-        metroRef.current.setRecordTap(dest);
-        mixRef.current = { src, dest };
+        metroRef.current.setRecordTap(dest);   // 메트로놈이 울리면 박에 맞춰 딸깍이 여기로도 들어감
+        mixRef.current = { src, dest, own };
         stream = dest.stream; withClicks = true;
-      } catch (_) { cleanupMix(); stream = mic; }
+      } catch (_) { own?.getTracks().forEach(t => t.stop()); cleanupMix(); stream = mic; }
     }
     const mime = pickMime();
     let mr;
@@ -173,7 +181,7 @@ const RecToggle = ({ on, onClick, title, desc }) => (
 const RecSettings = ({ S, updateSettings }) => (
   <div className="flex flex-col gap-3">
     <RecToggle on={S.recClicks} onClick={() => updateSettings({ recClicks: !S.recClicks })}
-      title="메트로놈 소리 직접 넣기 (이어폰용)" desc="이어폰으로 메트로놈을 들을 때만 켜세요. 스피커로 들으면 마이크에도 들어가서 딸깍이 두 번씩 녹음됩니다. 꺼도 스피커 소리는 마이크로 녹음돼요."/>
+      title="메트로놈 박 소리 넣기" desc="녹음 중 메트로놈이 울리면 박에 맞춰 깨끗한 딸깍을 넣고, 스피커에서 마이크로 들어온 메트로놈 소리는 에코 제거로 지웁니다. 바이올린 소리가 어색하게 녹음되면 끄세요 (끄면 마이크에 들리는 그대로 녹음)."/>
     <div className="flex items-center justify-between">
       <span className="text-xs font-bold text-gray-300">음질</span>
       <div className="flex gap-1 p-1 rounded-full t-chip">
