@@ -2,7 +2,7 @@
 // fingerboard — 지판 탭 (v2 디자인)
 // (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
 //  - 조표별 음 표시, 지금 연주하는 음, 누르면 기준음, 박마다 테두리 빛남
-//  - 히트맵: 최근 30일 음별 평균 센트 (자주 높으면 빨강 ▲, 낮으면 파랑 ▼) — 연습 기록(practice.jsx)의 음별 정확도 사용
+//  - 히트맵: 최근 30일 음별 평균 센트 (자주 높으면 빨강 ▼ 내리기, 낮으면 파랑 ▲ 올리기 — 화살표 = 고칠 방향) — 연습 기록(practice.jsx)의 음별 정확도 사용
 //  - 스케일 연습: 다음 음 안내 → 그 음을 0.15초 이상 연주하면 센트 기록하고 다음으로
 // ==========================================
 
@@ -199,14 +199,14 @@ const Fingerboard = ({ tuner, metro, log }) => {
                       <button onClick={() => tuner.toggleTone(label, semi)}
                         className={`min-w-[30px] px-1.5 py-[1px] border text-[11px] font-black leading-tight transition-all duration-100 ${pos === 0 ? 'rounded-md' : 'rounded-full'} ${extra}`}
                         style={{ ...style, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-                        {name}{mean !== null && !isDet && !isPlay && <span className="text-[8px] ml-0.5">{mean > 0 ? '▲' : '▼'}</span>}
+                        {name}{mean !== null && !isDet && !isPlay && <span className="text-[8px] ml-0.5">{mean > 0 ? '▼' : '▲'}</span>}
                       </button>
                     ) : null}
-                    {/* 지금 연주 중인 음: 높음 ▲ / 낮음 ▼ 센트 */}
+                    {/* 지금 연주 중인 음: 화살표 = 고칠 방향 (높으면 ▼ 내리기, 낮으면 ▲ 올리기) + 센트 */}
                     {isDet && (
                       <span className="absolute z-30 left-1/2 ml-6 px-1 rounded text-[10px] font-black font-mono whitespace-nowrap pointer-events-none"
                         style={{ background: 'rgba(0,0,0,.75)', color: detOk ? '#4afc9d' : tuner.cents > 0 ? '#ff6b6b' : '#60a5fa' }}>
-                        {detOk ? '✓' : tuner.cents > 0 ? '▲' : '▼'}{tuner.cents > 0 ? '+' : ''}{tuner.cents}
+                        {detOk ? '✓' : tuner.cents > 0 ? '▼' : '▲'}{tuner.cents > 0 ? '+' : ''}{tuner.cents}
                       </span>
                     )}
                     {spelled || isDet || isPlay || isTarget ? null : (
@@ -220,7 +220,7 @@ const Fingerboard = ({ tuner, metro, log }) => {
         </div>
       </div>
       {heat && <p className="text-[10px] text-gray-500 text-center shrink-0">
-        <span className="font-black" style={{ color: '#ef4444' }}>▲ 빨강</span> = 자주 높게 · <span className="font-black" style={{ color: '#3b82f6' }}>▼ 파랑</span> = 자주 낮게 (최근 30일, 3번 이상 연주한 음)
+        <span className="font-black" style={{ color: '#ef4444' }}>▼ 빨강</span> = 자주 높음(내리기) · <span className="font-black" style={{ color: '#3b82f6' }}>▲ 파랑</span> = 자주 낮음(올리기) (최근 30일, 3번 이상 연주한 음)
       </p>}
 
       {tuner.error && (
