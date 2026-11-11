@@ -239,7 +239,6 @@ const DEFAULT_SETTINGS = {
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto', beat: 'dial', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   recClicks: true,   // 녹음에 메트로놈 딸깍 소리도 넣기 (recorder.jsx)
-  recAutoMetro: false, // 메트로놈을 켜면 녹음도 같이 시작 · 끄면 같이 정지
   recQuality: 'std', // 'std' 64kbps | 'high' 128kbps
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
   layoutRev: 5,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)

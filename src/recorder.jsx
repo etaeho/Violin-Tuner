@@ -4,7 +4,7 @@
 // (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 //  - 튜너가 연 마이크를 그대로 씀 (권한 추가 없음). MediaRecorder → webm/opus
 //  - 메트로놈 소리 넣기: 메트로놈 오디오에서 마이크 + 딸깍 소리를 디지털로 섞음 (metro.getMetroCtx / setRecordTap)
-//  - 메트로놈 연동: 메트로놈 켜면 녹음 시작, 끄면 정지 (settings.recAutoMetro)
+//  - 녹음과 메트로놈은 따로 동작 (메트로놈을 켜도 녹음은 시작되지 않음)
 //  - 저장: 폰 안 IndexedDB('vt-rec'). 내보내기 = 안드로이드 VTNative.saveAudio(이름, 형식, base64) → 저장 위치 고르기
 // ==========================================
 
@@ -109,14 +109,6 @@ const useRecorder = (tuner, metro, notify) => {
   // 녹음 중 메트로놈을 켰다면 BPM 기록
   useEffect(() => { if (rec && metro.isPlayingMetro && metaRef.current && !metaRef.current.bpm) metaRef.current.bpm = metro.bpm; }, [rec, metro.isPlayingMetro]);
 
-  // 메트로놈 연동: 켜면 녹음 시작, 끄면 (연동으로 시작한 녹음만) 정지
-  const prevPlay = useRef(false);
-  useEffect(() => {
-    const p = metro.isPlayingMetro;
-    if (p && !prevPlay.current && S.recAutoMetro && !mrRef.current) start({ auto: true });
-    if (!p && prevPlay.current && autoRef.current) stop();
-    prevPlay.current = p;
-  }, [metro.isPlayingMetro]);
 
   // 앱이 화면에서 사라지면 마이크가 꺼지므로 녹음도 마무리
   useEffect(() => {
@@ -180,10 +172,8 @@ const RecToggle = ({ on, onClick, title, desc }) => (
 );
 const RecSettings = ({ S, updateSettings }) => (
   <div className="flex flex-col gap-3">
-    <RecToggle on={S.recAutoMetro} onClick={() => updateSettings({ recAutoMetro: !S.recAutoMetro })}
-      title="메트로놈과 같이 녹음" desc="메트로놈을 켜면 녹음 시작, 끄면 녹음 정지"/>
     <RecToggle on={S.recClicks} onClick={() => updateSettings({ recClicks: !S.recClicks })}
-      title="메트로놈 소리도 녹음" desc="딸깍 소리를 깨끗하게 섞어 넣음 (스피커로 들리는 소리도 마이크에 같이 들어갈 수 있어 이어폰 추천)"/>
+      title="메트로놈 소리도 녹음" desc="녹음 중에 메트로놈이 울리고 있으면 딸깍 소리를 깨끗하게 섞어 넣음 (스피커 소리도 마이크에 들어갈 수 있어 이어폰 추천)"/>
     <div className="flex items-center justify-between">
       <span className="text-xs font-bold text-gray-300">음질</span>
       <div className="flex gap-1 p-1 rounded-full t-chip">
@@ -294,22 +284,8 @@ const RecordTab = ({ recorder, tuner, metro }) => {
         </button>
         <span className="font-mono font-black text-3xl leading-none" style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
         <span className="text-[11px] font-bold text-gray-500 h-4">
-          {rec ? `녹음 중${rec.auto ? ' · 메트로놈과 함께' : ''}${rec.withClicks ? ' · 딸깍 포함' : ''} — 다른 탭으로 가도 계속 녹음됩니다` : '누르면 녹음 시작'}
+          {rec ? '녹음 중 — 다른 탭으로 가도 계속 녹음됩니다' : '누르면 녹음 시작'}
         </span>
-        {/* 메트로놈 빠른 조작 (연동 녹음용) */}
-        <div className="w-full flex items-center gap-2 pt-1">
-          <button onClick={() => { tuner.updateSettings({ recAutoMetro: !S.recAutoMetro }); haptic(8); }}
-            className="flex items-center gap-1.5 rounded-full px-3 h-9 t-chip text-[11px] font-black whitespace-nowrap"
-            style={S.recAutoMetro ? { color: '#ef4444', borderColor: 'rgba(239,68,68,.5)' } : { color: '#9ca3af' }}>
-            <Music size={13}/>메트로놈 연동 {S.recAutoMetro ? 'ON' : 'OFF'}
-          </button>
-          <button onClick={metro.toggleMetronome}
-            className="ml-auto flex items-center gap-1.5 rounded-full pl-3 pr-2.5 h-9 t-chip text-xs font-black"
-            style={{ color: metro.isPlayingMetro ? '#ffcc00' : 'var(--ink)', borderColor: metro.isPlayingMetro ? 'rgba(255,204,0,.5)' : undefined }}>
-            <span className="font-mono">{metro.bpm}</span><span className="text-[9px] text-gray-500">BPM</span>
-            {metro.isPlayingMetro ? <Square size={11} fill="currentColor"/> : <Play size={11} fill="currentColor"/>}
-          </button>
-        </div>
       </div>
 
       {/* 녹음하면서 음정 보기 */}
