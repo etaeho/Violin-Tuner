@@ -235,9 +235,9 @@ const DEFAULT_SETTINGS = {
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
-  recDelay: 0,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10)
+  recDelay: 3,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10), 기본 3초
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 8,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 9,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -281,7 +281,8 @@ const loadSettings = () => {
       if (dial) { l.splice(at, 1, { ...dial, on: false }); l.splice(at, 0, { id: 'boxes', on: dial.on, size: dial.size }); }
       v.layout2 = l;
     }
-    v.layoutRev = 8;
+    if (rev < 9 && !stored.recDelay) v.recDelay = 3;   // 9: 녹음 지연 기본 3초
+    v.layoutRev = 9;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }

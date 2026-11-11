@@ -472,7 +472,7 @@ const RecordTab = ({ recorder, tuner, metro }) => {
       <div className="w-full flex-1 min-h-0 overflow-y-auto flex flex-col gap-2.5 pb-1">
         {!supported && <p className="text-sm text-[#ef4444] font-bold">이 기기에서는 녹음을 지원하지 않습니다.</p>}
 
-        <MainPitchMeter tuner={tuner} big/>
+        <MainPitchMeter tuner={tuner}/>
 
         <div className="w-full t-inset rounded-3xl p-4 shrink-0">
           <div className="text-[10px] font-black tracking-widest text-gray-500 mb-3">녹음 설정</div>
