@@ -291,7 +291,7 @@ const Step = ({ value, unit, onDec, onInc }) => {
   );
 };
 
-const PracticeLog = ({ log }) => {
+const PracticeLog = ({ log, recorder }) => {
   const P = usePalette();
   const { days, today, goalMin, setGoalMin, idleSec, setIdleSec, reset, streak } = log;
   const [sel, setSel] = useState(dateKey());
@@ -321,7 +321,7 @@ const PracticeLog = ({ log }) => {
           <StatRow label="연주" ms={today.playMs} color={P.accent}/>
           <StatRow label="튜닝" ms={today.tuneMs} color="#38bdf8"/>
           <StatRow label="메트로놈" ms={today.metroMs} color="#ffcc00"/>
-          <StatRow label="드론" ms={today.droneMs} color="#a78bfa"/>
+          {today.droneMs > 0 && <StatRow label="드론" ms={today.droneMs} color="#a78bfa"/>}
           {today.bpmMax > 0 && (
             <div className="flex items-center justify-between text-[11px]">
               <span className="font-bold" style={{ color: P.dim }}>최고 BPM</span>
@@ -377,6 +377,9 @@ const PracticeLog = ({ log }) => {
           튜너 탭에서 개방현(G3·D4·A4·E5)은 튜닝으로 셉니다.
         </p>
       </div>
+
+      {/* 날짜별 녹음 (recorder.jsx) */}
+      {recorder && <RecordDays recorder={recorder}/>}
     </div>
   );
 };

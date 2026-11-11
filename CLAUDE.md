@@ -13,14 +13,14 @@
   5. `fingerboard.jsx` — 지판 탭 (v2 디자인): 조표(`fb.key`), 연주 음, 탭→기준음, 박마다 테두리, 히트맵(`fb.heat`, 연습 기록의 음별 정확도 최근 30일), 스케일 연습(`tuner.noteListeners`로 확정 음 받음)
   5-1. `drone.jsx` — 드론 탭: useDroneLogic(오디오), 근음 휠, 화음·음색. 재생 중엔 연주 명령 차단(droneActive). 계획: docs/drone-mode-plan.md
   5-2. `practice.jsx` — 기록 탭: 연습 시간 자동 측정(튜너 확정 음 → practiceSinkRef) + **음별 정확도**(하루 요약에 notes·ok·per), 목표 링, 12주 달력, 7일 그래프. `vt.log.days`. 계획: docs/practice-log-plan.md
-  5-4. `recorder.jsx` — 연습 녹음: `useRecorder`(튜너 마이크 `tuner.getStream()` → MediaRecorder webm/opus, IndexedDB 'vt-rec'), 모든 탭 위 `RecordBar`(● 녹음 · 메트로놈 연동 · 목록), `RecordingsSheet`(재생·폰에 저장·삭제), `RecSettings`(설정 ⑤). 메트로놈 소리 넣기 = 메트로놈 AudioContext에서 마이크+딸깍을 섞음(`metro.getMetroCtx`/`setRecordTap`). 메트로놈 연동 = `recAutoMetro`. 재생 중엔 `tuner.setListenGuard`로 연습 기록·연주 명령 막음. 폰 저장 = `VTNative.saveAudio(이름, 형식, base64)`(MainActivity)
+  5-4. `recorder.jsx` — 연습 녹음 = **4번째 탭** `RecordTab`(큰 녹음 버튼 · 메트로놈 연동/빠른 조작 · 음정 표시기 · `RecSettings` · 오늘 녹음). 기록 탭 맨 아래 `RecordDays`(날짜별 녹음). `RecItem` = 재생·폰에 저장·삭제. `useRecorder`(튜너 마이크 `tuner.getStream()` → MediaRecorder webm/opus, IndexedDB 'vt-rec'). 녹음 중엔 아래 탭 아이콘에 빨간 점. **드론 탭은 숨김**(drone.jsx·useDroneLogic은 남겨둠, app.jsx TAB_NAV에서 다시 켤 수 있음). 메트로놈 소리 넣기 = 메트로놈 AudioContext에서 마이크+딸깍을 섞음(`metro.getMetroCtx`/`setRecordTap`). 메트로놈 연동 = `recAutoMetro`. 재생 중엔 `tuner.setListenGuard`로 연습 기록·연주 명령 막음. 폰 저장 = `VTNative.saveAudio(이름, 형식, base64)`(MainActivity)
   5-3. `onboarding.jsx` — 첫 실행 안내(마이크 → 소음 측정 → 테마). `settings.onboarded`가 false면 마이크 자동 시작 안 함. 설정 → 정보에서 다시 보기
   6. `app.jsx` — 탭 전환, 테마 적용, 마운트
   - 파일 간 공유는 전역 top-level `const`로 한다 (import/export 없음). 새 파일을 만들면 index.html, sw.js PRECACHE에 추가.
 - `src/theme.css` — 테마 색 변수. `<html data-theme="tape|vintage|light">`. 라이트는 밝은 바디 + 튜너 테이프·숫자창은 어두운 표시창. 컴포넌트에 직접 쓴 어두운 색 클래스(text-white, bg-[#141414] 등)는 파일 아래쪽 라이트 덮어쓰기 규칙으로 바뀜 → 새 색 클래스를 쓰면 거기에도 추가. 인라인 글자색은 `var(--ink)`, `var(--ink2)` 사용.
   **컴포넌트에서 배경/테두리 색을 직접 쓰지 말고 `t-panel`, `t-chip`, `t-inset`, `t-board`, `t-card`, `t-sheet`, `t-nav`, `t-app` 클래스 사용.**
   모양 자체가 다른 부분만 `useVintage()`로 분기. 새 우드 디자인 = `SKINS` 항목 + `DESIGNS` 한 줄 + core.jsx `DESIGN_BASE` 한 줄. 새 바탕 테마 = theme.css 변수 블록 + loadSettings 허용 목록.
-  설정 시트는 ① 디자인(+세부 꾸미기) ② 화면 배치 ③ 소리 감지 ④ 연주 명령 ⑤ 녹음 ⑥ 백업·정보 — 자주 안 쓰는 값은 `Fold`(펼치기) 안에 둔다.
+  설정 시트는 ① 디자인(+세부 꾸미기) ② 화면 배치 ③ 소리 감지 ④ 연주 명령 ⑤ 백업·정보 — 자주 안 쓰는 값은 `Fold`(펼치기) 안에 둔다.
   - **세부 꾸미기** `settings.parts {num, plate}` (core.jsx `PART_NUM_STYLES`/`PART_PLATE_STYLES`) → `PartsContext`/`useParts()`. 숫자 = `PartNumber`(flip·radio·drum·led), 판 = `BrassPlate`. 적용: TunerReadout, 미니 메트로놈 BPM, 2번 탭 다이얼 가운데(`DialCenter`)
   - **화면 배치** `settings.layout1`(1번 탭) / `layout2`(2번 탭) = `[{id, on, size:'s'|'m'|'l'}]` 순서대로. 블록 목록은 core.jsx `LAYOUT_BLOCKS` (grow = 남는 공간 채움, 크기 = 비율 / 나머지는 크기 = zoom 배율, lock = 숨기기 불가). 렌더: `visibleBlocks` + `LayoutBlock`(theme.jsx). 편집: `LayoutEditor`(tuner.jsx, 손잡이 끌기 + `LayoutPreview` 실제 화면 축소 미리보기, 고른 블록은 `LayoutHighlightContext`로 테두리). 새 블록 = LAYOUT_BLOCKS 한 줄 + Tuner/Metronome의 `b.id === ...` 한 줄
   - **메인 음정 표시기** `parts.meter` = 'needle'(`PitchStrip`, 가운데 ±10¢를 넓게 펼친 바늘) | 'fine'(`FineGauge`) | 'digits'(`PitchDigits`) → `MainPitchMeter`(metronome.jsx). 2번 탭 'pitch' 블록 · 1번 탭 'meter' 블록 · 지판(compact swapColors) · 드론(compact) 공용. **다른 탭에 음정 표시를 붙일 땐 항상 MainPitchMeter 사용**

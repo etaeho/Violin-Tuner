@@ -32,7 +32,6 @@ const App = () => {
 
   // 연습 녹음 (recorder.jsx) — 모든 탭 위 녹음 줄
   const recorder = useRecorder(tuner, metro, showToast);
-  const [showRecs, setShowRecs] = useState(false);
 
   // 연주 명령(commands.jsx) → 메트로놈 켜기/끄기. 켤 때는 메트로놈 탭으로 이동
   useEffect(() => {
@@ -74,7 +73,7 @@ const App = () => {
     { id:'tuner',       label:'Tuner',  color:'#4afc9d', Icon:Activity },
     { id:'metronome',   label:'Metro',  color:'#ffcc00', Icon:Music    },
     { id:'fingerboard', label:'Finger', color:'#0ea5e9', Icon:LayoutGrid },
-    { id:'drone',       label:'Drone',  color:'#a78bfa', Icon:Waves },
+    { id:'record',      label:'녹음',    color:'#ef4444', Icon:Mic },
     { id:'log',         label:'기록',    color:'#fb923c', Icon:BarChart3 },
   ];
 
@@ -98,19 +97,17 @@ const App = () => {
           paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <RecordBar recorder={recorder} tuner={tuner} onOpenList={() => { setShowRecs(true); haptic(8); }}/>
         <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro}/></div>
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
-        <div className={activeTab==='drone'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Drone       drone={drone} metro={metro} tuner={tuner}/></div>
-        <div className={activeTab==='log'         ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><PracticeLog log={log}/></div>
+        {/* 드론 탭은 일단 숨김 (drone.jsx 그대로) → 4번째 탭 = 녹음 */}
+        <div className={activeTab==='record'      ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><RecordTab   recorder={recorder} tuner={tuner} metro={metro}/></div>
+        <div className={activeTab==='log'         ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><PracticeLog log={log} recorder={recorder}/></div>
       </div>
 
       {/* 연주 명령 알림 */}
       {/* 첫 실행 안내 */}
       {!tuner.settings.onboarded && <Onboarding tuner={tuner}/>}
-
-      {showRecs && <div className="absolute inset-0 z-[60]"><RecordingsSheet recorder={recorder} tuner={tuner} onClose={() => setShowRecs(false)}/></div>}
 
       {/* 앱 시작 때 자동 소음 측정 */}
       {tuner.autoCal && !toast && (
@@ -141,7 +138,7 @@ const App = () => {
         {TAB_NAV.map(({ id, label, color: tabColor, Icon }) => {
           const active = activeTab === id;
           // 빈티지: 모든 탭 황동색 / 라이트: 밝은 바탕에서 잘 보이게 진한 색
-          const LIGHT_TAB = { tuner:'#059669', metronome:'#b45309', fingerboard:'#0284c7', drone:'#7c3aed', log:'#ea580c' };
+          const LIGHT_TAB = { tuner:'#059669', metronome:'#b45309', fingerboard:'#0284c7', record:'#dc2626', log:'#ea580c' };
           const color = theme === 'vintage' ? '#f6dd94' : theme === 'light' ? LIGHT_TAB[id] : tabColor;
           return (
             <button
@@ -150,11 +147,13 @@ const App = () => {
               className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-2xl transition-all duration-200 active:scale-90"
               style={{ color: active ? color : '#4b5563' }}
             >
-              {/* Active indicator dot */}
-              <div
-                className="w-1 h-1 rounded-full mb-0.5 transition-all duration-200"
-                style={{ background: active ? color : 'transparent', boxShadow: active ? `0 0 6px ${color}` : 'none' }}
-              />
+              {/* Active indicator dot (녹음 탭은 녹음 중이면 빨간 점이 깜빡임 — 다른 탭에서도 보이게) */}
+              {id === 'record' && recorder.rec
+                ? <div className="w-1.5 h-1.5 rounded-full mb-0.5 bg-[#ef4444] animate-pulse" style={{ boxShadow: '0 0 6px #ef4444' }}/>
+                : <div
+                    className="w-1 h-1 rounded-full mb-0.5 transition-all duration-200"
+                    style={{ background: active ? color : 'transparent', boxShadow: active ? `0 0 6px ${color}` : 'none' }}
+                  />}
               {id === 'log' ? (() => {
                 // 기록 탭: 오늘 목표 진행 링 + 오늘 연습 분
                 const ms = practiceMs(log.today), pct = Math.min(1, ms / (log.goalMin * 60000)), c = 2 * Math.PI * 11;
