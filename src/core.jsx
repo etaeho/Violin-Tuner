@@ -1,6 +1,6 @@
 // ==========================================
 // core — 공통 상수, 설정, 피치 검출
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 // ==========================================
 
 /* =====================================================
@@ -10,7 +10,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 const {
   Play, Square, Settings, Volume2, VolumeX, AlertCircle,
   Music, Activity, Minus, Plus, ChevronUp, ChevronDown, RotateCcw,
-  LayoutGrid, SlidersHorizontal, X, GripVertical, Eye, EyeOff, Mic, ZoomIn, ZoomOut, AudioWaveform, Waves, BarChart3, Flame, Trash2, Download, Upload, Target
+  LayoutGrid, SlidersHorizontal, X, GripVertical, Eye, EyeOff, Pause, ListMusic, Mic, ZoomIn, ZoomOut, AudioWaveform, Waves, BarChart3, Flame, Trash2, Download, Upload, Target
 } = LucideReact;
 
 /* 햅틱 피드백 헬퍼 */
@@ -238,6 +238,9 @@ const DEFAULT_SETTINGS = {
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto', beat: 'dial', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
+  recClicks: true,   // 녹음에 메트로놈 딸깍 소리도 넣기 (recorder.jsx)
+  recAutoMetro: false, // 메트로놈을 켜면 녹음도 같이 시작 · 끄면 같이 정지
+  recQuality: 'std', // 'std' 64kbps | 'high' 128kbps
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
   layoutRev: 5,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함

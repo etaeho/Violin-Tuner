@@ -71,10 +71,30 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript("window.__vtSaved && window.__vtSaved($ok)", null)
     }
 
+    // ── 녹음 내보내기: 웹에서 VTNative.saveAudio(이름, 형식, base64) → 저장 위치 고르기 ──
+    private var pendingAudio: ByteArray? = null
+    private val createAudioDoc = registerForActivityResult(ActivityResultContracts.CreateDocument("audio/webm")) { uri: Uri? ->
+        val bytes = pendingAudio
+        pendingAudio = null
+        val ok = uri != null && bytes != null && runCatching {
+            contentResolver.openOutputStream(uri)?.use { it.write(bytes) } != null
+        }.getOrDefault(false)
+        webView.evaluateJavascript("window.__vtSaved && window.__vtSaved($ok)", null)
+    }
+
     inner class SaveBridge {
         @JavascriptInterface
         fun saveFile(name: String, text: String) {
             runOnUiThread { pendingSaveText = text; createDoc.launch(name) }
+        }
+
+        @JavascriptInterface
+        fun saveAudio(name: String, mime: String, base64: String) {
+            val bytes = runCatching { android.util.Base64.decode(base64, android.util.Base64.DEFAULT) }.getOrNull()
+            runOnUiThread {
+                if (bytes == null) { webView.evaluateJavascript("window.__vtSaved && window.__vtSaved(false)", null); return@runOnUiThread }
+                pendingAudio = bytes; createAudioDoc.launch(name)
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 // ==========================================
 // fingerboard — 지판 탭 (v2 디자인)
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 //  - 조표별 음 표시, 지금 연주하는 음, 누르면 기준음, 박마다 테두리 빛남
 //  - 히트맵: 최근 30일 음별 평균 센트 (자주 높으면 파랑 ▼ 내리기, 낮으면 빨강 ▲ 올리기 — 화살표 = 고칠 방향) — 연습 기록(practice.jsx)의 음별 정확도 사용
 //  - 스케일 연습: 다음 음 안내 → 그 음을 0.15초 이상 연주하면 센트 기록하고 다음으로

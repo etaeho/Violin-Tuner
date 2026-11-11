@@ -1,6 +1,6 @@
 // ==========================================
 // tuner — 튜너 탭 (로직 + 화면 + 설정 시트)
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 // ==========================================
 
 const useTunerLogic = () => {
@@ -303,6 +303,9 @@ const useTunerLogic = () => {
     currentNote, closestString, error, playingTone,
     startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
     settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise, autoCal,
+    getStream: () => streamRef.current,                 // 녹음(recorder.jsx)이 같은 마이크를 씀
+    // 녹음 재생 중엔 스피커 소리를 연습 기록·연주 명령으로 세지 않음
+    setListenGuard: (on) => { if (on) toneGuardRef.current = Infinity; else if (toneGuardRef.current === Infinity && !oscillatorRef.current) toneGuardRef.current = performance.now() + 600; },
     noteTracker: trackerRef.current, practiceSinkRef, noteListeners
   };
 };
@@ -1326,7 +1329,11 @@ const SettingsSheet = ({ tuner, metro, onClose }) => {
           </Fold>
         </Section>
 
-        <Section title="⑤ 백업 · 정보">
+        <Section title="⑤ 녹음">
+          <RecSettings S={S} updateSettings={updateSettings}/>
+        </Section>
+
+        <Section title="⑥ 백업 · 정보">
           <Fold label="백업 내보내기 · 가져오기, 앱 정보" open={open.misc} onToggle={() => setOpen(o => ({ ...o, misc: !o.misc }))}>
             <BackupSection/>
             <p className="text-xs text-gray-500 leading-relaxed">Violin Tuner — 모든 기록은 이 폰 안에만 저장됩니다.</p>

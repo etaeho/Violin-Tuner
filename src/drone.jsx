@@ -1,6 +1,6 @@
 // ==========================================
 // drone — 드론 탭: 근음(+5도·옥타브·3도)을 계속 울려 두고 그 위에서 음정 연습
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 // 구성안: docs/drone-mode-plan.md  (현재 1단계: 기본 드론)
 // ==========================================
 

@@ -1,6 +1,6 @@
 // ==========================================
 // app — 탭 전환, 테마 적용, 마운트
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 // ==========================================
 
 // ==========================================
@@ -29,6 +29,10 @@ const App = () => {
     clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToast(null), 1800);
   };
+
+  // 연습 녹음 (recorder.jsx) — 모든 탭 위 녹음 줄
+  const recorder = useRecorder(tuner, metro, showToast);
+  const [showRecs, setShowRecs] = useState(false);
 
   // 연주 명령(commands.jsx) → 메트로놈 켜기/끄기. 켤 때는 메트로놈 탭으로 이동
   useEffect(() => {
@@ -94,16 +98,19 @@ const App = () => {
           paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <div className={activeTab==='tuner'       ? 'flex flex-col w-full h-full' : 'hidden'}><Tuner       tuner={tuner} metro={metro}/></div>
-        <div className={activeTab==='metronome'   ? 'flex flex-col w-full h-full' : 'hidden'}><Metronome   metro={metro} tuner={tuner}/></div>
-        <div className={activeTab==='fingerboard' ? 'flex flex-col w-full h-full' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
-        <div className={activeTab==='drone'       ? 'flex flex-col w-full h-full' : 'hidden'}><Drone       drone={drone} metro={metro} tuner={tuner}/></div>
-        <div className={activeTab==='log'         ? 'flex flex-col w-full h-full' : 'hidden'}><PracticeLog log={log}/></div>
+        <RecordBar recorder={recorder} tuner={tuner} onOpenList={() => { setShowRecs(true); haptic(8); }}/>
+        <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro}/></div>
+        <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner}/></div>
+        <div className={activeTab==='fingerboard' ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
+        <div className={activeTab==='drone'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Drone       drone={drone} metro={metro} tuner={tuner}/></div>
+        <div className={activeTab==='log'         ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><PracticeLog log={log}/></div>
       </div>
 
       {/* 연주 명령 알림 */}
       {/* 첫 실행 안내 */}
       {!tuner.settings.onboarded && <Onboarding tuner={tuner}/>}
+
+      {showRecs && <div className="absolute inset-0 z-[60]"><RecordingsSheet recorder={recorder} tuner={tuner} onClose={() => setShowRecs(false)}/></div>}
 
       {/* 앱 시작 때 자동 소음 측정 */}
       {tuner.autoCal && !toast && (

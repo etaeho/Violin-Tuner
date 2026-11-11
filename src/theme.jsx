@@ -1,6 +1,6 @@
 // ==========================================
 // theme — 화면 모드(테마)와 공용 UI 조각
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 //
 // 색/배경은 src/theme.css 의 t-* 클래스로 처리하고,
 // 테마별로 모양 자체가 달라지는 부분만 useVintage()로 분기한다.

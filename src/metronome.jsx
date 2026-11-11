@@ -1,6 +1,6 @@
 // ==========================================
 // metronome — 메트로놈 탭
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 // ==========================================
 
 // ==========================================
@@ -27,6 +27,7 @@ const useMetronomeLogic = () => {
   const beatSubdivisionsRef = useRef(beatSubdivisions);
   const pressTimeoutRef  = useRef(null);
   const pressIntervalRef = useRef(null);
+  const recordTapRef     = useRef(null);   // 녹음 중이면 딸깍 소리를 여기에도 연결 (recorder.jsx)
   const lookahead = 25.0;
   const scheduleAheadTime = 0.1;
 
@@ -140,6 +141,7 @@ const useMetronomeLogic = () => {
       const dur=soundType===-1?0.02:0.04;
       gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
       osc.connect(gain); gain.connect(metroAudioCtxRef.current.destination);
+      if (recordTapRef.current) gain.connect(recordTapRef.current);   // 녹음에 메트로놈 소리 넣기
       osc.start(time); osc.stop(time+dur+0.01);
     }
   };
@@ -211,7 +213,9 @@ const useMetronomeLogic = () => {
   return {
     bpm, setBpm, isPlayingMetro, currentBeat, currentSub, timeSig, beatSounds, beatSubdivisions, visualFlash,
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
-    handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome
+    handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome,
+    getMetroCtx: () => { initMetroAudioContext(); return metroAudioCtxRef.current; },   // 녹음 믹스용
+    setRecordTap: (node) => { recordTapRef.current = node; },
   };
 };
 

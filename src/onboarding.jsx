@@ -1,6 +1,6 @@
 // ==========================================
 // onboarding — 첫 실행 안내 (30초): 마이크 허용 → 주변 소음 맞추기 → 테마
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 // 설정 → 정보 → "처음 안내 다시 보기"로 다시 볼 수 있음
 // ==========================================
 

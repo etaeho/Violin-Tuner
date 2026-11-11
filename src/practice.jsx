@@ -1,6 +1,6 @@
 // ==========================================
 // practice — 기록 탭: 연습 시간 자동 측정, 하루 연습량, 목표, 12주 달력, 요일별 그래프
-// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → app)
+// (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 // 구상안: docs/practice-log-plan.md  (현재 1단계: 연습 시간)
 //
 // 측정 방식: 튜너가 음을 확정할 때마다 note() 호출 → 직전 음과의 간격이
