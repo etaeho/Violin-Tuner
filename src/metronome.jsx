@@ -458,7 +458,7 @@ const Stepper = ({ value, onUp, onDown, accent }) => {
 };
 
 // 메트로놈 탭 위쪽 한 줄 음정 표시 (튜너와 같은 값): LIVE · 음이름 · ±50센트 바늘 · 센트
-const PitchStrip = ({ tuner, compact, swapColors }) => {
+const PitchStrip = ({ tuner, compact, swapColors, big }) => {
   // 바늘 게이지: 부채꼴 눈금(−50~+50센트) — 가운데(±10¢)를 넓게 펼친 눈금이라 작은 차이도 잘 보임
   // swapColors: 지판 탭 규칙 (높음 = 파랑, 낮음 = 빨강)
   const HI = swapColors ? '#3b82f6' : '#ef4444', LO = swapColors ? '#ef4444' : '#3b82f6';
@@ -490,10 +490,10 @@ const PitchStrip = ({ tuner, compact, swapColors }) => {
     const [x0, y0] = pt(ang(v), R), [x1, y1] = pt(ang(v), R - len);
     ticks.push(<line key={v} x1={x0} y1={y0} x2={x1} y2={y1} stroke={tick} strokeWidth={big ? 1.5 : 0.7} opacity={big ? 0.95 : 0.6}/>);
   }
-  const fs = compact ? 0.62 : 1;
+  const fs = compact ? 0.62 : big ? 1.35 : 1;
   return (
     <div className={`w-full rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[70px]' : 'h-[136px]'}`} style={{ background: face, boxShadow: 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
+      <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[70px]' : big ? 'h-[210px]' : 'h-[136px]'}`} style={{ background: face, boxShadow: 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full">
           <path d={arc(ang(-tolerance), ang(tolerance), R - 7)} fill="none" stroke={ok ? 'rgba(74,252,157,.8)' : 'rgba(74,180,110,.38)'} strokeWidth="11"/>
           {ticks}
@@ -524,7 +524,7 @@ const PitchStrip = ({ tuner, compact, swapColors }) => {
 };
 
 // 큰 숫자 음정 표시: 음이름 · 센트 · 방향 (메인 음정 표시기 '큰 숫자')
-const PitchDigits = ({ tuner, compact, swapColors }) => {
+const PitchDigits = ({ tuner, compact, swapColors, big }) => {
   const HI = swapColors ? '#3b82f6' : '#ef4444', LO = swapColors ? '#ef4444' : '#3b82f6';
   const { isStarted, pitch, cents, tolerance, currentNote, ensureMic } = tuner;
   const vintage = useVintage();
@@ -538,12 +538,12 @@ const PitchDigits = ({ tuner, compact, swapColors }) => {
         style={{ color: isStarted ? (vintage ? skin.live : '#4afc9d') : '#ef4444' }}>
         <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>{isStarted ? 'LIVE' : 'OFF'}
       </button>
-      <span className="font-black leading-none" style={{ color: live ? ink : cc, fontSize: compact ? 30 : 52, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+      <span className="font-black leading-none" style={{ color: live ? ink : cc, fontSize: compact ? 30 : big ? 72 : 52, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
         {live ? currentNote.name : '—'}<span style={{ fontSize: compact ? 16 : 26 }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
         <span style={{ fontSize: compact ? 12 : 18, opacity: 0.6 }}>{live ? currentNote.octave : ''}</span>
       </span>
       <span className="ml-auto flex flex-col items-end leading-none">
-        <span className="font-black" style={{ color: cc, fontSize: compact ? 28 : 48, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
+        <span className="font-black" style={{ color: cc, fontSize: compact ? 28 : big ? 64 : 48, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>
           {live ? (ok ? '✓' : `${cents > 0 ? '+' : ''}${cents}`) : '0'}{live && !ok && <span style={{ fontSize: compact ? 12 : 18 }}>¢</span>}
         </span>
         {!compact && <span className="text-[11px] font-black mt-1" style={{ color: cc }}>{!live ? '' : ok ? '맞음' : cents > 0 ? '높음 → 내리기' : '낮음 → 올리기'}</span>}
@@ -553,11 +553,11 @@ const PitchDigits = ({ tuner, compact, swapColors }) => {
 };
 
 // 메인 음정 표시기: 설정(세부 꾸미기 → 음정 표시기)에서 고른 모양으로 — 메트로놈·지판·드론 탭, 1번 탭 'meter' 블록 공용
-const MainPitchMeter = ({ tuner, compact, swapColors }) => {
+const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
   const { meter } = useParts();
-  if (meter === 'fine') return <FineGauge tuner={tuner} swapColors={swapColors}/>;
-  if (meter === 'digits') return <PitchDigits tuner={tuner} compact={compact} swapColors={swapColors}/>;
-  return <PitchStrip tuner={tuner} compact={compact} swapColors={swapColors}/>;
+  if (meter === 'fine') return big ? <div className="w-full flex justify-center" style={{ zoom: 1.25 }}><FineGauge tuner={tuner} swapColors={swapColors}/></div> : <FineGauge tuner={tuner} swapColors={swapColors}/>;
+  if (meter === 'digits') return <PitchDigits tuner={tuner} compact={compact} swapColors={swapColors} big={big}/>;
+  return <PitchStrip tuner={tuner} compact={compact} swapColors={swapColors} big={big}/>;
 };
 
 // 다이얼 칸: 남는 공간에 맞춰 정사각형 크기 계산 (배치에서 숨기면 통째로 빠짐)

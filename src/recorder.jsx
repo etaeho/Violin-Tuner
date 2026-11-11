@@ -151,7 +151,7 @@ const useRecorder = (tuner, metro, notify) => {
     const mime = pickMime();
     let mr;
     try {
-      mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: tuner.settings.recQuality === 'high' ? 128000 : 64000 });
+      mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 128000   /* 음질: 항상 높음 */ });
     } catch (e) { cleanupMix(); notify?.('녹음을 시작할 수 없습니다'); return false; }
     chunksRef.current = [];
     const latMs = Math.round(((own || mic).getAudioTracks()[0]?.getSettings?.().latency || 0.02) * 1000) + 10;
@@ -289,27 +289,17 @@ const RecToggle = ({ on, onClick, title, desc }) => (
 const RecSettings = ({ S, updateSettings }) => (
   <div className="flex flex-col gap-3">
     <RecToggle on={S.recClicks} onClick={() => updateSettings({ recClicks: !S.recClicks })}
-      title="메트로놈 박 소리 넣기" desc="녹음 중 메트로놈이 울리면 박에 맞춰 깨끗한 딸깍을 넣고, 스피커에서 마이크로 들어온 메트로놈 소리는 에코 제거로 지웁니다. 바이올린 소리가 어색하게 녹음되면 끄세요 (끄면 마이크에 들리는 그대로 녹음)."/>
+      title="메트로놈 녹음" desc="메트로놈을 켜고 녹음하면 박 소리를 박자에 딱 맞춰 깨끗하게 넣습니다"/>
     <div className="flex items-center justify-between gap-2">
       <div className="flex flex-col">
         <span className="text-xs font-bold text-gray-300">카운트인</span>
-        <span className="text-[10px] text-gray-600">녹음 전 메트로놈 템포로 세기</span>
+        <span className="text-[10px] text-gray-600 leading-snug">녹음 전에 딸깍으로 박을 세고 시작 (메트로놈 탭 빠르기 · 메트로놈이 꺼져 있어도 셈)</span>
       </div>
       <div className="flex gap-1 p-1 rounded-full t-chip shrink-0">
         {[[0, '없음'], [1, '1마디'], [2, '2마디']].map(([v, name]) => (
           <button key={v} onClick={() => { updateSettings({ recCountIn: v }); haptic(6); }}
             className="px-2.5 py-1 rounded-full text-[11px] font-black"
             style={(S.recCountIn || 0) === v ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{name}</button>
-        ))}
-      </div>
-    </div>
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-bold text-gray-300">음질</span>
-      <div className="flex gap-1 p-1 rounded-full t-chip">
-        {[['std', '보통 (작은 파일)'], ['high', '높음']].map(([id, name]) => (
-          <button key={id} onClick={() => { updateSettings({ recQuality: id }); haptic(6); }}
-            className="px-2.5 py-1 rounded-full text-[11px] font-black"
-            style={S.recQuality === id ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{name}</button>
         ))}
       </div>
     </div>
@@ -475,49 +465,51 @@ const RecordTab = ({ recorder, tuner, metro }) => {
   const total = items.reduce((a, b) => a + (b.size || 0), 0);
   const today = items.filter(it => recDayKey(it.at) === recDayKey(Date.now()));
   return (
-    <div className="w-full h-full flex flex-col gap-2.5 tab-enter overflow-y-auto pb-2">
+    <div className="w-full h-full flex flex-col gap-2.5 tab-enter">
       <div className="w-full flex items-center justify-between shrink-0 h-10">
         <span className="text-sm font-black tracking-widest" style={{ color: 'var(--ink)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>연습 녹음</span>
         <span className="t-chip px-3 py-1.5 rounded-full text-[11px] font-black text-gray-400">{items.length}개 · {(total / 1048576).toFixed(1)}MB</span>
       </div>
 
-      {!supported && <p className="text-sm text-[#ef4444] font-bold">이 기기에서는 녹음을 지원하지 않습니다.</p>}
+      {/* 위: 음정(크게) · 설정 · 오늘 녹음 — 스크롤 */}
+      <div className="w-full flex-1 min-h-0 overflow-y-auto flex flex-col gap-2.5 pb-1">
+        {!supported && <p className="text-sm text-[#ef4444] font-bold">이 기기에서는 녹음을 지원하지 않습니다.</p>}
 
-      {/* 녹음 버튼 */}
-      <div className="w-full t-panel rounded-3xl p-5 shrink-0 flex flex-col items-center gap-3">
-        <button onClick={recorder.toggle} disabled={!supported} aria-label={rec ? '녹음 정지' : recorder.count ? '카운트인 취소' : '녹음 시작'}
-          className="w-28 h-28 rounded-full flex items-center justify-center active:scale-95 transition-all"
-          style={{ background: rec ? 'rgba(239,68,68,.12)' : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)', border: `4px solid ${rec ? '#ef4444' : 'rgba(255,255,255,.15)'}`,
-            boxShadow: rec ? '0 0 30px rgba(239,68,68,.5)' : '0 8px 24px rgba(0,0,0,.4)' }}>
-          {rec ? <Square size={38} fill="#ef4444" color="#ef4444"/>
-            : recorder.count ? <span className="text-5xl font-black text-white font-mono">{recorder.count.left}</span>
-            : <span className="w-10 h-10 rounded-full bg-white"/>}
-        </button>
-        <span className="font-mono font-black text-3xl leading-none" style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
-        <span className="text-[11px] font-bold text-gray-500 h-4">
-          {rec ? '녹음 중 — 다른 탭으로 가도 계속 녹음됩니다' : recorder.count ? `카운트인… ${metro.bpm} BPM (누르면 취소)` : `누르면 녹음 시작${S.recCountIn ? ` · ${S.recCountIn}마디 세고 시작` : ''}`}
-        </span>
-      </div>
+        <MainPitchMeter tuner={tuner} big/>
 
-      {/* 녹음하면서 음정 보기 */}
-      <MainPitchMeter tuner={tuner} compact/>
-
-      {/* 녹음 설정 */}
-      <div className="w-full t-inset rounded-3xl p-4 shrink-0">
-        <div className="text-[10px] font-black tracking-widest text-gray-500 mb-3">녹음 설정</div>
-        <RecSettings S={S} updateSettings={tuner.updateSettings}/>
-      </div>
-
-      {/* 오늘 녹음 */}
-      <div className="w-full flex flex-col gap-2 shrink-0">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-black tracking-widest text-gray-500">오늘 녹음</span>
-          <span className="text-[10px] text-gray-500">지난 녹음은 기록 탭 맨 아래</span>
+        <div className="w-full t-inset rounded-3xl p-4 shrink-0">
+          <div className="text-[10px] font-black tracking-widest text-gray-500 mb-3">녹음 설정</div>
+          <RecSettings S={S} updateSettings={tuner.updateSettings}/>
         </div>
-        {!today.length && <p className="text-xs text-gray-500 text-center py-4">오늘 녹음이 아직 없습니다.</p>}
-        {today.map(it => <RecItem key={it.id} it={it} recorder={recorder} dateLabel="time"/>)}
+
+        <div className="w-full flex flex-col gap-2 shrink-0">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] font-black tracking-widest text-gray-500">오늘 녹음</span>
+            <span className="text-[10px] text-gray-500">지난 녹음은 기록 탭 맨 아래</span>
+          </div>
+          {!today.length && <p className="text-xs text-gray-500 text-center py-4">오늘 녹음이 아직 없습니다.</p>}
+          {today.map(it => <RecItem key={it.id} it={it} recorder={recorder} dateLabel="time"/>)}
+        </div>
+        <p className="text-[10px] text-gray-600 leading-snug px-1">녹음은 이 폰 안에만 보관됩니다. ⬇ 버튼으로 파일(webm)로 저장해 다른 앱에서 들을 수 있습니다. 앱이 화면에서 사라지면 녹음이 자동으로 끝납니다.</p>
       </div>
-      <p className="text-[10px] text-gray-600 leading-snug px-1">녹음은 이 폰 안에만 보관됩니다. ⬇ 버튼으로 파일(webm)로 저장해 다른 앱에서 들을 수 있습니다. 앱이 화면에서 사라지면 녹음이 자동으로 끝납니다.</p>
+
+      {/* 맨 아래: 녹음 버튼 (항상 보임) */}
+      <div className="w-full t-panel rounded-3xl px-5 py-3 shrink-0 flex items-center gap-4">
+        <div className="flex-1 min-w-0 flex flex-col gap-1">
+          <span className="font-mono font-black text-4xl leading-none" style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
+          <span className="text-[11px] font-bold text-gray-500 leading-snug">
+            {rec ? '녹음 중 · 다른 탭으로 가도 계속 녹음' : recorder.count ? `카운트인… ${metro.bpm} BPM (누르면 취소)` : `누르면 녹음 시작${S.recCountIn ? ` · ${S.recCountIn}마디 세고 시작` : ''}`}
+          </span>
+        </div>
+        <button onClick={recorder.toggle} disabled={!supported} aria-label={rec ? '녹음 정지' : recorder.count ? '카운트인 취소' : '녹음 시작'}
+          className="w-20 h-20 rounded-full flex items-center justify-center active:scale-95 transition-all shrink-0"
+          style={{ background: rec ? 'rgba(239,68,68,.12)' : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)', border: `4px solid ${rec ? '#ef4444' : 'rgba(255,255,255,.15)'}`,
+            boxShadow: rec ? '0 0 26px rgba(239,68,68,.5)' : '0 8px 24px rgba(0,0,0,.4)' }}>
+          {rec ? <Square size={30} fill="#ef4444" color="#ef4444"/>
+            : recorder.count ? <span className="text-4xl font-black text-white font-mono">{recorder.count.left}</span>
+            : <span className="w-8 h-8 rounded-full bg-white"/>}
+        </button>
+      </div>
     </div>
   );
 };
