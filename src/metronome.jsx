@@ -111,7 +111,10 @@ const useMetronomeLogic = () => {
       // 튜너가 이 순간 분석을 건너뛸 수 있게 클릭 시각 공유 (출력 지연 포함)
       const ctx = metroAudioCtxRef.current;
       const soundOn = subBeatNumber !== 0 || beatSoundsRef.current[beatNumber] > 0;
-      if (soundOn) METRO_CLICKS.times.push(performance.now() + delay + ((ctx.outputLatency || ctx.baseLatency || 0) * 1000));
+      const heard = performance.now() + delay + ((ctx.outputLatency || ctx.baseLatency || 0) * 1000);   // 스피커에서 실제로 나는 시각
+      if (soundOn) METRO_CLICKS.times.push(heard);
+      METRO_CLICKS.grid.push([heard, subBeatNumber === 0]);
+      if (METRO_CLICKS.grid.length > 4000) METRO_CLICKS.grid.splice(0, 2000);
     }
     if (subBeatNumber===0) {
       setTimeout(()=>{
@@ -215,6 +218,14 @@ const useMetronomeLogic = () => {
     toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
     handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome,
     getMetroCtx: () => { initMetroAudioContext(); return metroAudioCtxRef.current; },   // 녹음 믹스용
+    // 녹음 카운트인용 딸깍 한 번 (메트로놈 재생과 별개). when = AudioContext 시각
+    playClick: (when, strong) => {
+      initMetroAudioContext();
+      const ctx = metroAudioCtxRef.current, osc = ctx.createOscillator(), g = ctx.createGain(), t = when ?? ctx.currentTime + 0.02;
+      osc.type = 'square'; osc.frequency.value = strong ? 2000 : 1000;
+      g.gain.setValueAtTime(strong ? 1 : 0.7, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.05);
+    },
     setRecordTap: (node) => { recordTapRef.current = node; },
   };
 };

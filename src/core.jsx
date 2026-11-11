@@ -240,6 +240,7 @@ const DEFAULT_SETTINGS = {
   parts: { num: 'auto', plate: 'auto', beat: 'dial', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   recClicks: true,   // 녹음에 메트로놈 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx)
   recQuality: 'std', // 'std' 64kbps | 'high' 128kbps
+  recCountIn: 0,     // 녹음 전 카운트인 마디 수 (0·1·2)
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
   layoutRev: 7,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
@@ -323,7 +324,7 @@ const usePersistentState = (key, initial, validate = () => true) => {
 };
 
 // 메트로놈 딸깍 소리 시각(performance.now 기준) — metronome.jsx가 기록, 튜너가 그 순간 분석을 건너뜀
-const METRO_CLICKS = { times: [] };
+const METRO_CLICKS = { times: [], grid: [] };   // times: 소리 나는 클릭(튜너 건너뛰기용) · grid: 모든 박/쪼갠 박 [시각, 첫박여부] (녹음 박자 분석용)
 const CLICK_GATE_BEFORE = 20, CLICK_GATE_AFTER = 120;  // ms (마이크 지연 포함 여유)
 const isNearMetroClick = (now) => {
   const t = METRO_CLICKS.times;
