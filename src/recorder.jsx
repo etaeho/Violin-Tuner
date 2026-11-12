@@ -406,6 +406,7 @@ const RecPlayer = ({ it, recorder }) => {
 
 // 녹음 한 줄: 재생/일시정지 · 날짜/길이 · 폰에 저장 · 삭제(두 번). 재생 중이면 아래에 재생 패널
 const RecItem = ({ it, recorder, dateLabel = 'full' }) => {
+  // 오른손(활 잡은 손)으로 누르기 쉽게: 재생·저장은 오른쪽 끝, 삭제는 실수로 안 누르게 왼쪽
   const p = recorder.player;
   const [confirm, setConfirm] = useState(false);
   const on = p?.id === it.id;
@@ -413,11 +414,11 @@ const RecItem = ({ it, recorder, dateLabel = 'full' }) => {
   const stats = recStatsText(it);
   return (
     <div className="t-card rounded-2xl p-2.5 flex flex-col gap-2">
-      <div className="flex items-center gap-2.5">
-        <button onClick={() => recorder.open(it)} aria-label={on && !p.paused ? '일시정지' : '재생'}
-          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 active:scale-95"
-          style={{ background: on ? 'var(--accent)' : 'var(--chip-bg)', border: '1px solid var(--chip-border)', color: on ? '#000' : 'var(--ink)' }}>
-          {on && !p.paused ? <Pause size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
+      <div className="flex items-center gap-2">
+        <button onClick={() => { if (confirm) { recorder.remove(it); setConfirm(false); } else { setConfirm(true); haptic(8); setTimeout(() => setConfirm(false), 2500); } }}
+          className="rounded-full p-2 shrink-0 flex items-center gap-1" aria-label="삭제"
+          style={confirm ? { color: '#ef4444', border: '1px solid #ef4444' } : { color: '#6b7280' }}>
+          <Trash2 size={14}/>{confirm && <span className="text-[10px] font-black">한 번 더</span>}
         </button>
         <div className="flex-1 min-w-0 flex flex-col">
           <span className="text-sm font-black" style={{ color: 'var(--ink)' }}>{dateLabel === 'time' ? hm : fmtRecDate(it.at)} <span className="font-mono text-gray-400 text-xs">{on ? `${recDur(p.pos)} / ` : ''}{recDur(it.dur)}</span></span>
@@ -427,10 +428,10 @@ const RecItem = ({ it, recorder, dateLabel = 'full' }) => {
         </div>
         {on && <button onClick={recorder.closePlayer} className="t-chip rounded-full p-2 text-gray-400 shrink-0" aria-label="닫기"><X size={15}/></button>}
         <button onClick={() => recorder.exportItem(it)} className="t-chip rounded-full p-2 text-gray-300 shrink-0" aria-label="폰에 저장"><Download size={15}/></button>
-        <button onClick={() => { if (confirm) { recorder.remove(it); setConfirm(false); } else { setConfirm(true); haptic(8); setTimeout(() => setConfirm(false), 2500); } }}
-          className="t-chip rounded-full p-2 shrink-0 flex items-center gap-1" aria-label="삭제"
-          style={confirm ? { color: '#ef4444', borderColor: '#ef4444' } : { color: '#9ca3af' }}>
-          <Trash2 size={15}/>{confirm && <span className="text-[10px] font-black">한 번 더</span>}
+        <button onClick={() => recorder.open(it)} aria-label={on && !p.paused ? '일시정지' : '재생'}
+          className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 active:scale-95"
+          style={{ background: on ? 'var(--accent)' : 'var(--chip-bg)', border: '1px solid var(--chip-border)', color: on ? '#000' : 'var(--ink)' }}>
+          {on && !p.paused ? <Pause size={18} fill="currentColor"/> : <Play size={18} fill="currentColor"/>}
         </button>
       </div>
       {on && <RecPlayer it={it} recorder={recorder}/>}
@@ -569,7 +570,7 @@ const RecDelayOverlay = ({ recorder }) => {
   );
 };
 
-// ── 녹음 모듈: 화면 배치 '녹음' 블록 (튜너·메트로놈 탭). 작게 = 한 줄, 크게 = 두 줄(+ 마지막 녹음 바로 듣기) ──
+// ── 녹음 모듈: 화면 배치 '녹음' 블록 (튜너·메트로놈 탭). 작게 = 한 줄, 크게 = 두 줄(+ 마지막 녹음 바로 듣기). 버튼은 오른쪽(활 잡은 오른손) ──
 const RecModule = ({ size = 's' }) => {
   const recorder = React.useContext(RecorderContext);
   const vintage = useVintage();
@@ -582,6 +583,10 @@ const RecModule = ({ size = 's' }) => {
   return (
     <div className={`w-full max-w-sm rounded-2xl px-3 ${big ? 'py-2.5' : 'py-1.5'} flex flex-col gap-2 shrink-0 t-inset`}>
       <div className="flex items-center gap-3">
+        <span className={`font-mono font-black leading-none ${big ? 'text-3xl' : 'text-xl'}`} style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
+        <span className="flex-1 min-w-0 text-[11px] font-bold truncate" style={{ color: rec ? '#ef4444' : 'var(--ink2)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+          {rec ? '● 녹음 중' : count ? `${count.left}초 뒤 시작` : '녹음'}
+        </span>
         <button onClick={recorder.toggle} disabled={!supported} aria-label={rec ? '녹음 정지' : count ? '녹음 대기 취소' : '녹음 시작'}
           className={`${btn} rounded-full flex items-center justify-center shrink-0 active:scale-95`}
           style={{ background: rec ? (beat ? 'rgba(239,68,68,.32)' : 'rgba(239,68,68,.12)') : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)',
@@ -591,18 +596,14 @@ const RecModule = ({ size = 's' }) => {
             : count ? <span className={`${big ? 'text-2xl' : 'text-lg'} font-black text-white font-mono`}>{count.left}</span>
             : <span className={`${big ? 'w-5 h-5' : 'w-3.5 h-3.5'} rounded-full bg-white`}/>}
         </button>
-        <span className={`font-mono font-black leading-none ${big ? 'text-3xl' : 'text-xl'}`} style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
-        <span className="flex-1 min-w-0 text-[11px] font-bold truncate" style={{ color: rec ? '#ef4444' : 'var(--ink2)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-          {rec ? '● 녹음 중' : count ? `${count.left}초 뒤 시작` : '녹음'}
-        </span>
       </div>
       {big && (
         <div className="flex items-center gap-2 text-[11px] font-bold" style={{ color: 'var(--ink2)' }}>
           {last ? <>
+            <span className="flex-1 min-w-0 truncate">마지막 녹음 {fmtRecDate(last.at)} · {recDur(last.dur)}{recStatsText(last) ? ` · ${recStatsText(last)}` : ''}</span>
             <button onClick={() => recorder.open(last)} className="w-8 h-8 rounded-full t-chip flex items-center justify-center shrink-0" aria-label="마지막 녹음 듣기">
               {recorder.player?.id === last.id && !recorder.player.paused ? <Pause size={13} fill="currentColor"/> : <Play size={13} fill="currentColor"/>}
             </button>
-            <span className="truncate">마지막 녹음 {fmtRecDate(last.at)} · {recDur(last.dur)}{recStatsText(last) ? ` · ${recStatsText(last)}` : ''}</span>
           </> : <span className="text-gray-500">아직 녹음이 없습니다 · 녹음 탭에서 전체 목록</span>}
         </div>
       )}

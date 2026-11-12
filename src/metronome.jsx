@@ -665,56 +665,65 @@ const DragHint = ({ color }) => <span className="block text-center text-[9px] fo
 //  가운데 아주 큰 BPM, 위에 박 점, 끌면 빠르기 · 톡 누르면 시작/정지 (멀리서 보면서 연습용)
 const lum = (hex) => { const m = /^#([0-9a-f]{6})/i.exec(hex || ''); if (!m) return 0; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
 const BeatLight = ({ metro }) => {
-  const vintage = useVintage(), skin = useSkin();
+  // 큰 둥근 불빛 하나: 박마다 원 전체가 박 색으로 켜지고 가운데에 '지금 몇 번째 박'인지 큰 숫자.
+  // 원 둘레엔 박 위치 점(시계처럼), 첫 박은 더 밝고 크게. 끌면 빠르기 · 톡 누르면 시작/정지
+  const vintage = useVintage(), skin = useSkin(), isLightTheme = useTheme() === 'light';
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
   const { bpm, beatSounds, beatSubdivisions, currentBeat, currentSub, visualFlash, isPlayingMetro, timeSig } = metro;
   const drag = useBpmDrag(metro, () => { metro.toggleMetronome(); });
   const ref = useRef(null); const [box, setBox] = useState({ w: 300, h: 300 });
   useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight })); ro.observe(el); return () => ro.disconnect(); }, []);
-  // 숫자는 템포를 바꿀 때만 크게 잠깐 (끌기·−/+·TAP 모두)
   const [showBig, setShowBig] = useState(false);
   const firstRef = useRef(true);
   useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const f = beatFlash(metro), sub = isPlayingMetro && visualFlash === 'sub';
   const k = vintage ? skin.dial : null;
   const base = vintage ? (k.face === 'cream' ? '#f3e8cc' : k.face) : null;
-  let col = vintage ? (f.down ? k.on : k.strong && k.strong.startsWith('#') ? k.strong : k.on) : (pal[f.snd] || pal[1]);
-  if (vintage && lum(base) > 0.6 && lum(col) > 0.6) col = k.needle || '#b3261e';   // 밝은 문자판(라디오)에 밝은 색이면 안 보임 → 바늘 빨강
-  const lit = f.fire ? (f.down ? 0.55 : 0.32) : sub ? 0.1 : 0;
   const restInk = vintage ? (k.text === '#2a1a0e' || lum(base) > 0.6 ? '#2a1a0e' : k.text) : 'var(--ink)';
-  // 박 원: 판을 가득 채우게 (4박 = 한 줄, 5~8박 = 두 줄)
-  const n = beatSounds.length, cols = n <= 4 ? n : n <= 8 ? Math.ceil(n / 2) : Math.ceil(n / 3), rows = Math.ceil(n / cols);
-  const d = Math.max(36, Math.min((box.w - 32 - (cols - 1) * 14) / cols, (box.h - 96 - (rows - 1) * 22) / rows, 220));
-  const beatCol = (snd) => vintage ? (lum(base) > 0.6 ? (snd === 2 ? (k.needle || '#b3261e') : '#8a5a2b') : (snd === 2 ? k.on : k.strong)) : pal[snd];
+  const lightFace = vintage && lum(base) > 0.6;
+  // 박 색: 첫 박(강세)·중간 강세·약박
+  const colOf = (snd) => vintage ? (lightFace ? (snd === 2 ? (k.needle || '#b3261e') : '#a0522d') : (snd === 2 ? k.on : (k.strong && k.strong.startsWith('#') ? k.strong : '#e0a94f'))) : (pal[snd] || pal[1]);
+  const curSnd = isPlayingMetro && currentBeat >= 0 ? beatSounds[currentBeat] : 0;
+  const col = colOf(curSnd || 1);
+  const n = beatSounds.length;
+  const D = Math.max(120, Math.min(box.w - 56, box.h - 104));         // 큰 불빛 지름 (둘레 점 · 위아래 글자 자리 남김)
+  const R = D / 2 + 12;                                               // 박 점 둘레 반지름
+  const lit = f.fire ? 1 : sub ? 0.35 : isPlayingMetro && curSnd ? 0.22 : 0;   // 박 순간 = 꽉, 그 사이 = 은은하게 남음
+  const numInk = restInk;   // 숫자 색은 고정 (번쩍일 때마다 바뀌면 깜빡여 보임) + 그림자로 밝은 불빛 위에서도 읽히게
   return (
-    <div ref={ref} {...drag} className={`relative w-full flex-1 min-h-0 rounded-[28px] overflow-hidden flex flex-col items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
-      style={{ ...drag.style, cursor: 'pointer', ...(vintage ? { background: base, border: `2px solid ${k.ring}` } : {}),
-        boxShadow: f.fire ? `0 0 ${f.down ? 50 : 26}px ${col}` : 'none', transition: f.fire ? 'box-shadow 30ms' : 'box-shadow 300ms ease-out' }}
+    <div ref={ref} {...drag} className={`relative w-full flex-1 min-h-0 rounded-[28px] overflow-hidden flex items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
+      style={{ ...drag.style, cursor: 'pointer', ...(vintage ? { background: base, border: `2px solid ${k.ring}` } : {}) }}
       aria-label="박 조명 (끌어서 빠르기, 누르면 시작/정지)">
-      <div className="absolute inset-0 pointer-events-none" style={{ background: col, opacity: lit, transition: f.fire || sub ? 'opacity 30ms' : 'opacity 300ms ease-out' }}/>
-      {/* 작은 빠르기 표시 (위) */}
-      <span className="absolute top-3 inset-x-0 text-center text-sm font-black tracking-widest pointer-events-none" style={{ color: restInk, opacity: 0.8, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+      {/* 위: 작은 빠르기 */}
+      <span className="absolute top-2.5 inset-x-0 text-center text-xs font-black tracking-widest pointer-events-none" style={{ color: restInk, opacity: 0.7, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
         {bpm} BPM · {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm)}
       </span>
-      {/* 큰 박 원 */}
-      <div className="relative grid justify-center content-center pointer-events-none" style={{ gridTemplateColumns: `repeat(${cols}, ${d}px)`, columnGap: 14, rowGap: 22 }}>
+      <div className="relative pointer-events-none" style={{ width: D, height: D }}>
+        {/* 둘레 박 점 (12시 = 첫 박, 시계 방향) */}
         {beatSounds.map((snd, i) => {
-          const on = isPlayingMetro && i === currentBeat, fire = on && f.fire, c = beatCol(snd), nsub = beatSubdivisions[i] || 1;
-          return (
-            <div key={i} className="flex flex-col items-center gap-1.5">
-              <div className="rounded-full flex items-center justify-center font-black" style={{ width: d, height: d, fontSize: d * 0.36,
-                background: snd === 0 ? 'transparent' : c, border: snd === 0 ? `3px dashed ${restInk}` : `${fire ? 5 : 3}px solid ${on ? restInk : 'transparent'}`,
-                opacity: snd === 0 ? 0.35 : on ? 1 : 0.28, color: lum(c) > 0.55 ? '#111' : '#fff', fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace',
-                transform: `scale(${fire ? 1.08 : 1})`, boxShadow: fire ? `0 0 ${f.down ? 60 : 34}px ${c}` : 'none',
-                transition: fire ? 'transform 30ms, box-shadow 30ms, opacity 30ms' : 'transform 220ms ease-out, box-shadow 260ms, opacity 200ms' }}>{i + 1}</div>
-              <div className="flex gap-1 h-2">
-                {nsub > 1 && Array.from({ length: nsub }, (_, j) => <i key={j} className="rounded-full" style={{ width: 8, height: 8, background: restInk, opacity: on && (currentSub || 0) === j ? 1 : 0.22 }}/>)}
-              </div>
-            </div>
-          );
+          const ang = (i / n) * 2 * Math.PI - Math.PI / 2, on = isPlayingMetro && i === currentBeat;
+          const sz = snd === 2 ? 16 : 11, c = colOf(snd || 1);
+          return <i key={i} className="absolute rounded-full" style={{ width: sz, height: sz, left: D / 2 + R * Math.cos(ang) - sz / 2, top: D / 2 + R * Math.sin(ang) - sz / 2,
+            background: snd === 0 ? 'transparent' : c, border: snd === 0 ? `2px solid ${restInk}` : 'none', opacity: on ? 1 : 0.3,
+            transform: `scale(${on ? 1.6 : 1})`, boxShadow: on ? `0 0 12px ${c}` : 'none', transition: 'transform 80ms, opacity 80ms' }}/>;
         })}
+        {/* 큰 불빛 */}
+        <div className="absolute inset-0 rounded-full" style={{ background: vintage ? (lightFace ? 'rgba(42,26,14,.08)' : 'rgba(255,255,255,.04)') : 'rgba(128,128,128,.06)',
+          border: `3px solid ${isPlayingMetro ? col : restInk}`, opacity: isPlayingMetro ? 1 : 0.35 }}/>
+        <div className="absolute inset-0 rounded-full" style={{ background: `radial-gradient(circle at 45% 40%, ${col}, ${col} 55%, ${col}cc 80%, ${col}66)`, opacity: lit,
+          transform: `scale(${f.fire ? (f.down ? 1.04 : 1.02) : 1})`, boxShadow: f.fire ? `0 0 ${f.down ? 80 : 46}px ${f.down ? 20 : 8}px ${col}` : 'none',
+          transition: f.fire ? 'opacity 25ms, transform 25ms, box-shadow 25ms' : 'opacity 320ms ease-out, transform 220ms ease-out, box-shadow 320ms ease-out' }}/>
+        {/* 가운데: 지금 몇 번째 박 (멈춤이면 ▶) */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          {isPlayingMetro
+            ? <span className="font-black leading-none" style={{ fontSize: D * 0.46, color: numInk, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace', textShadow: lightFace || isLightTheme ? '0 1px 8px rgba(255,255,255,.6)' : '0 2px 12px rgba(0,0,0,.55)' }}>{currentBeat >= 0 ? currentBeat + 1 : ''}</span>
+            : <Play size={D * 0.3} fill={restInk} color={restInk} style={{ opacity: 0.5 }}/>}
+          {isPlayingMetro && (beatSubdivisions[currentBeat] || 1) > 1 && (
+            <span className="flex gap-1.5 mt-1">{Array.from({ length: beatSubdivisions[currentBeat] }, (_, j) => <i key={j} className="rounded-full" style={{ width: 9, height: 9, background: numInk, opacity: (currentSub || 0) === j ? 1 : 0.3 }}/>)}</span>
+          )}
+        </div>
       </div>
-      <span className="absolute bottom-3 inset-x-0 text-center text-[11px] font-bold pointer-events-none" style={{ color: restInk, opacity: 0.5 }}>
+      <span className="absolute bottom-2 inset-x-0 text-center text-[11px] font-bold pointer-events-none" style={{ color: restInk, opacity: 0.5 }}>
         ◀ 느리게 · 끌기 · 빠르게 ▶ · 누르면 {isPlayingMetro ? '정지' : '시작'}
       </span>
       {/* 템포를 바꾸는 동안만 큰 숫자 */}
