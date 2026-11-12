@@ -634,7 +634,7 @@ const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
   return <PitchStrip tuner={tuner} compact={compact} swapColors={swapColors} big={big}/>;
 };
 
-// BPM 숫자 끌기: 오른쪽(+ 쪽)·위로 끌면 빨라지고, 왼쪽(− 쪽)·아래로 끌면 느려짐 (6px = 1 BPM)
+// BPM 숫자 끌기: 오른쪽(+ 쪽)·위로 끌면 빨라지고, 왼쪽(− 쪽)·아래로 끌면 느려짐 (6px = 1 BPM, 주로 움직인 방향만)
 const useBpmDrag = (metro, onTap) => {
   const st = useRef(null);
   const mref = useRef(metro); mref.current = metro;
@@ -643,7 +643,10 @@ const useBpmDrag = (metro, onTap) => {
     onPointerMove: (e) => {
       const s0 = st.current; if (!s0) return;
       if (Math.abs(e.clientX - s0.x) + Math.abs(e.clientY - s0.y) > 8) s0.moved = true;
-      const v = Math.max(30, Math.min(250, s0.bpm + Math.round(((e.clientX - s0.x) - (e.clientY - s0.y)) / 6)));
+      // 주로 움직인 방향 하나만 씀 (엄지로 오른쪽으로 끌면 살짝 아래로 휘어서 서로 상쇄되던 문제)
+      const dx = e.clientX - s0.x, dy = e.clientY - s0.y;
+      const delta = Math.abs(dx) >= Math.abs(dy) ? dx : -dy;          // 오른쪽 또는 위 = 빠르게
+      const v = Math.max(30, Math.min(250, s0.bpm + Math.round(delta / 6)));
       if (v !== s0.last) { s0.last = v; mref.current.setBpm(v); haptic(4); }
     },
     onPointerUp: () => { const s0 = st.current; st.current = null; if (s0 && !s0.moved && onTap) onTap(); },   // 끌지 않고 톡 누르면 onTap (박 조명: 시작/정지)
@@ -652,7 +655,7 @@ const useBpmDrag = (metro, onTap) => {
   };
 };
 // 끌기 안내: BPM 숫자 아래 작은 글씨
-const DragHint = ({ color }) => <span className="block text-center text-[9px] font-bold pointer-events-none" style={{ color: color || 'rgba(156,163,175,.7)' }}>◀ 끌어서 빠르기 ▶</span>;
+const DragHint = ({ color }) => <span className="block text-center text-[9px] font-bold pointer-events-none" style={{ color: color || 'rgba(156,163,175,.7)' }}>◀ 느리게 · 끌기 · 빠르게 ▶</span>;
 
 // ── 박 조명: 화면 절반 이상을 차지하는 큰 판. 박마다 판 전체가 박 색으로 번쩍(첫 박은 꽉 차게) ──
 //  가운데 아주 큰 BPM, 위에 박 점, 끌면 빠르기 · 톡 누르면 시작/정지 (멀리서 보면서 연습용)
@@ -708,7 +711,7 @@ const BeatLight = ({ metro }) => {
         })}
       </div>
       <span className="absolute bottom-3 inset-x-0 text-center text-[11px] font-bold pointer-events-none" style={{ color: restInk, opacity: 0.5 }}>
-        ◀ 끌어서 빠르기 ▶ · 누르면 {isPlayingMetro ? '정지' : '시작'}
+        ◀ 느리게 · 끌기 · 빠르게 ▶ · 누르면 {isPlayingMetro ? '정지' : '시작'}
       </span>
       {/* 템포를 바꾸는 동안만 큰 숫자 */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: showBig ? 1 : 0, transition: showBig ? 'opacity 80ms' : 'opacity 400ms ease-out' }}>
