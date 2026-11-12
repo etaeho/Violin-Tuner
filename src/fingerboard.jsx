@@ -2,7 +2,7 @@
 // fingerboard — 지판 탭 (v2 디자인)
 // (index.html에서 순서대로 로드됨: core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app)
 //  - 조표별 음 표시, 지금 연주하는 음, 누르면 기준음, 박마다 테두리 빛남
-//  - 히트맵: 최근 30일 음별 평균 센트 (자주 높으면 파랑 ▼ 내리기, 낮으면 빨강 ▲ 올리기 — 화살표 = 고칠 방향) — 연습 기록(practice.jsx)의 음별 정확도 사용
+//  - 히트맵(아래 '초기화' 두 번 → log.resetPerNote, 음별 정확도만 지움): 최근 30일 음별 평균 센트 (자주 높으면 파랑 ▼ 내리기, 낮으면 빨강 ▲ 올리기 — 화살표 = 고칠 방향) — 연습 기록(practice.jsx)의 음별 정확도 사용
 //  - 스케일 연습: 다음 음 안내 → 그 음을 0.15초 이상 연주하면 센트 기록하고 다음으로
 // ==========================================
 
@@ -82,6 +82,7 @@ const useScalePractice = (keyId, tuner) => {
 const Fingerboard = ({ tuner, metro, log }) => {
   const [keyId, setKeyId] = usePersistentState('fb.key', fbInitialKey(), v => !!FB_KEYS.find(k => k.id === v));
   const [heat, setHeat] = usePersistentState('fb.heat', false, v => typeof v === 'boolean');
+  const [heatReset, setHeatReset] = useState(false);   // 히트맵 초기화: 두 번 눌러야 실행
   const vintage = useVintage();
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
   const scale = useScalePractice(keyId, tuner);
@@ -221,9 +222,16 @@ const Fingerboard = ({ tuner, metro, log }) => {
           ))}
         </div>
       </div>
-      {heat && <p className="text-[10px] text-gray-500 text-center shrink-0">
-        <span className="font-black" style={{ color: FB_HIGH }}>▼ 파랑</span> = 자주 높음(내리기) · <span className="font-black" style={{ color: FB_LOW }}>▲ 빨강</span> = 자주 낮음(올리기) (최근 30일, 3번 이상 연주한 음)
-      </p>}
+      {heat && (
+        <div className="flex items-center justify-center gap-2 shrink-0 text-[10px] font-bold text-gray-500">
+          <span><b style={{ color: FB_HIGH }}>▼파랑</b> 높음 · <b style={{ color: FB_LOW }}>▲빨강</b> 낮음 · 최근 30일</span>
+          <button onClick={() => { if (heatReset) { log.resetPerNote(); setHeatReset(false); haptic(30); } else { setHeatReset(true); haptic(8); setTimeout(() => setHeatReset(false), 2500); } }}
+            className="t-chip rounded-full px-2 py-0.5 flex items-center gap-1"
+            style={heatReset ? { color: '#ef4444', borderColor: '#ef4444' } : { color: '#9ca3af' }}>
+            <RotateCcw size={10}/>{heatReset ? '한 번 더' : '초기화'}
+          </button>
+        </div>
+      )}
 
       {tuner.error && (
         <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60 backdrop-blur-sm rounded-2xl">

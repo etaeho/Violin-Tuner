@@ -135,6 +135,13 @@ const usePracticeLog = (ctxRef) => {
     setVer(v => v + 1);
   };
 
+  // 지판 히트맵만 초기화: 날짜별 음별 정확도(per)만 지움 (연습 시간 등 다른 기록은 그대로)
+  const resetPerNote = () => {
+    Object.values(daysRef.current).forEach(d => { if (d) delete d.per; });
+    vtSave(LOG_KEY, JSON.stringify(daysRef.current));
+    setVer(v => v + 1);
+  };
+
   // 연속 연습일: 1분 이상 연습한 날이 오늘(또는 어제)부터 며칠 이어졌나
   const streak = () => {
     const days = daysRef.current;
@@ -145,7 +152,7 @@ const usePracticeLog = (ctxRef) => {
     return n;
   };
 
-  return { days: daysRef.current, today: today(), goalMin, setGoalMin, idleSec, setIdleSec, note, reset, streak };
+  return { days: daysRef.current, today: today(), goalMin, setGoalMin, idleSec, setIdleSec, note, reset, resetPerNote, streak };
 };
 
 // ── 화면 ──
