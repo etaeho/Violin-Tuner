@@ -28,7 +28,7 @@
   - **메인 음정 표시기** `parts.meter` = 'needle'(`PitchStrip`, 가운데 ±10¢를 넓게 펼친 바늘) | 'fine'(`FineGauge`) | 'digits'(`PitchDigits`) → `MainPitchMeter`(metronome.jsx). 2번 탭 'pitch' 블록 · 1번 탭 'meter' 블록 · 지판(compact swapColors) · 드론(compact) 공용. **다른 탭에 음정 표시를 붙일 땐 항상 MainPitchMeter 사용**
   - **음정 그래프 색은 `graphLook(vintage, skin)`**(theme.jsx) — 다크·라이트 = 검은 표시창, 우드 = 디자인 다이얼 색(라디오·악보는 밝은 문자판 + 진한 점). 새 그래프도 이걸 쓸 것
   - **실시간 음정 그래프** `LivePitchGraph`(metronome.jsx) = 화면 배치 'history' 블록: **음역 그래프**(세로 = 실제 음 높이, `PitchRows` 반음 줄·음이름·개방현 줄, 범위 자동 `pitchRange`) + 점 색 맞음/높음/낮음 + 메트로놈 박 줄 + '맞음 %'(최근 5초). 녹음 재생 그래프도 같은 방식
-  - 미니 메트로놈이 켜진 튜너 탭: 메트로놈이 돌면 박마다 화면 전체 테두리 번쩍. **현별 막대 블록은 없앰**
+  - 미니 메트로놈이 켜진 튜너 탭: 메트로놈이 돌면 박마다 화면 전체 테두리 번쩍. **현별 막대 · 정밀 게이지 · 숫자창 블록은 없앰**(정밀 게이지는 '음정 표시기' 모양 중 하나로만 남음, TunerReadout 코드는 남아 있으나 안 씀)
   - **정밀 튜닝**: `FineGauge`(1번 탭 'fine' 블록) = A4 기준 목표 Hz · 차이 0.1Hz · 1¢, ±12¢ 안이면 눈금 ±10¢로 확대. 세로/가로 테이프도 ±15¢ 안이면 확대(×4/×3)
   - **부드러운 움직임**: core.jsx `useSpring(목표값들, onFrame)` — 매 프레임 DOM을 직접 바꿈(리렌더 없음). 테이프·게이지 바늘에 사용
   - **음정 기준 통일**: 모든 음정 표시(테이프·막대·게이지·숫자·그래프)는 `tuner.cents`(가장 가까운 음 기준, 정수)·`tuner.centsExact`(소수) 하나만 씀. 현 기준(stringCents)은 표시에 쓰지 말 것

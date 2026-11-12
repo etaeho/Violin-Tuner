@@ -949,7 +949,7 @@ const PartsEditor = ({ parts, onChange }) => {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <div className="text-[10px] font-bold text-gray-500 mb-1.5">숫자 모양 (Hz · BPM)</div>
+        <div className="text-[10px] font-bold text-gray-500 mb-1.5">숫자 모양 (BPM)</div>
         <div className="grid grid-cols-3 gap-2">
           {PART_NUM_STYLES.map(o => (
             <Opt key={o.id} on={parts.num === o.id} onClick={() => onChange({ num: o.id })}>
@@ -960,7 +960,7 @@ const PartsEditor = ({ parts, onChange }) => {
         </div>
       </div>
       <div>
-        <div className="text-[10px] font-bold text-gray-500 mb-1.5">판 모양 (숫자창 · 다이얼 가운데)</div>
+        <div className="text-[10px] font-bold text-gray-500 mb-1.5">판 모양 (다이얼 가운데)</div>
         <div className="grid grid-cols-2 gap-2">
           {PART_PLATE_STYLES.map(o => (
             <Opt key={o.id} on={parts.plate === o.id} onClick={() => onChange({ plate: o.id })}>
@@ -1527,12 +1527,10 @@ const Tuner = ({ tuner, metro, openSettings }) => {
           <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
             {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
-            {b.id === 'fine' && <FineGauge tuner={tuner}/>}
             {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
             {b.id === 'history' && <LivePitchGraph tuner={tuner}/>}
             {b.id === 'rec' && <RecModule size={b.size}/>}
-            {b.id === 'readout' && <TunerReadout tuner={tuner}/>}
-            {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('readout') && !has('note')}/>}
+            {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter') && !has('note')}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}
           </LayoutBlock>
         ))}
