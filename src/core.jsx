@@ -165,11 +165,13 @@ const LAYOUT_BLOCKS = {
   t2: [
     { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
     { id: 'history',  name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정' },
+    { id: 'light',    name: '박 조명 (화면 크게 번쩍)', short: '박 조명',   group: '템포', grow: true },
+    { id: 'ctrl',     name: '박자 · 템포 · 시작',       short: '박자·템포·시작', group: '템포', lock: true },
     { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '템포' },
     { id: 'dial',     name: '박자 원형 다이얼', short: '원형 다이얼', group: '템포', grow: true },
     { id: 'boxes',    name: '박자 네모 칸 원',  short: '네모 칸 원',  group: '템포', grow: true },
     { id: 'tempo',    name: '템포 슬라이더 · 프리셋', short: '템포 슬라이더', group: '템포' },
-    { id: 'controls', name: 'TAP · 시작',       short: 'TAP · 시작',  group: '템포', lock: true },
+    { id: 'controls', name: 'TAP · 시작 (큰 버튼)', short: 'TAP · 시작',  group: '템포' },
     { id: 'rec',      name: '녹음 버튼',        short: '녹음',        group: '녹음', sizes: ['s', 'l'], noZoom: true },
   ],
 };
@@ -188,7 +190,7 @@ const makeLayout = (tab, onIds) => [
   ...onIds.map(id => ({ id, on: true, size: 'm' })),
   ...LAYOUT_BLOCKS[tab].filter(b => !onIds.includes(b.id)).map(b => ({ id: b.id, on: !!b.lock, size: 'm' })),
 ];
-const DEFAULT_LAYOUT2_ON = ['pitch', 'beats', 'dial', 'tempo', 'controls'];
+const DEFAULT_LAYOUT2_ON = ['pitch', 'light', 'ctrl'];   // 메트로놈 탭 기본: 음정(작게) · 박 조명(크게) · 박자·템포·시작
 // 저장값 정리: 모르는 블록 제거, 빠진 블록은 꺼진 채로 뒤에 추가
 const normLayout = (tab, list) => {
   const known = LAYOUT_BLOCKS[tab], seen = new Set(), out = [];
@@ -240,12 +242,12 @@ const DEFAULT_SETTINGS = {
   design: 'dark',    // 디자인 7가지 중 하나 → theme.jsx DESIGNS (dark·light·piano·leather·radio·violin·sheet)
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
-  layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON),      // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
+  layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON).map(b => b.id === 'pitch' ? { ...b, size: 's' } : b),   // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
   parts: { num: 'auto', plate: 'auto', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
   recDelay: 3,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10), 기본 3초
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 9,      // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 10,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -290,7 +292,14 @@ const loadSettings = () => {
       v.layout2 = l;
     }
     if (rev < 9 && !stored.recDelay) v.recDelay = 3;   // 9: 녹음 지연 기본 3초
-    v.layoutRev = 9;
+    if (rev < 10) {
+      // 10: 메트로놈 탭 새 구성 (박 조명 + 박자·템포·시작 묶음). 녹음 블록을 켜두었다면 유지
+      const keepRec = v.layout2.find(b => b.id === 'rec' && b.on);
+      const l = makeLayout('t2', DEFAULT_LAYOUT2_ON).map(b => b.id === 'pitch' ? { ...b, size: 's' } : b);
+      if (keepRec) { const i = l.findIndex(b => b.id === 'rec'); l.splice(i, 1); l.splice(2, 0, keepRec); }
+      v.layout2 = normLayout('t2', l);
+    }
+    v.layoutRev = 10;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }
