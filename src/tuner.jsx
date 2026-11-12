@@ -1447,6 +1447,7 @@ const Tuner = ({ tuner, metro, openSettings }) => {
             {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
             {b.id === 'fine' && <FineGauge tuner={tuner}/>}
             {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
+            {b.id === 'history' && <LivePitchGraph tuner={tuner}/>}
             {b.id === 'readout' && <TunerReadout tuner={tuner}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('readout') && !has('note')}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}

@@ -552,6 +552,49 @@ const PitchDigits = ({ tuner, compact, swapColors, big }) => {
   );
 };
 
+// 실시간 음정 그래프: 최근 10초 동안 연주한 음정을 점으로 (녹음 재생 그래프와 같은 모양, 화면 배치 'history' 블록)
+//  맞음 초록 · 높음 빨강 · 낮음 파랑, 음이 바뀌면 음이름, 메트로놈이 돌면 박 세로줄
+const LivePitchGraph = ({ tuner }) => {
+  const WIN = 10000;
+  const ptsRef = useRef([]);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const f = (label, cents, now) => { const a = ptsRef.current; if (!a.length || now - a[a.length - 1][0] >= 30) a.push([now, cents, label]); };
+    tuner.noteListeners.add(f);
+    const iv = setInterval(() => { const a = ptsRef.current, cut = performance.now() - WIN; while (a.length && a[0][0] < cut) a.shift(); setTick(t => t + 1); }, 100);
+    return () => { tuner.noteListeners.delete(f); clearInterval(iv); };
+  }, []);
+  const vintage = useVintage(), skin = useSkin();
+  const now = performance.now(), w0 = now - WIN, tol = tuner.tolerance;
+  const xp = (t) => ((t - w0) / WIN) * 100;
+  const Y = (c) => 50 - Math.max(-50, Math.min(50, c)) * 0.9;
+  const col = (c) => Math.abs(c) <= tol ? '#4afc9d' : c > 0 ? '#ef4444' : '#3b82f6';
+  const pts = ptsRef.current;
+  const labels = []; let prev = null, lastL = -1e9;
+  pts.forEach(q => { if (q[2] !== prev && q[0] - lastL > WIN * 0.07) { labels.push(q); lastL = q[0]; } prev = q[2]; });
+  const grid = METRO_CLICKS.grid.filter(g => g[0] >= w0 && g[0] <= now);
+  const recent = pts.filter(q => q[0] > now - 3000);
+  const okPct = recent.length ? Math.round(100 * recent.filter(q => Math.abs(q[1]) <= tol).length / recent.length) : null;
+  return (
+    <div className={`w-full max-w-sm rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+      <div className="relative h-28 rounded-xl overflow-hidden" style={{ background: '#0a0a0a', boxShadow: 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+          <rect x="0" y={Y(tol)} width="100" height={Y(-tol) - Y(tol)} fill="rgba(74,252,157,.12)"/>
+          <line x1="0" x2="100" y1="50" y2="50" stroke="#3f3f46" strokeWidth="1" vectorEffect="non-scaling-stroke"/>
+          {grid.map((g, i) => <line key={i} x1={xp(g[0])} x2={xp(g[0])} y1="0" y2="100" stroke={g[1] ? '#52525b' : '#27272a'} strokeWidth={g[1] ? 1 : 0.6} vectorEffect="non-scaling-stroke"/>)}
+        </svg>
+        {pts.map((q, i) => <i key={i} className="absolute rounded-full" style={{ left: `${xp(q[0])}%`, top: `${Y(q[1])}%`, width: 4, height: 4, margin: -2, background: col(q[1]) }}/>)}
+        {labels.map((q, i) => <span key={'l' + i} className="absolute text-[9px] font-black" style={{ left: `${xp(q[0])}%`, top: 2, color: '#a1a1aa' }}>{q[2].replace('#', '♯')}</span>)}
+        <span className="absolute left-1.5 bottom-1 text-[8px] font-bold text-gray-500">10초 전</span>
+        <span className="absolute right-1.5 bottom-1 text-[8px] font-bold text-gray-500">지금</span>
+        <span className="absolute right-1.5 top-1 text-[8px] font-bold text-gray-500">+50¢</span>
+        {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? '#4afc9d' : '#ffcc00', background: 'rgba(0,0,0,.6)' }}>최근 3초 맞음 {okPct}%</span>}
+        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-gray-600">연주하면 음정이 여기에 그려집니다</span>}
+      </div>
+    </div>
+  );
+};
+
 // 메인 음정 표시기: 설정(세부 꾸미기 → 음정 표시기)에서 고른 모양으로 — 메트로놈·지판·드론 탭, 1번 탭 'meter' 블록 공용
 const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
   const { meter } = useParts();
@@ -618,6 +661,7 @@ const Metronome = ({ metro, tuner, openSettings }) => {
       {visibleBlocks('t2', layout).map(b => (
         <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
           {b.id === 'pitch' && tuner && <MainPitchMeter tuner={tuner}/>}
+          {b.id === 'history' && tuner && <LivePitchGraph tuner={tuner}/>}
           {b.id === 'beats' && (
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">
         <div className={`grid justify-center justify-items-center w-full ${isDense ? 'gap-x-1.5 gap-y-2' : 'gap-x-3'}`}
