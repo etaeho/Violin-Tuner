@@ -38,7 +38,7 @@
   - **오른손 배치 원칙**: 바이올린 연주 중엔 활 잡은 오른손으로 버튼을 누름 → 녹음·재생·시작 같은 주요 버튼은 **오른쪽**, 삭제처럼 위험한 버튼은 왼쪽
   - **흔들림 주의**: 박마다 바뀌는 표시는 크기(폰트·width)를 바꾸지 말고 transform·box-shadow만 (레이아웃이 밀려 화면 전체가 흔들림)
   - 저음 감지: `cleanBuffer`(직류·80Hz 이하 제거) 후 detectPitch. 330Hz 아래는 게이트 −6dB·신뢰도 −0.08 완화. 최저 주파수는 `MIN_FREQ_CAP`(170Hz) 넘게 못 올림
-  - 2번 탭 박 표시 = 화면 배치 블록 두 개: 'dial'(원형 다이얼, 쪼갠 박은 `beatPieces`로 조각 나눔) · 'boxes'(`BeatBoxes` 네모 칸 원 + 쪼갠 박 점). 둘 다 켜거나 하나만 켤 수 있음. metro.`currentSub` = 지금 쪼갠 박 번호
+  - 2번 탭 박 표시 블록: 'light'(`BeatLight` 큰 불빛) · 'boxes'(`BeatBoxes` 네모 칸 원 + 쪼갠 박 점). **원형 다이얼('dial')·템포 슬라이더('tempo') 블록은 없앰**(코드는 남아 있으나 화면 배치에 없음). metro.`currentSub` = 지금 쪼갠 박 번호
   - **설정창은 app.jsx에 하나** (`settingsTab` 't1'|'t2'): 튜너·메트로놈 탭 위 '설정' 버튼 → `openSettings(탭)`. 화면 배치 편집은 연 탭이 먼저 보임
   - 지판: `FB_POSITIONS`=30(최상단, E현 A7까지, 위로 갈수록 칸이 좁아짐), 위에 `PitchStrip compact swapColors`, 연주 음 옆에 센트 + 화살표(고칠 방향: 높으면 ▼ 파랑, 낮으면 ▲ 빨강 — `FB_HIGH`/`FB_LOW`, 히트맵도 같은 규칙). 감지 최고 4200Hz
   - 앱 시작 때 3초 자동 소음 측정 `autoCalibrate`(설정 `autoCalib`), 결과는 하위 30% 레벨 + 10dB, −70~−35dB

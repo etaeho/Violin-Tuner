@@ -165,9 +165,7 @@ const LAYOUT_BLOCKS = {
     { id: 'light',    name: '박 조명 (화면 크게 번쩍)', short: '박 조명',   group: '템포', grow: true },
     { id: 'ctrl',     name: '박자 · 템포 · 시작',       short: '박자·템포·시작', group: '템포', lock: true },
     { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '템포' },
-    { id: 'dial',     name: '박자 원형 다이얼', short: '원형 다이얼', group: '템포', grow: true },
     { id: 'boxes',    name: '박자 네모 칸 원',  short: '네모 칸 원',  group: '템포', grow: true },
-    { id: 'tempo',    name: '템포 슬라이더 · 프리셋', short: '템포 슬라이더', group: '템포' },
     { id: 'controls', name: 'TAP · 시작 (큰 버튼)', short: 'TAP · 시작',  group: '템포' },
     { id: 'rec',      name: '녹음 버튼',        short: '녹음',        group: '녹음', sizes: ['s', 'l'], noZoom: true },
   ],
@@ -277,7 +275,18 @@ const loadSettings = () => {
       const seen = new Set(); l1src = l1src.filter(b => !seen.has(b.id) && seen.add(b.id));
     }
     v.layout1 = normLayout('t1', l1src || makeLayout('t1', LAYOUT_PRESETS.find(p => p.id === v.tunerLayout).on));
-    v.layout2 = normLayout('t2', stored.layout2 || makeLayout('t2', DEFAULT_LAYOUT2_ON));
+    // 13: '원형 다이얼'·'템포 슬라이더' 블록 없앰 → 다이얼이 켜져 있었으면 그 자리에 박 조명 (이미 켜져 있으면 그냥 뺌)
+    let l2src = Array.isArray(stored.layout2) ? stored.layout2 : null;
+    if (l2src) {
+      let lightOn = l2src.some(x => x && x.id === 'light' && x.on);
+      l2src = l2src.map(b => {
+        if (!b || (b.id !== 'dial' && b.id !== 'tempo')) return b;
+        if (b.id === 'dial' && b.on && !lightOn) { lightOn = true; return { id: 'light', on: true, size: b.size }; }
+        return null;
+      }).filter(Boolean);
+      const seen = new Set(); l2src = l2src.filter(b => !seen.has(b.id) && seen.add(b.id));
+    }
+    v.layout2 = normLayout('t2', l2src || makeLayout('t2', DEFAULT_LAYOUT2_ON));
     v.parts = normParts(stored.parts);
     if (rev < 4) {
       // 4: 낮게 풀린 G현도 잡히게 최저 주파수 180 → 150, 1번 탭에 정밀 게이지 추가
