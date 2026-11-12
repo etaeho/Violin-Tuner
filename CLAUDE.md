@@ -9,7 +9,7 @@
   1-1. `commands.jsx` — 연주 명령: 음 패턴(기본 G3→E5→G3) 감지 → 메트로놈 켜기/끄기 (app.jsx에서 onCommand 연결)
   2. `theme.jsx` — **디자인 7종** `DESIGNS`(다크·라이트 / 피아노·가죽·라디오·바이올린·악보). 설정값 `settings.design`, 각 디자인의 `base`(tape|light|vintage)가 `settings.uiMode`·`data-theme`이 됨. 우드 계열은 `SKINS[skin]` 토큰(숫자창·버튼·표시등·다이얼 모양)을 `SkinContext`/`useSkin()`으로 받음 → `SkinNumber`(1번 탭 Hz), `SkinBeatDial`·`SkinMiniMetronome`(metronome.jsx). 고르는 화면 = `DesignPicker`(설정 ①, 온보딩 3단계 공용). 라디오만 `hzDial`로 `RadioDial`(Hz 눈금 창 + 빨간 바늘)·`RadioBeatDial` 사용. 그 외 ThemeContext/useVintage, 공용 UI(DrumDigits · Screw · BrassPlate)
   3. `tuner.jsx` — 튜너 탭: useTunerLogic, StringBars(막대), StringVTapes/VTape(현별 세로 테이프), BigNote(큰 음이름), NoteTape(가로 테이프), TunerReadout, SettingsSheet(LayoutEditor·PartsEditor), Tuner. 블록 배치는 `settings.layout1`
-  4. `metronome.jsx` — 메트로놈 탭(블록 배치 `settings.layout2`, `PitchStrip`: 음정 바늘 게이지) + `MiniMetronome`(튜너 탭 '테이프 + 템포' 구성에서 같은 metro 상태 공유). 클릭 시각을 `METRO_CLICKS`(core.jsx)에 기록 → 튜너가 그 순간 분석을 건너뜀
+  4. `metronome.jsx` — 메트로놈 탭(블록 배치 `settings.layout2`, `PitchStrip`: 음정 바늘 게이지) + `MiniMetronome`(튜너 탭 'mini' 블록: 박 원을 가로 가득 크게 + 아래 한 줄 작게 TAP·−·BPM(끌기)·+·시작, 빠르기 숫자 버튼 없음, 같은 metro 상태 공유). 클릭 시각을 `METRO_CLICKS`(core.jsx)에 기록 → 튜너가 그 순간 분석을 건너뜀
   5. `fingerboard.jsx` — 지판 탭 (v2 디자인): 조표(`fb.key`), 연주 음, 탭→기준음, 박마다 테두리, 히트맵(`fb.heat`, 연습 기록의 음별 정확도 최근 30일, 아래 '초기화' 두 번 → `log.resetPerNote`), 스케일 연습(`tuner.noteListeners`로 확정 음 받음)
   5-1. `drone.jsx` — 드론 탭: useDroneLogic(오디오), 근음 휠, 화음·음색. 재생 중엔 연주 명령 차단(droneActive). 계획: docs/drone-mode-plan.md
   5-2. `practice.jsx` — 기록 탭: 연습 시간 자동 측정(튜너 확정 음 → practiceSinkRef) + **음별 정확도**(하루 요약에 notes·ok·per), 목표 링, 12주 달력, 7일 그래프. `vt.log.days`. 계획: docs/practice-log-plan.md

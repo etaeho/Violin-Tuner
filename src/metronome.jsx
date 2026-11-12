@@ -999,122 +999,61 @@ const SkinPresets = ({ k, bpm, setBpm }) => {
   );
 };
 
-const SkinMiniMetronome = ({ metro }) => {
-  const k = useSkin();
-  const bpmDrag = useBpmDrag(metro);
-  const parts = useParts();
-  const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
+// 미니 메트로놈 (튜너 탭 'mini' 블록): 박 원을 가로 가득 크게, 나머지(TAP·−·BPM·+·시작)는 아래 한 줄로 작게. 빠르기 숫자 버튼은 없음
+//  우드 계열은 디자인 판·표시등 색, 다크·라이트는 박 색 팔레트
+const MiniMetronome = ({ metro }) => {
+  const vintage = useVintage(), k = useSkin(), parts = useParts();
+  const { bpm, isPlayingMetro, currentBeat, beatSounds, beatSubdivisions, visualFlash, currentSub, timeSig,
           toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
+  const bpmDrag = useBpmDrag(metro);
+  const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd });
-  const dense = beatSounds.length > 8;
+  const L = vintage ? k.lamp : null;
+  const ink = vintage ? k.label : 'var(--ink)', dim = vintage ? k.unit : '#6b7280';
+  const knob = vintage ? k.knob : null;
+  const glowCol = vintage ? (L.shape === 'note' ? '#b3261e' : L.on) : (beatSounds[currentBeat] === 2 ? '#ffcc00' : '#4afc9d');
+  const beatColor = (snd, on) => vintage
+    ? (snd === 0 ? 'transparent' : on ? (L.shape === 'note' ? '#b3261e' : L.on) : snd === 2 ? L.strong : L.off)
+    : (snd === 0 ? 'transparent' : pal[snd]);
+  const small = 'w-8 h-8 rounded-full flex items-center justify-center active:scale-90 shrink-0';
   return (
-    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 rounded-[18px]"
-      style={{ ...k.frame, transition: 'box-shadow 90ms', ...(beatGlow(metro, k.lamp.shape === 'note' ? '#b3261e' : k.lamp.on) ? { boxShadow: beatGlow(metro, k.lamp.shape === 'note' ? '#b3261e' : k.lamp.on) } : {}) }}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1 flex-wrap">
-          {beatSounds.map((snd, i) => <SkinLamp key={i} k={k} snd={snd} dense={dense} fired={isPlayingMetro && i === currentBeat && visualFlash === 'main'}/>)}
-        </div>
-        <span className="shrink-0" style={{ color: k.label, fontFamily: 'Georgia,serif', fontSize: k.italic ? 12 : 10, fontStyle: k.italic ? 'italic' : 'normal', letterSpacing: k.italic ? 0 : '0.15em', fontWeight: 700 }}>
-          {k.italic ? `${timeSig.num}/${timeSig.den} · ${getTempoMarking(bpm)}` : `${timeSig.num}/${timeSig.den} · ${getTempoMarking(bpm).toUpperCase()}`}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <button onClick={tapTempo} className="w-12 h-12 flex items-center justify-center active:scale-95 shrink-0 text-xs font-black" style={k.tap}>TAP</button>
-        <button {...press(-1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 내리기" style={{ touchAction: 'none', ...k.knob }}>
-          <Minus size={18} className="pointer-events-none" style={{ color: k.knob.color }}/>
-        </button>
-        <div className="flex-1 flex flex-col items-center min-w-0" {...bpmDrag} aria-label="끌어서 빠르기 조절">
-          {parts.num !== 'auto'
-            ? <PartNumber style={parts.num} text={parts.num === 'flip' || parts.num === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={32} unitColor={k.unit}/>
-            : k.quarter
-            ? <span style={{ fontFamily: 'Georgia,serif', fontSize: 30, lineHeight: 1, color: k.ink }}>♩ = <b style={{ fontSize: 40 }}>{bpm}</b></span>
-            : <SkinNumber skin={k} text={String(bpm)} unit="BPM" size={42}/>}
-          <DragHint color={k.unit}/>
-        </div>
-        <button {...press(1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 올리기" style={{ touchAction: 'none', ...k.knob }}>
-          <Plus size={18} className="pointer-events-none" style={{ color: k.knob.color }}/>
-        </button>
-        <button onClick={toggleMetronome} className="w-12 h-12 flex items-center justify-center shrink-0 active:scale-95 transition-all" style={isPlayingMetro ? k.playOn : k.play}>
-          {isPlayingMetro ? <Square size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
-        </button>
-      </div>
-      <SkinPresets k={k} bpm={bpm} setBpm={setBpm}/>
-    </div>
-  );
-};
-
-// 우드 계열 디자인은 SkinMiniMetronome, 다크·라이트는 아래 PlainMiniMetronome
-const MiniMetronome = ({ metro }) => useVintage() ? <SkinMiniMetronome metro={metro}/> : <PlainMiniMetronome metro={metro}/>;
-
-const PlainMiniMetronome = ({ metro }) => {
-  const parts = useParts();
-  const bpmDrag = useBpmDrag(metro);
-  const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
-          toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
-  const pal = METRO_PALETTE.tape;
-  const dim = '#6b7280';
-  const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
-  const dense = beatSounds.length > 8;
-  return (
-    <div className="w-full max-w-sm px-3 py-3 shrink-0 flex flex-col gap-3 t-panel rounded-3xl" style={{ transition: 'box-shadow 90ms', boxShadow: beatGlow(metro, beatSounds[currentBeat] === 2 ? '#ffcc00' : '#4afc9d') || undefined }}>
-      {/* 박 표시 + 박자표 */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {beatSounds.map((snd, i) => {
-            const fired = isPlayingMetro && i === currentBeat && visualFlash === 'main';
-            const col = pal[snd];
-            return (
-              <span key={i} className={`${dense ? 'w-5 h-5' : 'w-7 h-7'} rounded-full transition-all duration-75`}
-                style={snd === 0
-                  ? { border: `1.5px solid ${pal[0]}` }
-                  : { background: col, opacity: fired ? 1 : 0.3, transform: fired ? 'scale(1.4)' : 'none',
-                      boxShadow: fired ? `0 0 ${10 * pal.glow}px ${col}` : 'none' }}/>
-            );
-          })}
-        </div>
-        <span className="text-[10px] font-black tracking-widest shrink-0" style={{ color: dim }}>
-          {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm).toUpperCase()}
-        </span>
-      </div>
-      {/* BPM (가운데) — 왼쪽 TAP·−, 오른쪽 +·시작 으로 좌우 대칭 */}
-      <div className="flex items-center gap-2">
-        <button onClick={tapTempo} className="w-12 h-12 flex flex-col items-center justify-center active:scale-95 shrink-0 rounded-2xl t-chip">
-          <span className="text-xs font-black" style={{ color: 'var(--ink)' }}>TAP</span>
-        </button>
-        <button {...press(-1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 t-chip" aria-label="BPM 내리기">
-          <Minus size={18} className="pointer-events-none" style={{ color: dim }}/>
-        </button>
-        <div className="flex-1 flex flex-col items-center justify-center min-w-0" {...bpmDrag} aria-label="끌어서 빠르기 조절">
-          {parts.num !== 'auto'
-            ? <PartNumber style={parts.num} text={parts.num === 'flip' || parts.num === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={32} unitColor={dim}/>
-            : <div className="flex items-baseline gap-1">
-                <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: 'var(--ink)' }}>{bpm}</span>
-                <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
-              </div>}
-          <DragHint/>
-        </div>
-        <button {...press(1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 t-chip" aria-label="BPM 올리기">
-          <Plus size={18} className="pointer-events-none" style={{ color: dim }}/>
-        </button>
-        <button onClick={toggleMetronome}
-          className="w-12 h-12 flex items-center justify-center shrink-0 active:scale-95 transition-all rounded-2xl"
-          style={{ background: isPlayingMetro ? 'rgba(255,204,0,.12)' : 'rgba(74,252,157,.12)',
-                   color: isPlayingMetro ? '#ffcc00' : '#4afc9d', border: `2px solid ${isPlayingMetro ? 'rgba(255,204,0,.35)' : 'rgba(74,252,157,.35)'}` }}>
-          {isPlayingMetro ? <Square size={17} fill="currentColor"/> : <Play size={17} fill="currentColor"/>}
-        </button>
-      </div>
-      {/* 프리셋 */}
-      <div className="flex items-center gap-1.5">
-        {TEMPO_PRESETS.map(v => {
-          const on = bpm === v;
+    <div className={`w-full max-w-sm px-3 pt-3 pb-2 shrink-0 flex flex-col gap-2 rounded-3xl ${vintage ? '' : 't-panel'}`}
+      style={{ ...(vintage ? k.frame : {}), transition: 'box-shadow 90ms', boxShadow: beatGlow(metro, glowCol) || (vintage ? k.frame.boxShadow : undefined) }}>
+      {/* 박 원: 가로 가득 */}
+      <div className="flex justify-center gap-2">
+        {beatSounds.map((snd, i) => {
+          const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd, on), nsub = beatSubdivisions[i] || 1;
           return (
-            <button key={v} onClick={() => { setBpm(v); haptic(8); }}
-              className="flex-1 py-1.5 text-[11px] font-black active:scale-95 rounded-full font-mono"
-              style={on ? { background: '#4afc9d', color: '#000' } : { color: dim, border: '1px solid var(--chip-border)' }}>
-              {v}
-            </button>
+            <div key={i} className="flex flex-col items-center gap-1" style={{ flex: '1 1 0', maxWidth: 64, minWidth: 0 }}>
+              <div className="w-full rounded-full flex items-center justify-center font-black" style={{ aspectRatio: '1', background: c,
+                border: snd === 0 ? `2px dashed ${dim}` : `3px solid ${on ? ink : 'transparent'}`, opacity: snd === 0 ? 0.4 : on ? 1 : vintage ? 0.75 : 0.3,
+                transform: `scale(${fire ? 1.1 : 1})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 26 : 16}px ${c}` : 'none', color: '#000', fontSize: 13,
+                transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>{beatSounds.length <= 8 ? i + 1 : ''}</div>
+              {nsub > 1 && <div className="flex gap-0.5">{Array.from({ length: nsub }, (_, j) => <i key={j} className="rounded-full" style={{ width: 5, height: 5, background: ink, opacity: on && (currentSub || 0) === j ? 1 : 0.25 }}/>)}</div>}
+            </div>
           );
         })}
+      </div>
+      {/* 작은 조작 줄 */}
+      <div className="flex items-center gap-1.5">
+        <button onClick={tapTempo} className={`${small} text-[9px] font-black ${vintage ? '' : 't-chip'}`} style={vintage ? { ...k.tap, borderRadius: 999 } : { color: 'var(--ink2)' }}>TAP</button>
+        <button {...press(-1)} className={`${small} ${vintage ? '' : 't-chip'}`} aria-label="BPM 내리기" style={{ touchAction: 'none', ...(knob || {}) }}>
+          <Minus size={14} className="pointer-events-none" style={{ color: knob ? knob.color : dim }}/>
+        </button>
+        <div className="flex-1 min-w-0 flex items-baseline justify-center gap-1" {...bpmDrag} aria-label="끌어서 빠르기 조절" style={{ ...bpmDrag.style }}>
+          {parts.num !== 'auto'
+            ? <PartNumber style={parts.num} text={parts.num === 'flip' || parts.num === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} size={16} unitColor={dim}/>
+            : <span className="font-black leading-none" style={{ fontSize: 20, color: ink, fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace' }}>{bpm}</span>}
+          <span className="text-[9px] font-bold truncate" style={{ color: ink, opacity: 0.6 }}>BPM · {timeSig.num}/{timeSig.den}</span>
+        </div>
+        <button {...press(1)} className={`${small} ${vintage ? '' : 't-chip'}`} aria-label="BPM 올리기" style={{ touchAction: 'none', ...(knob || {}) }}>
+          <Plus size={14} className="pointer-events-none" style={{ color: knob ? knob.color : dim }}/>
+        </button>
+        <button onClick={toggleMetronome} className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 active:scale-95" aria-label={isPlayingMetro ? '메트로놈 정지' : '메트로놈 시작'}
+          style={vintage ? { ...(isPlayingMetro ? k.playOn : k.play), borderRadius: 999 }
+            : { background: isPlayingMetro ? 'rgba(255,204,0,.15)' : 'rgba(74,252,157,.15)', color: isPlayingMetro ? '#ffcc00' : '#4afc9d', border: `2px solid ${isPlayingMetro ? 'rgba(255,204,0,.4)' : 'rgba(74,252,157,.4)'}` }}>
+          {isPlayingMetro ? <Square size={13} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
+        </button>
       </div>
     </div>
   );
