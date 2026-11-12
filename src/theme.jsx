@@ -173,6 +173,16 @@ const PartNumber = ({ style, text, unit, size = 26, unitColor }) => {
   );
 };
 
+// ── 음정 그래프 색 (실시간 그래프 · 녹음 재생 그래프 공용) — 디자인 바탕에 맞춤 ──
+//  다크·라이트 = 검은 표시창, 우드 = 그 디자인의 다이얼 문자판 색 (라디오·악보는 밝은 문자판 → 진한 점 색)
+const graphLook = (vintage, skin) => {
+  if (!vintage) return { face: '#0a0a0a', zero: '#3f3f46', beat: '#52525b', sub: '#27272a', text: '#a1a1aa', dim: '#6b7280', ok: '#4afc9d', hi: '#ef4444', lo: '#3b82f6', band: 'rgba(74,252,157,.12)', head: 'rgba(255,255,255,.85)', shadow: 'inset 0 2px 8px rgba(0,0,0,.5)' };
+  const lightFace = skin.dial.ticks || skin.quarter;          // 라디오(크림) · 악보(양피지)
+  const face = skin.dial.ticks ? '#f3e8cc' : skin.dial.face;
+  if (lightFace) return { face, zero: 'rgba(90,58,30,.45)', beat: 'rgba(90,58,30,.45)', sub: 'rgba(90,58,30,.18)', text: '#5a3a1e', dim: 'rgba(90,58,30,.7)', ok: '#15803d', hi: '#b91c1c', lo: '#1d4ed8', band: 'rgba(21,128,61,.14)', head: '#3a2410', shadow: 'inset 0 2px 6px rgba(0,0,0,.25)' };
+  return { face, zero: 'rgba(255,255,255,.18)', beat: 'rgba(255,255,255,.28)', sub: 'rgba(255,255,255,.1)', text: skin.dial.sub, dim: skin.dial.sub, ok: '#4afc9d', hi: '#f87171', lo: '#60a5fa', band: 'rgba(74,252,157,.12)', head: skin.dial.on, shadow: 'inset 0 2px 8px rgba(0,0,0,.5)' };
+};
+
 // ── 화면 배치 블록 감싸기 (LAYOUT_BLOCKS) ──
 //  grow 블록: 크기 = 남는 공간 차지 비율 (작게는 최대 45%)
 //  고정 블록: 크기 = 확대 배율 (zoom — 폭은 화면 안에 맞춰지고 높이만 커짐)

@@ -568,7 +568,8 @@ const LivePitchGraph = ({ tuner }) => {
   const now = performance.now(), w0 = now - WIN, tol = tuner.tolerance;
   const xp = (t) => ((t - w0) / WIN) * 100;
   const Y = (c) => 50 - Math.max(-50, Math.min(50, c)) * 0.9;
-  const col = (c) => Math.abs(c) <= tol ? '#4afc9d' : c > 0 ? '#ef4444' : '#3b82f6';
+  const L = graphLook(vintage, skin);
+  const col = (c) => Math.abs(c) <= tol ? L.ok : c > 0 ? L.hi : L.lo;
   const pts = ptsRef.current;
   const labels = []; let prev = null, lastL = -1e9;
   pts.forEach(q => { if (q[2] !== prev && q[0] - lastL > WIN * 0.07) { labels.push(q); lastL = q[0]; } prev = q[2]; });
@@ -577,19 +578,19 @@ const LivePitchGraph = ({ tuner }) => {
   const okPct = recent.length ? Math.round(100 * recent.filter(q => Math.abs(q[1]) <= tol).length / recent.length) : null;
   return (
     <div className={`w-full max-w-sm rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      <div className="relative h-28 rounded-xl overflow-hidden" style={{ background: '#0a0a0a', boxShadow: 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
+      <div className="relative h-28 rounded-xl overflow-hidden" style={{ background: L.face, boxShadow: L.shadow }}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-          <rect x="0" y={Y(tol)} width="100" height={Y(-tol) - Y(tol)} fill="rgba(74,252,157,.12)"/>
-          <line x1="0" x2="100" y1="50" y2="50" stroke="#3f3f46" strokeWidth="1" vectorEffect="non-scaling-stroke"/>
-          {grid.map((g, i) => <line key={i} x1={xp(g[0])} x2={xp(g[0])} y1="0" y2="100" stroke={g[1] ? '#52525b' : '#27272a'} strokeWidth={g[1] ? 1 : 0.6} vectorEffect="non-scaling-stroke"/>)}
+          <rect x="0" y={Y(tol)} width="100" height={Y(-tol) - Y(tol)} fill={L.band}/>
+          <line x1="0" x2="100" y1="50" y2="50" stroke={L.zero} strokeWidth="1" vectorEffect="non-scaling-stroke"/>
+          {grid.map((g, i) => <line key={i} x1={xp(g[0])} x2={xp(g[0])} y1="0" y2="100" stroke={g[1] ? L.beat : L.sub} strokeWidth={g[1] ? 1 : 0.6} vectorEffect="non-scaling-stroke"/>)}
         </svg>
         {pts.map((q, i) => <i key={i} className="absolute rounded-full" style={{ left: `${xp(q[0])}%`, top: `${Y(q[1])}%`, width: 4, height: 4, margin: -2, background: col(q[1]) }}/>)}
-        {labels.map((q, i) => <span key={'l' + i} className="absolute text-[9px] font-black" style={{ left: `${xp(q[0])}%`, top: 2, color: '#a1a1aa' }}>{q[2].replace('#', '♯')}</span>)}
-        <span className="absolute left-1.5 bottom-1 text-[8px] font-bold text-gray-500">10초 전</span>
-        <span className="absolute right-1.5 bottom-1 text-[8px] font-bold text-gray-500">지금</span>
-        <span className="absolute right-1.5 top-1 text-[8px] font-bold text-gray-500">+50¢</span>
-        {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? '#4afc9d' : '#ffcc00', background: 'rgba(0,0,0,.6)' }}>맞음 {okPct}%</span>}
-        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-gray-600">연주하면 음정이 여기에 그려집니다</span>}
+        {labels.map((q, i) => <span key={'l' + i} className="absolute text-[9px] font-black" style={{ left: `${xp(q[0])}%`, top: 2, color: L.text, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{q[2].replace('#', '♯')}</span>)}
+        <span className="absolute left-1.5 bottom-1 text-[8px] font-bold" style={{ color: L.dim }}>10초 전</span>
+        <span className="absolute right-1.5 bottom-1 text-[8px] font-bold" style={{ color: L.dim }}>지금</span>
+        <span className="absolute right-1.5 top-1 text-[8px] font-bold" style={{ color: L.dim }}>+50¢</span>
+        {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? L.ok : '#d97706', background: L.face, border: `1px solid ${L.sub}` }}>맞음 {okPct}%</span>}
+        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold" style={{ color: L.dim }}>연주하면 음정이 여기에 그려집니다</span>}
       </div>
     </div>
   );
