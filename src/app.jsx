@@ -83,6 +83,7 @@ const App = () => {
     <ThemeContext.Provider value={theme}>
     <SkinContext.Provider value={designById(tuner.settings.design).skin || 'radio'}>
     <PartsContext.Provider value={tuner.settings.parts}>
+    <RecorderContext.Provider value={recorder}>
     <div
       className="fixed inset-0 t-app text-white flex flex-col items-center font-sans select-none overflow-hidden"
       style={{
@@ -194,6 +195,7 @@ const App = () => {
         })}
       </nav>
     </div>
+    </RecorderContext.Provider>
     </PartsContext.Provider>
     </SkinContext.Provider>
     </ThemeContext.Provider>

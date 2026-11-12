@@ -1010,6 +1010,7 @@ const BlockThumb = ({ id, on = true }) => {
     case 'dial': return svg(<>{[0, 1, 2, 3].map(i => <path key={i} d={arcPath(24, 15, 12, i * 90 + 8, i * 90 + 82)} fill="none" stroke={i ? g : y} strokeWidth="3" opacity={i === 1 ? 1 : 0.4}/>)}<text x="24" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill={m}>60</text></>);
     case 'boxes': return svg(<><rect x="5" y="3" width="38" height="24" rx="4" fill={d}/>{[12, 20, 28, 36].map((x, i) => <circle key={i} cx={x} cy="17" r="3.3" fill={i === 1 ? g : i ? '#14532d' : y}/>)}<text x="24" y="10" textAnchor="middle" fontSize="6" fontWeight="900" fill={m}>60</text></>);
     case 'tempo': return svg(<><line x1="5" x2="43" y1="10" y2="10" stroke={d} strokeWidth="2.5"/><circle cx="17" cy="10" r="3.5" fill={g}/>{[5, 15, 25, 35].map(x => <rect key={x} x={x} y="18" width="8" height="6" rx="3" fill={x === 5 ? g : d}/>)}</>);
+    case 'rec': return svg(<><circle cx="12" cy="15" r="8" fill="#dc2626"/><circle cx="12" cy="15" r="3" fill="#fff"/><text x="23" y="19" fontSize="10" fontWeight="900" fill={m}>0:12</text></>);
     case 'controls': return svg(<><rect x="4" y="8" width="13" height="14" rx="3" fill={d}/><text x="10.5" y="18" textAnchor="middle" fontSize="5" fontWeight="900" fill={m}>TAP</text><rect x="20" y="8" width="24" height="14" rx="3" fill="rgba(74,252,157,.25)"/><path d="M29 11 L36 15 L29 19 Z" fill={g}/></>);
     default: return svg(null);
   }
@@ -1034,6 +1035,9 @@ const LayoutPreview = ({ tab, tuner, metro, sel }) => {
 
 // ── 화면 배치: 탭별 블록을 손잡이(⋮⋮)로 끌어 위아래 이동 · 크기 · 보이기 ──
 const SIZE_NAMES = { s: '작게', m: '보통', l: '크게' };
+const sizeNames = (m) => m.sizes && m.sizes.length === 2 ? { s: '한 줄', l: '두 줄' } : SIZE_NAMES;
+// 기능 묶음 표시: 음정 = 초록 물결, 템포 = 노랑 음표, 녹음 = 빨강 마이크
+const GroupIcon = ({ g, size = 12 }) => { const c = LAYOUT_GROUPS[g]; return g === '템포' ? <Music size={size} style={{ color: c }}/> : g === '녹음' ? <Mic size={size} style={{ color: c }}/> : <Activity size={size} style={{ color: c }}/>; };
 const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) => {
   const [tab, setTab] = useState(initialTab);
   const [sel, setSel] = useState(null);          // 미리보기에서 테두리로 표시할 블록
@@ -1055,7 +1059,8 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
   const addBlock = (id) => {
     const on = listNow.current.filter(b => b.on), off = listNow.current.filter(b => !b.on && b.id !== id);
     const it = listNow.current.find(b => b.id === id);
-    save([...on, { ...it, on: true }, ...off]); setSel(id);
+    const mm = LAYOUT_BLOCKS[tab].find(k => k.id === id);
+    save([...on, { ...it, on: true, size: mm.sizes ? (mm.sizes.includes(it.size) ? it.size : mm.sizes[0]) : it.size }, ...off]); setSel(id);
   };
 
   // 끌기: 손가락이 다른 줄의 가운데를 넘으면 그 자리로 이동
@@ -1098,19 +1103,22 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
           return (
             <div key={b.id} className="flex items-center gap-1.5 rounded-xl pr-1.5 transition-shadow"
               style={{ background: drag ? 'rgba(74,252,157,.12)' : 'rgba(0,0,0,.25)', border: `1px solid ${drag ? 'var(--accent)' : sel === b.id ? 'var(--accent)' : 'var(--chip-border)'}`,
-                boxShadow: drag ? '0 6px 16px rgba(0,0,0,.5)' : 'none' }}>
+                borderLeft: `4px solid ${LAYOUT_GROUPS[m.group]}`, boxShadow: drag ? '0 6px 16px rgba(0,0,0,.5)' : 'none' }}>
               <span onPointerDown={e => onDown(e, b.id)} className="w-7 h-12 flex items-center justify-center shrink-0 cursor-grab" style={{ touchAction: 'none', color: 'var(--ink2)' }} aria-label="끌어서 옮기기">
                 <GripVertical size={17}/>
               </span>
               <span className="flex-1 min-w-0 flex items-center gap-2" onClick={() => { setSel(sel === b.id ? null : b.id); haptic(6); }}>
                 <BlockThumb id={b.id}/>
-                <span className="text-xs font-black truncate" style={{ color: sel === b.id ? 'var(--accent)' : 'var(--ink)' }}>{m.short}</span>
+                <span className="flex flex-col min-w-0">
+                  <span className="text-xs font-black truncate" style={{ color: sel === b.id ? 'var(--accent)' : 'var(--ink)' }}>{m.short}</span>
+                  <span className="flex items-center gap-1 text-[9px] font-bold" style={{ color: LAYOUT_GROUPS[m.group] }}><GroupIcon g={m.group} size={10}/>{m.group}</span>
+                </span>
               </span>
               <span className="flex rounded-full overflow-hidden shrink-0" style={{ border: '1px solid var(--chip-border)' }}>
-                {LAYOUT_SIZES.map(z => (
+                {(m.sizes || LAYOUT_SIZES).map(z => (
                   <button key={z} onClick={() => { patch(b.id, { size: z }); setSel(b.id); haptic(6); }}
                     className="px-1.5 py-1 text-[10px] font-black"
-                    style={b.size === z ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{SIZE_NAMES[z]}</button>
+                    style={b.size === z ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{sizeNames(m)[z]}</button>
                 ))}
               </span>
               <button disabled={m.lock} onClick={() => { patch(b.id, { on: false }); setSel(null); haptic(8); }}
@@ -1131,12 +1139,12 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
           if (!items.length) return null;
           return (
             <div key={gname}>
-              <div className="text-[10px] font-bold mb-1 ml-0.5" style={{ color: 'var(--ink2)' }}>{gname}</div>
+              <div className="text-[11px] font-black mb-1 ml-0.5 flex items-center gap-1" style={{ color: LAYOUT_GROUPS[gname] }}><GroupIcon g={gname}/>{gname}</div>
               <div className="grid grid-cols-3 gap-1.5">
                 {items.map(b => (
                   <button key={b.id} onClick={() => { addBlock(b.id); haptic(10); }}
                     className="flex flex-col items-center gap-1 rounded-xl py-1.5 px-1 active:scale-95"
-                    style={{ background: 'rgba(0,0,0,.25)', border: '1px dashed var(--chip-border)' }}>
+                    style={{ background: 'rgba(0,0,0,.25)', border: `1px dashed ${LAYOUT_GROUPS[gname]}88` }}>
                     <BlockThumb id={b.id} on={false}/>
                     <span className="text-[10px] font-black leading-tight text-center" style={{ color: 'var(--ink2)' }}>+ {meta(b.id).short}</span>
                   </button>
@@ -1504,13 +1512,14 @@ const Tuner = ({ tuner, metro, openSettings }) => {
         {/* 남는 공간을 채우는 블록이 없으면 위아래 여백을 같게 → 블록들이 화면 가운데에 모임 */}
         {!blocks.some(b => b.grow) && <div className="flex-1"/>}
         {blocks.map(b => (
-          <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
+          <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
             {b.id === 'bars' && <StringBars tuner={tuner} size="fill"/>}
             {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
             {b.id === 'fine' && <FineGauge tuner={tuner}/>}
             {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
             {b.id === 'history' && <LivePitchGraph tuner={tuner}/>}
+            {b.id === 'rec' && <RecModule size={b.size}/>}
             {b.id === 'readout' && <TunerReadout tuner={tuner}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('readout') && !has('note')}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}

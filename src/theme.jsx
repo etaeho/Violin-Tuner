@@ -190,15 +190,17 @@ const BLOCK_ZOOM = { s: 0.85, m: 1, l: 1.2 };
 const BLOCK_GROW = { s: 1, m: 2, l: 3 };
 // 설정 미리보기에서 고른 블록을 테두리로 표시
 const LayoutHighlightContext = React.createContext(null);
-const LayoutBlock = ({ id, grow, size = 'm', children }) => {
+const LayoutBlock = ({ id, grow, noZoom, size = 'm', children }) => {
   const hl = React.useContext(LayoutHighlightContext) === id;
   const mark = hl ? { outline: '3px solid var(--accent)', outlineOffset: 2, borderRadius: 14 } : {};
   return grow
     ? <div className="w-full min-h-0 flex flex-col items-center" style={{ flex: `${BLOCK_GROW[size]} 1 0`, maxHeight: size === 's' ? '45%' : undefined, ...mark }}>{children}</div>
-    : <div className="w-full shrink-0 flex flex-col items-center" style={{ zoom: BLOCK_ZOOM[size], ...mark }}>{children}</div>;
+    : <div className="w-full shrink-0 flex flex-col items-center" style={{ zoom: noZoom ? 1 : BLOCK_ZOOM[size], ...mark }}>{children}</div>;
 };
 // 켜진 블록만 순서대로 [{id, size, grow}]
-const visibleBlocks = (tab, list) => list.filter(b => b.on).map(b => ({ ...b, grow: !!LAYOUT_BLOCKS[tab].find(k => k.id === b.id)?.grow }));
+const visibleBlocks = (tab, list) => list.filter(b => b.on).map(b => { const k = LAYOUT_BLOCKS[tab].find(x => x.id === b.id) || {}; return { ...b, grow: !!k.grow, noZoom: !!k.noZoom }; });
+// 녹음 모듈이 어느 탭에서든 같은 녹음기를 쓰도록 (app.jsx에서 제공)
+const RecorderContext = React.createContext(null);
 
 // 디자인 고르기 카드 (설정 · 첫 실행 안내 공용) — 실제 Hz·BPM 모양을 작게 미리 보여줌
 const WOOD_BG = 'repeating-linear-gradient(92deg,rgba(0,0,0,.12) 0 2px,transparent 2px 6px),linear-gradient(180deg,#6e4220,#3a200d)';

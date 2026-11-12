@@ -147,28 +147,33 @@ const getTempoMarking = (bpm) => {
 // ==========================================
 // ── 화면 배치 (설정 → 화면 배치): 탭마다 블록 순서 · 보이기 · 크기 ──
 //  grow = 남는 세로 공간을 채우는 블록(크기 = 차지 비율), 나머지는 크기 = 확대 배율. lock = 숨길 수 없음
+// group: '음정'(초록) · '템포'(노랑) · '녹음'(빨강) — 화면 배치에서 색·아이콘으로 구분 (LAYOUT_GROUPS)
+// sizes: 이 블록이 고를 수 있는 크기 (녹음은 한 줄 / 두 줄만), noZoom: 크기를 확대 배율 대신 블록이 직접 처리
 const LAYOUT_BLOCKS = {
   t1: [
-    { id: 'vtapes',  name: '현별 세로 테이프', short: '세로 테이프', group: '현별 표시', grow: true },
-    { id: 'bars',    name: '현별 막대',       short: '현별 막대',   group: '현별 표시', grow: true },
+    { id: 'vtapes',  name: '현별 세로 테이프', short: '세로 테이프', group: '음정', grow: true },
+    { id: 'bars',    name: '현별 막대',       short: '현별 막대',   group: '음정', grow: true },
     { id: 'note',    name: '큰 음이름',       short: '큰 음이름',   group: '음정', grow: true },
     { id: 'fine',    name: '정밀 게이지 (±1¢ · Hz)', short: '정밀 게이지', group: '음정' },
     { id: 'meter',   name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
     { id: 'history', name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정' },
-    { id: 'readout', name: '음정 숫자창',     short: '숫자창',      group: '숫자 · 테이프' },
-    { id: 'tape',    name: '가로 음 테이프',  short: '가로 테이프', group: '숫자 · 테이프' },
+    { id: 'readout', name: '음정 숫자창',     short: '숫자창',      group: '음정' },
+    { id: 'tape',    name: '가로 음 테이프',  short: '가로 테이프', group: '음정' },
     { id: 'mini',    name: '미니 메트로놈',   short: '미니 메트로놈', group: '템포' },
+    { id: 'rec',     name: '녹음 버튼',       short: '녹음',        group: '녹음', sizes: ['s', 'l'], noZoom: true },
   ],
   t2: [
     { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
     { id: 'history',  name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정' },
-    { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '박자' },
-    { id: 'dial',     name: '박자 원형 다이얼', short: '원형 다이얼', group: '박자', grow: true },
-    { id: 'boxes',    name: '박자 네모 칸 원',  short: '네모 칸 원',  group: '박자', grow: true },
-    { id: 'tempo',    name: '템포 슬라이더 · 프리셋', short: '템포 슬라이더', group: '템포 조절' },
-    { id: 'controls', name: 'TAP · 시작',       short: 'TAP · 시작',  group: '템포 조절', lock: true },
+    { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '템포' },
+    { id: 'dial',     name: '박자 원형 다이얼', short: '원형 다이얼', group: '템포', grow: true },
+    { id: 'boxes',    name: '박자 네모 칸 원',  short: '네모 칸 원',  group: '템포', grow: true },
+    { id: 'tempo',    name: '템포 슬라이더 · 프리셋', short: '템포 슬라이더', group: '템포' },
+    { id: 'controls', name: 'TAP · 시작',       short: 'TAP · 시작',  group: '템포', lock: true },
+    { id: 'rec',      name: '녹음 버튼',        short: '녹음',        group: '녹음', sizes: ['s', 'l'], noZoom: true },
   ],
 };
+const LAYOUT_GROUPS = { '음정': '#4afc9d', '템포': '#ffcc00', '녹음': '#ef4444' };
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
   { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'fine', 'readout', 'mini'] },
@@ -191,9 +196,10 @@ const normLayout = (tab, list) => {
     const b = it && known.find(k => k.id === it.id);
     if (!b || seen.has(b.id)) return;
     seen.add(b.id);
-    out.push({ id: b.id, on: b.lock ? true : !!it.on, size: LAYOUT_SIZES.includes(it.size) ? it.size : 'm' });
+    const sizes = b.sizes || LAYOUT_SIZES;
+    out.push({ id: b.id, on: b.lock ? true : !!it.on, size: sizes.includes(it.size) ? it.size : sizes[0] === 's' && sizes.length === 2 ? 's' : 'm' });
   });
-  known.forEach(b => { if (!seen.has(b.id)) out.push({ id: b.id, on: !!b.lock, size: 'm' }); });
+  known.forEach(b => { if (!seen.has(b.id)) out.push({ id: b.id, on: !!b.lock, size: b.sizes ? b.sizes[0] : 'm' }); });
   return out;
 };
 

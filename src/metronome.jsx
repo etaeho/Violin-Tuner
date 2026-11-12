@@ -382,7 +382,7 @@ const DialCenter = ({ bpm, size, parts, sub }) => {
 };
 
 // 네모 칸 원: 판 안에 박을 큰 원으로 나열 + 원 아래에 쪼갠 박 점 (화면 배치의 '박자 네모 칸 원' 블록)
-const BeatBoxes = ({ metro, size, vintage, skin, pal }) => {
+const BeatBoxes = ({ metro, size, vintage, skin, pal, drag }) => {
   const { bpm, beatSounds, beatSubdivisions, currentBeat, currentSub, visualFlash, isPlayingMetro } = metro;
   const parts = useParts();
   // 다이얼 자리(정사각형)보다 넓게: 칸 너비를 직접 재서 원 크기 결정
@@ -400,11 +400,12 @@ const BeatBoxes = ({ metro, size, vintage, skin, pal }) => {
       style={{ height: size, ...(vintage ? { background: k.outer, border: `2px solid ${k.ring}` } : {}),
         transition: f.fire ? 'box-shadow 40ms' : 'box-shadow 260ms ease-out',
         boxShadow: f.fire ? `0 0 ${f.down ? 70 : 40}px ${f.down ? 10 : 4}px ${fcol}, inset 0 0 0 ${f.down ? 5 : 3}px ${fcol}` : (vintage ? '0 8px 20px rgba(0,0,0,.45)' : 'none') }}>
-      <div className="flex flex-col items-center leading-none">
+      <div className="flex flex-col items-center leading-none" {...(drag || {})} aria-label="끌어서 빠르기 조절">
         {ns ? <PartNumber style={ns} text={ns === 'flip' || ns === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={Math.round(size * 0.12)} unitColor={sub}/>
           : <span className="flex items-baseline gap-1"><span className="font-black" style={{ fontSize: size * 0.17, color: ink, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
               <span className="text-[10px] font-black tracking-widest" style={{ color: sub }}>BPM</span></span>}
         <span className="text-[10px] font-bold tracking-widest uppercase mt-1" style={{ color: sub, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{getTempoMarking(bpm)}</span>
+        {drag && <DragHint color={sub}/>}
       </div>
       <div className="grid justify-center content-center gap-x-3 gap-y-2 flex-1 w-full" style={{ gridTemplateColumns: `repeat(${cols}, ${d}px)` }}>
         {beatSounds.map((snd, i) => {
@@ -636,6 +637,24 @@ const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
   return <PitchStrip tuner={tuner} compact={compact} swapColors={swapColors} big={big}/>;
 };
 
+// BPM 숫자 끌기: 오른쪽(+ 쪽)·위로 끌면 빨라지고, 왼쪽(− 쪽)·아래로 끌면 느려짐 (6px = 1 BPM)
+const useBpmDrag = (metro) => {
+  const st = useRef(null);
+  const mref = useRef(metro); mref.current = metro;
+  return {
+    onPointerDown: (e) => { st.current = { x: e.clientX, y: e.clientY, bpm: mref.current.bpm, last: mref.current.bpm }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} },
+    onPointerMove: (e) => {
+      const s0 = st.current; if (!s0) return;
+      const v = Math.max(30, Math.min(250, s0.bpm + Math.round(((e.clientX - s0.x) - (e.clientY - s0.y)) / 6)));
+      if (v !== s0.last) { s0.last = v; mref.current.setBpm(v); haptic(4); }
+    },
+    onPointerUp: () => { st.current = null; }, onPointerCancel: () => { st.current = null; },
+    style: { touchAction: 'none', cursor: 'ew-resize' },
+  };
+};
+// 끌기 안내: BPM 숫자 아래 작은 글씨
+const DragHint = ({ color }) => <span className="block text-center text-[9px] font-bold pointer-events-none" style={{ color: color || 'rgba(156,163,175,.7)' }}>◀ 끌어서 빠르기 ▶</span>;
+
 // 다이얼 칸: 남는 공간에 맞춰 정사각형 크기 계산 (배치에서 숨기면 통째로 빠짐)
 const DialBlock = ({ children }) => {
   const [ref, size] = useFitSquare(104, 480);     // 다이얼을 최대한 크게 (멀리서도 보이게)
@@ -643,6 +662,7 @@ const DialBlock = ({ children }) => {
 };
 
 const Metronome = ({ metro, tuner, openSettings }) => {
+  const bpmDrag = useBpmDrag(metro);
   const skin = useSkin();
   const {
     bpm, setBpm, isPlayingMetro, currentBeat, timeSig, beatSounds, beatSubdivisions, visualFlash,
@@ -693,9 +713,10 @@ const Metronome = ({ metro, tuner, openSettings }) => {
 
       {!layout.some(b => b.on && (b.id === 'dial' || b.id === 'boxes')) && <div className="flex-1"/>}
       {visibleBlocks('t2', layout).map(b => (
-        <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
+        <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
           {b.id === 'pitch' && tuner && <MainPitchMeter tuner={tuner}/>}
           {b.id === 'history' && tuner && <LivePitchGraph tuner={tuner}/>}
+          {b.id === 'rec' && <RecModule size={b.size}/>}
           {b.id === 'beats' && (
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">
         <div className={`grid justify-center justify-items-center w-full ${isDense ? 'gap-x-1.5 gap-y-2' : 'gap-x-3'}`}
@@ -731,7 +752,10 @@ const Metronome = ({ metro, tuner, openSettings }) => {
           className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
           <Minus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
         </button>
-        <BeatDial metro={metro} size={dialSize} pal={pal} vintage={vintage} skin={skin}/>
+        <div {...bpmDrag} className="relative" aria-label="끌어서 빠르기 조절">
+          <BeatDial metro={metro} size={dialSize} pal={pal} vintage={vintage} skin={skin}/>
+          <span className="absolute left-0 right-0 pointer-events-none" style={{ bottom: dialSize * 0.2 }}><DragHint color={vintage ? (skin.dial.ticks ? '#5a3a1e' : skin.dial.sub) : undefined}/></span>
+        </div>
         <button {...pressProps(1)} style={{ ...pressProps(1).style, ...(vintage ? skin.knob : {}) }}
           className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
           <Plus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
@@ -745,7 +769,7 @@ const Metronome = ({ metro, tuner, openSettings }) => {
                 className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
                 <Minus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
               </button>
-              <BeatBoxes metro={metro} size={boxSize} vintage={vintage} skin={skin} pal={pal}/>
+              <BeatBoxes metro={metro} size={boxSize} vintage={vintage} skin={skin} pal={pal} drag={bpmDrag}/>
               <button {...pressProps(1)} style={{ ...pressProps(1).style, ...(vintage ? skin.knob : {}) }} aria-label="BPM 올리기"
                 className={`w-12 h-12 rounded-full flex items-center justify-center active:scale-90 transition-transform shrink-0 ${vintage ? '' : 't-chip'}`}>
                 <Plus size={20} className="pointer-events-none" style={{ color: vintage ? skin.knob.color : '#9ca3af' }}/>
@@ -852,6 +876,7 @@ const SkinPresets = ({ k, bpm, setBpm }) => {
 
 const SkinMiniMetronome = ({ metro }) => {
   const k = useSkin();
+  const bpmDrag = useBpmDrag(metro);
   const parts = useParts();
   const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
           toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
@@ -873,12 +898,13 @@ const SkinMiniMetronome = ({ metro }) => {
         <button {...press(-1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 내리기" style={{ touchAction: 'none', ...k.knob }}>
           <Minus size={18} className="pointer-events-none" style={{ color: k.knob.color }}/>
         </button>
-        <div className="flex-1 flex justify-center min-w-0">
+        <div className="flex-1 flex flex-col items-center min-w-0" {...bpmDrag} aria-label="끌어서 빠르기 조절">
           {parts.num !== 'auto'
             ? <PartNumber style={parts.num} text={parts.num === 'flip' || parts.num === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={32} unitColor={k.unit}/>
             : k.quarter
             ? <span style={{ fontFamily: 'Georgia,serif', fontSize: 30, lineHeight: 1, color: k.ink }}>♩ = <b style={{ fontSize: 40 }}>{bpm}</b></span>
             : <SkinNumber skin={k} text={String(bpm)} unit="BPM" size={42}/>}
+          <DragHint color={k.unit}/>
         </div>
         <button {...press(1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0" aria-label="BPM 올리기" style={{ touchAction: 'none', ...k.knob }}>
           <Plus size={18} className="pointer-events-none" style={{ color: k.knob.color }}/>
@@ -897,6 +923,7 @@ const MiniMetronome = ({ metro }) => useVintage() ? <SkinMiniMetronome metro={me
 
 const PlainMiniMetronome = ({ metro }) => {
   const parts = useParts();
+  const bpmDrag = useBpmDrag(metro);
   const { bpm, setBpm, isPlayingMetro, currentBeat, beatSounds, visualFlash, timeSig,
           toggleMetronome, handlePressStart, handlePressEnd, tapTempo } = metro;
   const pal = METRO_PALETTE.tape;
@@ -932,13 +959,14 @@ const PlainMiniMetronome = ({ metro }) => {
         <button {...press(-1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 t-chip" aria-label="BPM 내리기">
           <Minus size={18} className="pointer-events-none" style={{ color: dim }}/>
         </button>
-        <div className="flex-1 flex flex-col items-center justify-center min-w-0">
+        <div className="flex-1 flex flex-col items-center justify-center min-w-0" {...bpmDrag} aria-label="끌어서 빠르기 조절">
           {parts.num !== 'auto'
             ? <PartNumber style={parts.num} text={parts.num === 'flip' || parts.num === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={32} unitColor={dim}/>
             : <div className="flex items-baseline gap-1">
                 <span className={`text-[46px] font-black font-mono leading-none transition-transform duration-75 ${isPlayingMetro && visualFlash === 'main' ? 'scale-105' : ''}`} style={{ color: 'var(--ink)' }}>{bpm}</span>
                 <span className="text-[10px] font-black" style={{ color: dim }}>BPM</span>
               </div>}
+          <DragHint/>
         </div>
         <button {...press(1)} className="w-11 h-11 rounded-full flex items-center justify-center active:scale-90 shrink-0 t-chip" aria-label="BPM 올리기">
           <Plus size={18} className="pointer-events-none" style={{ color: dim }}/>

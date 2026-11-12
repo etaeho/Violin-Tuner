@@ -274,7 +274,7 @@ const useRecorder = (tuner, metro, notify) => {
   const remove = async (item) => { if (player?.id === item.id) closePlayer(); await recDb.del(item.id); refresh(); haptic(15); };
 
   const elapsed = rec ? Date.now() - rec.start : 0;
-  return { supported, rec, count, elapsed, items, player, start, stop, toggle, open, togglePause, closePlayer, seekMs, setRate, setAB, clearAB, exportItem, remove };
+  return { supported, rec, count, elapsed, items, player, start, stop, toggle, open, togglePause, closePlayer, seekMs, setRate, setAB, clearAB, exportItem, remove, metro };
 };
 
 // ── 녹음 설정 (설정 시트 ⑤ · 녹음 목록 시트 공용) ──
@@ -340,6 +340,21 @@ const RecPlayer = ({ it, recorder }) => {
   const bins = [];
   if (tr) { const n = Math.max(1, Math.ceil(dur / 500)); for (let i = 0; i < n; i++) bins.push([]); tr.pts.forEach(q => { const i = Math.min(bins.length - 1, Math.floor(q[0] / 500)); bins[i].push(q[1]); }); }
   const seekFrom = (e, a, b) => { const r = e.currentTarget.getBoundingClientRect(); recorder.seekMs(a + ((e.clientX - r.left) / r.width) * (b - a)); };
+  // 손가락으로 끌기: 그래프 = 화면을 밀듯이(오른쪽으로 끌면 뒤로, 왼쪽으로 끌면 앞으로), 막대 = 손가락 위치로 바로 이동
+  const dragRef = useRef(null);
+  const graphDrag = {
+    onPointerDown: (e) => { dragRef.current = { x: e.clientX, pos: p.pos, moved: false, w: e.currentTarget.getBoundingClientRect().width, win: W }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} },
+    onPointerMove: (e) => { const d = dragRef.current; if (!d) return; const dx = e.clientX - d.x; if (Math.abs(dx) > 4) d.moved = true; if (d.moved) recorder.seekMs(d.pos - (dx / d.w) * d.win); },
+    onPointerUp: (e) => { const d = dragRef.current; dragRef.current = null; if (d && !d.moved) seekFrom(e, w0, w1); },
+    onPointerCancel: () => { dragRef.current = null; },
+    style: { touchAction: 'none' },
+  };
+  const barDrag = {
+    onPointerDown: (e) => { dragRef.current = { bar: true }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} seekFrom(e, 0, dur); },
+    onPointerMove: (e) => { if (dragRef.current?.bar) seekFrom(e, 0, dur); },
+    onPointerUp: () => { dragRef.current = null; }, onPointerCancel: () => { dragRef.current = null; },
+    style: { touchAction: 'none' },
+  };
   const s = it.stats;
   return (
     <div className="flex flex-col gap-2 pt-1">
@@ -352,7 +367,7 @@ const RecPlayer = ({ it, recorder }) => {
       )}
       {/* 음정 그래프 */}
       {tr ? (
-        <div className="relative h-32 rounded-xl overflow-hidden cursor-pointer" style={{ background: L.face, boxShadow: L.shadow }} onClick={e => seekFrom(e, w0, w1)}>
+        <div className="relative h-32 rounded-xl overflow-hidden cursor-grab" {...graphDrag} style={{ ...graphDrag.style, background: L.face, boxShadow: L.shadow }}>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
             <rect x="0" y={Y(tol)} width="100" height={Y(-tol) - Y(tol)} fill={L.band}/>
             <line x1="0" x2="100" y1="50" y2="50" stroke={L.zero} strokeWidth="0.4" vectorEffect="non-scaling-stroke"/>
@@ -370,7 +385,7 @@ const RecPlayer = ({ it, recorder }) => {
         </div>
       ) : <p className="text-[10px] text-gray-500">이 녹음은 음정 기록이 없습니다 (이전 버전 녹음).</p>}
       {/* 전체 막대 */}
-      <div className="relative h-4 rounded-md overflow-hidden flex cursor-pointer t-chip" onClick={e => seekFrom(e, 0, dur)}>
+      <div className="relative h-5 rounded-md overflow-hidden flex cursor-pointer t-chip" {...barDrag}>
         {bins.map((b, i) => {
           const c = b.length ? b.reduce((x, y) => x + y, 0) / b.length : null;
           return <span key={i} className="h-full" style={{ flex: 1, background: c === null ? 'transparent' : col(c), opacity: c === null ? 0 : 0.75 }}/>;
@@ -389,7 +404,7 @@ const RecPlayer = ({ it, recorder }) => {
         <button onClick={() => recorder.setAB('B')} aria-label="구간 끝 B" disabled={p.A === null} className="px-2.5 py-1 rounded-full text-[11px] font-black disabled:opacity-40" style={p.B !== null ? { background: '#ffcc00', color: '#000' } : { color: 'var(--ink2)', border: '1px solid var(--chip-border)' }}>B {p.B !== null ? recDur(p.B) : ''}</button>
         {(p.A !== null || p.B !== null) && <button onClick={recorder.clearAB} className="px-2 py-1 rounded-full text-[11px] font-black text-gray-400" aria-label="구간 해제"><X size={12}/></button>}
       </div>
-      <p className="text-[9px] text-gray-500 leading-snug">그래프·막대를 누르면 그 위치로 이동 · A를 누르고 반복할 끝에서 B를 누르면 그 구간만 반복 · 느리게 들어도 음높이는 그대로</p>
+      <p className="text-[9px] text-gray-500 leading-snug">그래프를 좌우로 끌면 앞뒤로 이동 · 막대는 누르거나 끌면 그 위치로 · A를 누르고 반복할 끝에서 B를 누르면 그 구간만 반복 · 느리게 들어도 음높이는 그대로</p>
     </div>
   );
 };
@@ -556,5 +571,61 @@ const RecDelayOverlay = ({ recorder }) => {
         </span>
       </div>
     </div>
+  );
+};
+
+// ── 녹음 모듈: 화면 배치 '녹음' 블록 (튜너·메트로놈 탭). 작게 = 한 줄, 크게 = 두 줄(+ 마지막 녹음 바로 듣기) ──
+const RecModule = ({ size = 's' }) => {
+  const recorder = React.useContext(RecorderContext);
+  const vintage = useVintage();
+  if (!recorder) return null;
+  const { rec, count, elapsed, items, supported } = recorder;
+  const metro = recorder.metro;
+  const beat = rec && metro?.isPlayingMetro && metro.visualFlash === 'main' && metro.beatSounds[metro.currentBeat] !== 0;
+  const big = size === 'l', last = items[0];
+  const btn = big ? 'w-14 h-14' : 'w-10 h-10';
+  return (
+    <div className={`w-full max-w-sm rounded-2xl px-3 ${big ? 'py-2.5' : 'py-1.5'} flex flex-col gap-2 shrink-0 t-inset`}>
+      <div className="flex items-center gap-3">
+        <button onClick={recorder.toggle} disabled={!supported} aria-label={rec ? '녹음 정지' : count ? '녹음 대기 취소' : '녹음 시작'}
+          className={`${btn} rounded-full flex items-center justify-center shrink-0 active:scale-95`}
+          style={{ background: rec ? (beat ? 'rgba(239,68,68,.32)' : 'rgba(239,68,68,.12)') : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)',
+            border: `3px solid ${rec ? '#ef4444' : 'rgba(255,255,255,.15)'}`, transform: `scale(${beat ? 1.06 : 1})`,
+            transition: beat ? 'transform 40ms' : 'transform 160ms ease-out', boxShadow: rec ? `0 0 ${beat ? 26 : 14}px rgba(239,68,68,.6)` : 'none' }}>
+          {rec ? <Square size={big ? 20 : 14} fill="#ef4444" color="#ef4444"/>
+            : count ? <span className={`${big ? 'text-2xl' : 'text-lg'} font-black text-white font-mono`}>{count.left}</span>
+            : <span className={`${big ? 'w-5 h-5' : 'w-3.5 h-3.5'} rounded-full bg-white`}/>}
+        </button>
+        <span className={`font-mono font-black leading-none ${big ? 'text-3xl' : 'text-xl'}`} style={{ color: rec ? '#ef4444' : 'var(--ink-off)' }}>{recDur(elapsed)}</span>
+        <span className="flex-1 min-w-0 text-[11px] font-bold truncate" style={{ color: rec ? '#ef4444' : 'var(--ink2)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+          {rec ? '● 녹음 중' : count ? `${count.left}초 뒤 시작` : '녹음'}
+        </span>
+      </div>
+      {big && (
+        <div className="flex items-center gap-2 text-[11px] font-bold" style={{ color: 'var(--ink2)' }}>
+          {last ? <>
+            <button onClick={() => recorder.open(last)} className="w-8 h-8 rounded-full t-chip flex items-center justify-center shrink-0" aria-label="마지막 녹음 듣기">
+              {recorder.player?.id === last.id && !recorder.player.paused ? <Pause size={13} fill="currentColor"/> : <Play size={13} fill="currentColor"/>}
+            </button>
+            <span className="truncate">마지막 녹음 {fmtRecDate(last.at)} · {recDur(last.dur)}{recStatsText(last) ? ` · ${recStatsText(last)}` : ''}</span>
+          </> : <span className="text-gray-500">아직 녹음이 없습니다 · 녹음 탭에서 전체 목록</span>}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 지판 탭 위 줄의 작은 녹음 버튼
+const RecChip = () => {
+  const recorder = React.useContext(RecorderContext);
+  if (!recorder || !recorder.supported) return null;
+  const { rec, count, elapsed } = recorder;
+  return (
+    <button onClick={recorder.toggle} aria-label={rec ? '녹음 정지' : '녹음 시작'}
+      className="t-chip rounded-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-black shrink-0"
+      style={rec || count ? { color: '#ef4444', borderColor: '#ef4444' } : { color: 'var(--ink2)' }}>
+      {rec ? <Square size={9} fill="currentColor"/> : <span className="w-2 h-2 rounded-full bg-[#ef4444]"/>}
+      {rec ? <span className="font-mono">{recDur(elapsed)}</span> : count ? count.left : ''}
+    </button>
   );
 };

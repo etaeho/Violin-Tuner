@@ -118,6 +118,7 @@ const Fingerboard = ({ tuner, metro, log }) => {
           style={scale.active ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : { color: '#9ca3af' }}>
           <Target size={12}/>스케일
         </button>
+        <RecChip/>
         <button onClick={metro.toggleMetronome} aria-label="박자"
           className="ml-auto t-chip rounded-full flex items-center gap-1 pl-2 pr-1.5 py-1.5 shrink-0 transition-shadow"
           style={flashCol ? { borderColor: flashCol, boxShadow: `0 0 ${12 * pal.glow + 4}px ${flashCol}` } : {}}>
