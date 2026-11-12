@@ -38,8 +38,18 @@ const useMetronomeLogic = () => {
   }, [timeSig, beatSounds, beatSubdivisions, currentBeat]);
   useEffect(() => { bpmRef.current=bpm; }, [bpm]);
 
+  // 소리 최대: 딸깍 → 증폭(×2.4) → 리미터(찌그러짐 없이 최대 음량) → 스피커
+  const masterRef = useRef(null);
   const initMetroAudioContext = () => {
-    if (!metroAudioCtxRef.current) metroAudioCtxRef.current = new (window.AudioContext||window.webkitAudioContext)();
+    if (!metroAudioCtxRef.current) {
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      metroAudioCtxRef.current = ctx;
+      const boost = ctx.createGain(); boost.gain.value = 2.4;
+      const lim = ctx.createDynamicsCompressor();
+      lim.threshold.value = -3; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.05;
+      boost.connect(lim); lim.connect(ctx.destination);
+      masterRef.current = boost;
+    }
     if (metroAudioCtxRef.current.state==='suspended') metroAudioCtxRef.current.resume();
   };
 
@@ -137,13 +147,13 @@ const useMetronomeLogic = () => {
       let freq=1000, vol=1.0;
       if (soundType===2)  { freq=2000; vol=1.0; }
       else if (soundType===3) { freq=1500; vol=0.85; }
-      else if (soundType===1) { freq=1000; vol=0.7; }
-      else if (soundType===-1){ freq=1200; vol=0.5; }
+      else if (soundType===1) { freq=1000; vol=0.9; }
+      else if (soundType===-1){ freq=1200; vol=0.7; }
       osc.frequency.value=freq;
       gain.gain.setValueAtTime(vol,time);
-      const dur=soundType===-1?0.02:0.04;
+      const dur=soundType===-1?0.03:0.055;
       gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
-      osc.connect(gain); gain.connect(metroAudioCtxRef.current.destination);
+      osc.connect(gain); gain.connect(masterRef.current || metroAudioCtxRef.current.destination);
       if (recordTapRef.current) gain.connect(recordTapRef.current);   // 녹음에 메트로놈 소리 넣기
       osc.start(time); osc.stop(time+dur+0.01);
     }
@@ -224,7 +234,7 @@ const useMetronomeLogic = () => {
       const ctx = metroAudioCtxRef.current, osc = ctx.createOscillator(), g = ctx.createGain(), t = when ?? ctx.currentTime + 0.02;
       osc.type = 'square'; osc.frequency.value = strong ? 2000 : 1000;
       g.gain.setValueAtTime(strong ? 1 : 0.7, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
-      osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.05);
+      osc.connect(g); g.connect(masterRef.current || ctx.destination); osc.start(t); osc.stop(t + 0.05);
     },
     setRecordTap: (node) => { recordTapRef.current = node; },
   };
@@ -276,14 +286,28 @@ const beatPieces = (metro, gapDeg) => {
   return out;
 };
 
+// 박이 울릴 때 다이얼 전체가 번쩍 (멀리서도 보이게): 문자판이 박 색으로 차오르고 바깥이 빛남. 첫 박은 더 강하게
+const beatFlash = (metro) => {
+  const { isPlayingMetro, visualFlash, currentBeat, beatSounds } = metro;
+  const fire = isPlayingMetro && visualFlash === 'main' && beatSounds[currentBeat] > 0;
+  return { fire, down: fire && currentBeat === 0, snd: fire ? beatSounds[currentBeat] : 0 };
+};
+const flashWrap = (f, col) => ({ borderRadius: '50%', transition: f.fire ? 'box-shadow 40ms' : 'box-shadow 260ms ease-out',
+  boxShadow: f.fire ? `0 0 ${f.down ? 80 : 46}px ${f.down ? 18 : 8}px ${col}` : '0 0 0 0 transparent' });
+const flashFace = (f, r, col, max = 0.55) => (
+  <circle cx="100" cy="100" r={r} fill={col} opacity={f.fire ? (f.down ? max : max * 0.6) : 0}
+    style={{ transition: f.fire ? 'opacity 40ms' : 'opacity 260ms ease-out' }}/>
+);
+
 // 빈티지: 아르데코 라디오 다이얼 — 크림색 문자판, 눈금 링, 박마다 빨간 바늘이 그 박 위치로 이동
 const RadioBeatDial = ({ metro, size, center }) => {
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
   const n = beatSounds.length, gap = n > 8 ? 3 : 6;
   const firing = visualFlash === 'main';
+  const f = beatFlash(metro);
   const beatAngle = isPlayingMetro && currentBeat >= 0 ? (360 / n) * (currentBeat + 0.5) : 0;
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative" style={{ width: size, height: size, ...flashWrap(f, 'rgba(244,215,138,.75)') }}>
       <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
         <defs>
           <radialGradient id="radioFace" cx="50%" cy="40%" r="60%"><stop offset="0" stopColor="#fbf4e2"/><stop offset="1" stopColor="#e2d3ad"/></radialGradient>
@@ -291,7 +315,7 @@ const RadioBeatDial = ({ metro, size, center }) => {
         <circle cx="100" cy="100" r="97" fill="#3a2410" stroke="#b88a35" strokeWidth="3"/>
         {/* 박 구간 (바깥 링) */}
         {beatPieces(metro, gap).map(({ i, j, snd, a0, a1, cur, beatCur }) => (
-          <path key={i + '-' + j} d={arcPath(100, 100, 90, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur ? (visualFlash ? 7 : 5.5) : j ? 2.5 : 4}
+          <path key={i + '-' + j} d={arcPath(100, 100, 88, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur ? (visualFlash ? 14 : 11) : j ? 5 : 8}
             stroke={cur ? RADIO.cream : j ? (beatCur ? 'rgba(244,215,138,.5)' : 'rgba(244,215,138,.25)') : snd === 0 ? 'rgba(244,215,138,.15)' : snd === 2 ? 'rgba(244,215,138,.55)' : 'rgba(184,138,53,.45)'}
             style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && visualFlash ? `drop-shadow(0 0 5px ${RADIO.cream})` : 'none' }}/>
         ))}
@@ -303,6 +327,7 @@ const RadioBeatDial = ({ metro, size, center }) => {
         })}
         {/* 문자판 */}
         <circle cx="100" cy="100" r="64" fill="url(#radioFace)" stroke="#b88a35" strokeWidth="2"/>
+        {flashFace(f, 63, f.down ? '#c0392b' : '#e0a94f', 0.5)}
         <circle cx="100" cy="100" r="60" fill="none" stroke="#b88a35" strokeWidth="0.8" opacity={visualFlash === 'sub' ? 0.9 : 0.25} style={{ transition: 'opacity 60ms' }}/>
         {/* 바늘: 지금 박 위치 */}
         <g style={{ transform: `rotate(${beatAngle}deg)`, transformOrigin: '100px 100px', transition: 'transform 120ms ease-out' }} opacity={isPlayingMetro ? 1 : 0.5}>
@@ -321,16 +346,18 @@ const RadioBeatDial = ({ metro, size, center }) => {
 const SkinBeatDial = ({ metro, size, k, center }) => {
   const { bpm, currentBeat, beatSounds, visualFlash, isPlayingMetro } = metro;
   const d = k.dial, n = beatSounds.length, gap = n > 8 ? 3 : 6, firing = visualFlash === 'main';
+  const f = beatFlash(metro);
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative" style={{ width: size, height: size, ...flashWrap(f, d.on) }}>
       <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
         <circle cx="100" cy="100" r="97" fill={d.outer} stroke={d.ring} strokeWidth="2.5" strokeDasharray={d.ringDash ? '5 4' : undefined}/>
         {beatPieces(metro, gap).map(({ i, j, snd, a0, a1, cur, beatCur }) => (
-          <path key={i + '-' + j} d={arcPath(100, 100, 85, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur ? (visualFlash ? 12 : 10) : j ? 5 : 8}
+          <path key={i + '-' + j} d={arcPath(100, 100, 84, a0, a1)} fill="none" strokeLinecap="round" strokeWidth={cur ? (visualFlash ? 19 : 15) : j ? 7 : 12}
             stroke={cur ? d.on : j ? (beatCur ? d.strong : d.off) : snd === 0 ? d.off : snd === 2 ? d.strong : d.off}
             style={{ transition: 'stroke-width 80ms, stroke 80ms', filter: cur && visualFlash ? `drop-shadow(0 0 6px ${d.on})` : 'none' }}/>
         ))}
         <circle cx="100" cy="100" r="68" fill={d.face} stroke={d.ring} strokeWidth="1.5" strokeDasharray={d.ringDash ? '4 3' : undefined}/>
+        {flashFace(f, 67, d.on, 0.45)}
         <circle cx="100" cy="100" r="63" fill="none" stroke={d.sub} strokeWidth="0.8" opacity={visualFlash === 'sub' ? 0.9 : 0.15} style={{ transition: 'opacity 60ms' }}/>
       </svg>
       {center ? <div className="absolute inset-0 flex flex-col items-center justify-center">{center}</div> : <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -362,14 +389,17 @@ const BeatBoxes = ({ metro, size, vintage, skin, pal }) => {
   const ref = useRef(null); const [w, setW] = useState(size);
   useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setW(el.clientWidth)); ro.observe(el); return () => ro.disconnect(); }, []);
   const n = beatSounds.length, cols = n <= 4 ? n : n <= 8 ? Math.ceil(n / 2) : Math.ceil(n / 3), rows = Math.ceil(n / cols);
-  const d = Math.max(26, Math.min(84, (w - 28 - (cols - 1) * 12) / cols, (size * 0.62 - (rows - 1) * 22) / rows - 14));
+  const d = Math.max(30, Math.min(130, (w - 24 - (cols - 1) * 10) / cols, (size * 0.72 - (rows - 1) * 20) / rows - 12));
   const k = vintage ? skin.dial : null;
+  const f = beatFlash(metro), fcol = vintage ? k.on : (pal[f.snd] || pal[1]);
   const ink = vintage ? k.text : 'var(--ink)', sub = vintage ? k.sub : '#9ca3af';
   const colOf = (snd, on) => vintage ? (on ? k.on : snd === 2 ? k.strong : snd === 0 ? 'transparent' : k.off) : (snd === 0 ? 'transparent' : pal[snd]);
   const ns = parts.num !== 'auto' ? parts.num : null;
   return (
-    <div ref={ref} className={`relative flex-1 mx-2 flex flex-col items-center justify-between rounded-[26px] py-3 px-3.5 ${vintage ? '' : 't-panel'}`}
-      style={{ height: size, ...(vintage ? { background: k.outer, border: `2px solid ${k.ring}`, boxShadow: '0 8px 20px rgba(0,0,0,.45)' } : {}) }}>
+    <div ref={ref} className={`relative flex-1 min-w-0 overflow-hidden mx-2 flex flex-col items-center justify-between rounded-[26px] py-3 px-3.5 ${vintage ? '' : 't-panel'}`}
+      style={{ height: size, ...(vintage ? { background: k.outer, border: `2px solid ${k.ring}` } : {}),
+        transition: f.fire ? 'box-shadow 40ms' : 'box-shadow 260ms ease-out',
+        boxShadow: f.fire ? `0 0 ${f.down ? 70 : 40}px ${f.down ? 10 : 4}px ${fcol}, inset 0 0 0 ${f.down ? 5 : 3}px ${fcol}` : (vintage ? '0 8px 20px rgba(0,0,0,.45)' : 'none') }}>
       <div className="flex flex-col items-center leading-none">
         {ns ? <PartNumber style={ns} text={ns === 'flip' || ns === 'drum' ? String(bpm).padStart(3, '0') : String(bpm)} unit="BPM" size={Math.round(size * 0.12)} unitColor={sub}/>
           : <span className="flex items-baseline gap-1"><span className="font-black" style={{ fontSize: size * 0.17, color: ink, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
@@ -411,19 +441,21 @@ const BeatDial = ({ metro, size, pal, vintage, skin }) => {
   const n = beatSounds.length;
   const gap = n > 8 ? 4 : 7;
   const firing = visualFlash === 'main';
+  const f = beatFlash(metro), fcol = pal[f.snd] || pal[1];
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative" style={{ width: size, height: size, ...flashWrap(f, fcol) }}>
       <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full">
         {vintage && <circle cx="100" cy="100" r="96" fill="none" stroke="#6b4a12" strokeWidth="3"/>}
         {beatPieces(metro, gap).map(({ i, j, snd, a0, a1, cur, beatCur }) => {
           const col = j ? pal.sub : pal[snd];
           return (
-            <path key={i + '-' + j} d={arcPath(100, 100, 86, a0, a1)} fill="none" strokeLinecap="round"
-              stroke={col} strokeWidth={cur ? (visualFlash ? 14 : 11) : j ? 6 : 9}
+            <path key={i + '-' + j} d={arcPath(100, 100, 84, a0, a1)} fill="none" strokeLinecap="round"
+              stroke={col} strokeWidth={cur ? (visualFlash ? 22 : 17) : j ? 9 : 14}
               opacity={cur ? 1 : snd === 0 && !j ? 1 : beatCur ? 0.55 : 0.25}
               style={{ transition: 'stroke-width 80ms, opacity 80ms', filter: cur && visualFlash ? `drop-shadow(0 0 ${8 * pal.glow}px ${col})` : 'none' }}/>
           );
         })}
+        {flashFace(f, 70, fcol, 0.4)}
         {/* 세분박 깜빡임 */}
         <circle cx="100" cy="100" r="72" fill="none" stroke={pal.sub} strokeWidth="1.5"
           opacity={visualFlash === 'sub' ? 0.9 : 0.08} style={{ transition: 'opacity 60ms' }}/>
@@ -606,7 +638,7 @@ const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
 
 // 다이얼 칸: 남는 공간에 맞춰 정사각형 크기 계산 (배치에서 숨기면 통째로 빠짐)
 const DialBlock = ({ children }) => {
-  const [ref, size] = useFitSquare(120, 300);
+  const [ref, size] = useFitSquare(104, 480);     // 다이얼을 최대한 크게 (멀리서도 보이게)
   return <div ref={ref} className="w-full flex-1 min-h-0 flex items-center justify-between">{children(size)}</div>;
 };
 
@@ -659,6 +691,7 @@ const Metronome = ({ metro, tuner, openSettings }) => {
         </div>
       </div>
 
+      {!layout.some(b => b.on && (b.id === 'dial' || b.id === 'boxes')) && <div className="flex-1"/>}
       {visibleBlocks('t2', layout).map(b => (
         <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
           {b.id === 'pitch' && tuner && <MainPitchMeter tuner={tuner}/>}

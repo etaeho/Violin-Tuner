@@ -6,7 +6,8 @@
 const useTunerLogic = () => {
   const [isStarted, setIsStarted] = useState(false);
   const [pitch, setPitch] = useState(0);
-  const [cents, setCents] = useState(0);
+  const [cents, setCents] = useState(0);              // 가장 가까운 음 기준 센트 (모든 음정 표시가 이 값 하나를 씀)
+  const [centsExact, setCentsExact] = useState(0);    // 같은 값의 소수점 (정밀 게이지 바늘용)
   const [stringCents, setStringCents] = useState(0);
   const [a4Freq, setA4Freq] = usePersistentState('a4Freq', 442, v => v >= 430 && v <= 450);
   const [tolerance, setTolerance] = usePersistentState('tolerance', 10, v => v >= 2 && v <= 30);
@@ -164,6 +165,7 @@ const useTunerLogic = () => {
         const fullNote = NOTE_NAMES[noteIndex];
         setPitch(freq.toFixed(1));
         setCents(chromaticCentsOff);
+        setCentsExact(centsBetween(freq, chromaticTargetFreq));
         setStringCents(strCentsOff);
         setClosestString(closestStr);
         setCurrentNote({
@@ -185,7 +187,7 @@ const useTunerLogic = () => {
       if (lastGoodRef.current && now - lastGoodRef.current > S.holdMs) {
         lastGoodRef.current = 0;
         freqHistoryRef.current = [];
-        setPitch(0); setCents(0); setStringCents(0);
+        setPitch(0); setCents(0); setCentsExact(0); setStringCents(0);
       }
     }
     trackerRef.current.tick(now);
@@ -271,7 +273,7 @@ const useTunerLogic = () => {
     freqHistoryRef.current=[];
     gateOpenRef.current=false; candidateRef.current={ freq:0, count:0 }; lastGoodRef.current=0;
     levelRef.current={ db:-100, clarity:0, freq:-1, gate:false, accepted:false };
-    setIsStarted(false); setPitch(0); setCents(0); setStringCents(0);
+    setIsStarted(false); setPitch(0); setCents(0); setCentsExact(0); setStringCents(0);
   };
 
   const handleReset = () => {
@@ -299,7 +301,7 @@ const useTunerLogic = () => {
   const cycleTolerance = () => { setTolerance(prev=>prev>=24?4:prev+2); haptic(8); };
 
   return {
-    isStarted, pitch, cents, stringCents, a4Freq, tolerance,
+    isStarted, pitch, cents, centsExact, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
     startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
     settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise, autoCal,
@@ -318,15 +320,15 @@ const useTunerLogic = () => {
 // 비선형(제곱근) 눈금 → 0 근처는 세밀하게, 멀리는 ±350센트까지 넓게
 // ==========================================
 const OPEN_STRING_COLORS = { G:'#f97316', D:'#eab308', A:'#4afc9d', E:'#38bdf8' };
-const BAR_MAX_CENTS = 350;
-const BAR_TICKS = [10, 50, 100, 200];
+const BAR_MAX_CENTS = 50;          // 막대도 가장 가까운 음 기준 ±50센트 (다른 음정 표시와 같은 기준)
+const BAR_TICKS = [5, 10, 25, 50];
 const BAR_H = 'clamp(52px, 13vh, 120px)';
 // 막대 크기: 'normal'(고정) | 'fill'(남는 세로 공간 채움) | 'compact'(작게, 템포 패널과 함께)
 const barBox = (size) => (
   size === 'fill' ? { flex: '1 1 0', minHeight: 56 }
   : size === 'compact' ? { flex: '1 1 0', minHeight: 44, maxHeight: 130 }   // 남는 공간만큼 늘어나되 최대 130px
   : { height: BAR_H });
-const barTicks = (size) => (size === 'compact' ? [10, 50, 100] : BAR_TICKS);
+const barTicks = (size) => (size === 'compact' ? [10, 25, 50] : BAR_TICKS);
 
 const barPct = (c) => Math.min(100, Math.sqrt(Math.min(Math.abs(c), BAR_MAX_CENTS) / BAR_MAX_CENTS) * 100);
 
@@ -371,7 +373,7 @@ const StringBar = ({ dir, show, pos, color, tolerance, size }) => {
 const StringBars = ({ tuner, size = 'normal' }) => {
   const fill = size === 'fill' || size === 'compact';
   const vintage = useVintage();
-  const { isStarted, pitch, stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;
+  const { isStarted, pitch, cents: stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;   // 가장 가까운 음 기준 (다른 표시와 통일)
   return (
     <div className={`flex justify-between w-full max-w-sm pr-2 my-2 ${fill ? 'flex-1 min-h-0 items-stretch' : 'shrink-0 items-center'}`}>
       <div className="flex flex-col items-center justify-center">
@@ -499,7 +501,7 @@ const VTape = ({ center, active, perfect, tolerance, vintage, cents = 99 }) => {
 
 const StringVTapes = ({ tuner }) => {
   const vintage = useVintage();
-  const { isStarted, pitch, a4Freq, stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;
+  const { isStarted, pitch, a4Freq, cents: stringCents, tolerance, closestString, playingTone, toggleTone } = tuner;   // 가장 가까운 음 기준 (다른 표시와 통일)
   const live = isStarted && pitch > 0;
   const semi = live ? 12 * Math.log2(pitch / a4Freq) : null;
   return (
@@ -547,8 +549,8 @@ const FineGauge = ({ tuner, swapColors }) => {
   const f = Number(pitch) || 0, live = isStarted && f > 0;
   const semi = live ? Math.round(12 * Math.log2(f / a4Freq)) : 0;
   const target = a4Freq * Math.pow(2, semi / 12);
-  const exact = live ? 1200 * Math.log2(f / target) : 0;       // 소수점 센트
-  const c = Math.round(exact), dHz = f - target;
+  const exact = live ? tuner.centsExact : 0;                  // 튜너가 계산한 같은 값 (다른 표시와 기준 통일)
+  const c = live ? tuner.cents : 0, dHz = f - target;
   const ok = live && Math.abs(c) <= tolerance;
   const noteIdx = ((semi + 9) % 12 + 12) % 12, oct = Math.floor((semi + 57) / 12);
   const nm = NOTE_NAMES[noteIdx];
@@ -710,7 +712,7 @@ const TunerReadout = ({ tuner }) => {
 // 하단 음 테이프: 음이름이 적힌 테이프가 좌우로 흐르고 가운데 바늘이 고정
 // 왼쪽 = 낮은 음, 오른쪽 = 높은 음. 바늘이 음 이름 오른쪽이면 높음(♯)
 // ==========================================
-const TAPE_SP = 112;   // 반음 간격(px) → 10센트 ≈ 11px
+const TAPE_SP = 60;    // 반음 간격(px) → 한 화면에 음 6개쯤 (가까우면 ×3 확대)
 
 const NoteTape = ({ tuner, showMic }) => {
   const vintage = useVintage();
@@ -721,14 +723,14 @@ const NoteTape = ({ tuner, showMic }) => {
   const semi = semiRef.current;
   const base = Math.round(semi);
   const keys = [];
-  for (let k = base - 4; k <= base + 4; k++) keys.push(k);
+  for (let k = base - 8; k <= base + 8; k++) keys.push(k);
   const inTune = active && Math.abs(cents) <= tolerance;
   // 스프링으로 부드럽게 + 목표 ±15센트 안이면 3배 확대
   const keyRefs = useRef({}), bandRef = useRef(null);
   const tolRef = useRef(tolerance); tolRef.current = tolerance;
   const zoomT = active && Math.abs(cents) <= 15 ? 1 : 0;
   const place = ([sv, z]) => {
-    const sp = TAPE_SP * (1 + 2 * z);
+    const sp = TAPE_SP * (1 + 2.5 * z);
     Object.entries(keyRefs.current).forEach(([k, el]) => {
       if (!el) return;
       el.style.width = sp + 'px'; el.style.marginLeft = -sp / 2 + 'px';
@@ -737,7 +739,7 @@ const NoteTape = ({ tuner, showMic }) => {
     if (bandRef.current) bandRef.current.style.width = (tolRef.current * 2 / 100) * sp + 'px';
   };
   const [s0, z0] = useSpring([semi, zoomT], place, { k: 0.18, snap: 6 });
-  const sp0 = TAPE_SP * (1 + 2 * z0);
+  const sp0 = TAPE_SP * (1 + 2.5 * z0);
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
   const ink = vintage ? '#3b2a1a' : '#e5e5e5';
 
@@ -774,7 +776,7 @@ const NoteTape = ({ tuner, showMic }) => {
             <div className="absolute left-0 right-0 top-7 bottom-0 flex items-center justify-center">
               <span className="font-black leading-none" style={{
                 fontFamily: vintage ? 'Georgia, "Times New Roman", serif' : undefined,
-                fontSize: 34, color: vintage ? ink : (isCur ? (inTune ? '#4afc9d' : '#fff') : '#52525b'),
+                fontSize: 24, color: vintage ? ink : (isCur ? (inTune ? '#4afc9d' : '#fff') : '#52525b'),
                 textShadow: vintage ? '0 1px 0 rgba(255,255,255,.6)' : 'none' }}>
                 {name[0]}<sup className="text-lg align-top">{name[1] === '#' ? '♯' : ''}</sup>
                 <sub className="text-[11px] opacity-50 align-baseline ml-0.5">{oct}</sub>
@@ -1499,6 +1501,8 @@ const Tuner = ({ tuner, metro, openSettings }) => {
 
       {/* 화면 배치 (설정 → 화면 배치): 켜진 블록을 순서대로 */}
       <div className="w-full flex-1 min-h-0 flex flex-col items-center gap-2 pt-1">
+        {/* 남는 공간을 채우는 블록이 없으면 위아래 여백을 같게 → 블록들이 화면 가운데에 모임 */}
+        {!blocks.some(b => b.grow) && <div className="flex-1"/>}
         {blocks.map(b => (
           <LayoutBlock key={b.id} id={b.id} grow={b.grow} size={b.size}>
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}

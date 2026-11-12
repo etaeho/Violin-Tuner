@@ -28,6 +28,9 @@
   - **실시간 음정 그래프** `LivePitchGraph`(metronome.jsx) = 화면 배치 'history' 블록(1·2번 탭, 기본 꺼짐): `tuner.noteListeners`로 최근 10초 음정 점 + 음이름 + 메트로놈 박 줄 + '맞음 %'(최근 5초)
   - **정밀 튜닝**: `FineGauge`(1번 탭 'fine' 블록) = A4 기준 목표 Hz · 차이 0.1Hz · 1¢, ±12¢ 안이면 눈금 ±10¢로 확대. 세로/가로 테이프도 ±15¢ 안이면 확대(×4/×3)
   - **부드러운 움직임**: core.jsx `useSpring(목표값들, onFrame)` — 매 프레임 DOM을 직접 바꿈(리렌더 없음). 테이프·게이지 바늘에 사용
+  - **음정 기준 통일**: 모든 음정 표시(테이프·막대·게이지·숫자·그래프)는 `tuner.cents`(가장 가까운 음 기준, 정수)·`tuner.centsExact`(소수) 하나만 씀. 현 기준(stringCents)은 표시에 쓰지 말 것
+  - 블록 배치: 남는 공간을 채우는 블록이 없으면 위아래 빈칸 → 블록들이 화면 가운데에 모임
+  - 메트로놈 박 표시: `beatFlash`/`flashWrap`/`flashFace` — 박마다 문자판이 박 색으로 차오르고 바깥이 빛남(첫 박 더 강하게). 다이얼은 최대 480px. 소리는 증폭(×2.4) + 리미터(`masterRef`)
   - **흔들림 주의**: 박마다 바뀌는 표시는 크기(폰트·width)를 바꾸지 말고 transform·box-shadow만 (레이아웃이 밀려 화면 전체가 흔들림)
   - 저음 감지: `cleanBuffer`(직류·80Hz 이하 제거) 후 detectPitch. 330Hz 아래는 게이트 −6dB·신뢰도 −0.08 완화. 최저 주파수는 `MIN_FREQ_CAP`(170Hz) 넘게 못 올림
   - 2번 탭 박 표시 = 화면 배치 블록 두 개: 'dial'(원형 다이얼, 쪼갠 박은 `beatPieces`로 조각 나눔) · 'boxes'(`BeatBoxes` 네모 칸 원 + 쪼갠 박 점). 둘 다 켜거나 하나만 켤 수 있음. metro.`currentSub` = 지금 쪼갠 박 번호
