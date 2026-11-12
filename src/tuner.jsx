@@ -990,6 +990,29 @@ const PartsEditor = ({ parts, onChange }) => {
   );
 };
 
+// 화면 배치용 작은 그림 (블록이 어떻게 생겼는지 한눈에)
+const BlockThumb = ({ id, on = true }) => {
+  const g = on ? '#4afc9d' : '#71717a', d = '#3f3f46', m = '#a1a1aa', r = '#ef4444', b = '#3b82f6', y = '#ffcc00';
+  const svg = (children) => <svg viewBox="0 0 48 30" width="48" height="30" className="shrink-0 rounded-md" style={{ background: '#0b0b0b' }}>{children}</svg>;
+  switch (id) {
+    case 'vtapes': return svg(<>{[5, 16, 27, 38].map((x, i) => <rect key={i} x={x} y="3" width="7" height="24" rx="2" fill={d}/>)}<line x1="3" x2="45" y1="15" y2="15" stroke={g} strokeWidth="1.5"/></>);
+    case 'bars': return svg(<>{[8, 19, 30, 41].map((x, i) => <g key={i}><line x1={x} x2={x} y1="3" y2="27" stroke={d} strokeWidth="2"/><circle cx={x} cy="15" r="3.5" fill={i === 2 ? g : m}/></g>)}</>);
+    case 'note': return svg(<text x="24" y="24" textAnchor="middle" fontSize="22" fontWeight="900" fill={m}>A<tspan fontSize="9" fill={g}>4</tspan></text>);
+    case 'fine': return svg(<><rect x="3" y="11" width="42" height="14" rx="2" fill={d}/>{[7, 12, 17, 22, 26, 31, 36, 41].map(x => <line key={x} x1={x} x2={x} y1="11" y2="16" stroke={m} strokeWidth="0.8"/>)}<line x1="28" x2="28" y1="9" y2="26" stroke={g} strokeWidth="2"/><text x="4" y="8" fontSize="6" fontWeight="800" fill={m}>196.9Hz +3¢</text></>);
+    case 'meter': case 'pitch': return svg(<><path d="M6 26 A18 18 0 0 1 42 26" fill="none" stroke={m} strokeWidth="1.5"/><path d="M19 9 A18 18 0 0 1 29 9" fill="none" stroke={g} strokeWidth="3"/><line x1="24" y1="27" x2="28" y2="10" stroke={g} strokeWidth="2"/></>);
+    case 'history': return svg(<><rect x="0" y="12" width="48" height="6" fill="rgba(74,252,157,.15)"/>{[[4, 15, g], [9, 14, g], [14, 9, r], [19, 8, r], [24, 15, g], [29, 21, b], [34, 22, b], [39, 15, g], [44, 14, g]].map(([x, yy, c], i) => <circle key={i} cx={x} cy={yy} r="1.8" fill={c}/>)}</>);
+    case 'readout': return svg(<>{[6, 15, 24, 33].map((x, i) => <rect key={i} x={x} y="8" width="8" height="14" rx="1.5" fill={d}/>)}<text x="10" y="19" textAnchor="middle" fontSize="9" fontWeight="800" fill={m}>4</text><text x="19" y="19" textAnchor="middle" fontSize="9" fontWeight="800" fill={m}>4</text><text x="28" y="19" textAnchor="middle" fontSize="9" fontWeight="800" fill={m}>2</text><text x="42" y="19" fontSize="6" fontWeight="800" fill={g}>+3</text></>);
+    case 'tape': return svg(<><rect x="2" y="9" width="44" height="14" rx="2" fill={d}/>{[['F', 8], ['G', 24], ['A', 40]].map(([t, x]) => <text key={t} x={x} y="20" textAnchor="middle" fontSize="8" fontWeight="900" fill={m}>{t}</text>)}<line x1="27" x2="27" y1="6" y2="26" stroke={r} strokeWidth="1.5"/></>);
+    case 'mini': return svg(<>{[6, 11, 16, 21].map((x, i) => <circle key={i} cx={x} cy="9" r="2" fill={i ? g : y} opacity={i ? 0.5 : 1}/>)}<text x="22" y="24" textAnchor="middle" fontSize="11" fontWeight="900" fill={m}>60</text><path d="M37 17 L44 21 L37 25 Z" fill={g}/></>);
+    case 'beats': return svg(<>{[9, 19, 29, 39].map((x, i) => <circle key={i} cx={x} cy="14" r="4.5" fill={i ? g : y}/>)}<text x="24" y="27" textAnchor="middle" fontSize="5" fill={m}>♩ ♫ ♩ ♬</text></>);
+    case 'dial': return svg(<>{[0, 1, 2, 3].map(i => <path key={i} d={arcPath(24, 15, 12, i * 90 + 8, i * 90 + 82)} fill="none" stroke={i ? g : y} strokeWidth="3" opacity={i === 1 ? 1 : 0.4}/>)}<text x="24" y="18" textAnchor="middle" fontSize="8" fontWeight="900" fill={m}>60</text></>);
+    case 'boxes': return svg(<><rect x="5" y="3" width="38" height="24" rx="4" fill={d}/>{[12, 20, 28, 36].map((x, i) => <circle key={i} cx={x} cy="17" r="3.3" fill={i === 1 ? g : i ? '#14532d' : y}/>)}<text x="24" y="10" textAnchor="middle" fontSize="6" fontWeight="900" fill={m}>60</text></>);
+    case 'tempo': return svg(<><line x1="5" x2="43" y1="10" y2="10" stroke={d} strokeWidth="2.5"/><circle cx="17" cy="10" r="3.5" fill={g}/>{[5, 15, 25, 35].map(x => <rect key={x} x={x} y="18" width="8" height="6" rx="3" fill={x === 5 ? g : d}/>)}</>);
+    case 'controls': return svg(<><rect x="4" y="8" width="13" height="14" rx="3" fill={d}/><text x="10.5" y="18" textAnchor="middle" fontSize="5" fontWeight="900" fill={m}>TAP</text><rect x="20" y="8" width="24" height="14" rx="3" fill="rgba(74,252,157,.25)"/><path d="M29 11 L36 15 L29 19 Z" fill={g}/></>);
+    default: return svg(null);
+  }
+};
+
 // 화면 배치 미리보기: 실제 탭 화면을 그대로 작게 그림 (조작은 안 됨)
 const LayoutPreview = ({ tab, tuner, metro, sel }) => {
   const W = Math.min(window.innerWidth, 448) - 32;            // 탭 내용 영역 크기 (app.jsx 여백 기준)
@@ -1021,14 +1044,24 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
   const save = (l) => updateSettings({ [key]: l });
   const meta = (id) => LAYOUT_BLOCKS[tab].find(b => b.id === id);
   const patch = (id, p) => save(list.map(b => b.id === id ? { ...b, ...p } : b));
-  const move = (from, to) => { const l = [...listNow.current]; const [it] = l.splice(from, 1); l.splice(to, 0, it); save(l); };
+  const onList = list.filter(b => b.on), offList = list.filter(b => !b.on);
+  // 보이는 블록끼리 순서 바꾸기 (숨긴 블록은 뒤에 그대로)
+  const move = (from, to) => {
+    const on = listNow.current.filter(b => b.on), off = listNow.current.filter(b => !b.on);
+    const [it] = on.splice(from, 1); on.splice(to, 0, it); save([...on, ...off]);
+  };
+  const addBlock = (id) => {
+    const on = listNow.current.filter(b => b.on), off = listNow.current.filter(b => !b.on && b.id !== id);
+    const it = listNow.current.find(b => b.id === id);
+    save([...on, { ...it, on: true }, ...off]); setSel(id);
+  };
 
   // 끌기: 손가락이 다른 줄의 가운데를 넘으면 그 자리로 이동
   const onDown = (e, id) => { e.preventDefault(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} setDragId(id); setSel(id); haptic(12); };
   const onMove = (e) => {
     if (!dragId || !listRef.current) return;
     const rows = [...listRef.current.children];
-    const from = listNow.current.findIndex(b => b.id === dragId);
+    const from = listNow.current.filter(b => b.on).findIndex(b => b.id === dragId);
     let to = from;
     rows.forEach((r, i) => { const rc = r.getBoundingClientRect(); if (e.clientY > rc.top && e.clientY < rc.bottom) to = i; });
     if (to !== from) { move(from, to); haptic(6); }
@@ -1055,38 +1088,64 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
           ))}
         </div>
       )}
+      {/* 화면 순서: 지금 보이는 블록만 (위 → 아래) */}
+      <div className="text-[10px] font-black tracking-widest text-gray-500 mt-1">화면 순서 <span className="font-bold tracking-normal">(위 → 아래 · ⋮⋮ 끌어서 이동)</span></div>
       <div ref={listRef} className="flex flex-col gap-1.5" onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-        {list.map(b => {
+        {onList.map(b => {
           const m = meta(b.id), drag = dragId === b.id;
           return (
             <div key={b.id} className="flex items-center gap-1.5 rounded-xl pr-1.5 transition-shadow"
-              style={{ background: drag ? 'rgba(74,252,157,.12)' : 'rgba(0,0,0,.25)', border: `1px solid ${drag ? 'var(--accent)' : 'var(--chip-border)'}`,
-                boxShadow: drag ? '0 6px 16px rgba(0,0,0,.5)' : 'none', opacity: b.on ? 1 : 0.5 }}>
-              <span onPointerDown={e => onDown(e, b.id)} className="w-9 h-11 flex items-center justify-center shrink-0 cursor-grab" style={{ touchAction: 'none', color: 'var(--ink2)' }} aria-label="끌어서 옮기기">
-                <GripVertical size={18}/>
+              style={{ background: drag ? 'rgba(74,252,157,.12)' : 'rgba(0,0,0,.25)', border: `1px solid ${drag ? 'var(--accent)' : sel === b.id ? 'var(--accent)' : 'var(--chip-border)'}`,
+                boxShadow: drag ? '0 6px 16px rgba(0,0,0,.5)' : 'none' }}>
+              <span onPointerDown={e => onDown(e, b.id)} className="w-7 h-12 flex items-center justify-center shrink-0 cursor-grab" style={{ touchAction: 'none', color: 'var(--ink2)' }} aria-label="끌어서 옮기기">
+                <GripVertical size={17}/>
               </span>
-              <span className="flex-1 min-w-0 flex flex-col" onClick={() => { setSel(sel === b.id ? null : b.id); haptic(6); }}>
-                <span className="text-xs font-black truncate" style={{ color: sel === b.id ? 'var(--accent)' : 'var(--ink)' }}>{m.name}</span>
-                <span className="text-[9px] text-gray-500">{m.grow ? '남는 공간 채움' : '고정 높이'}</span>
+              <span className="flex-1 min-w-0 flex items-center gap-2" onClick={() => { setSel(sel === b.id ? null : b.id); haptic(6); }}>
+                <BlockThumb id={b.id}/>
+                <span className="text-xs font-black truncate" style={{ color: sel === b.id ? 'var(--accent)' : 'var(--ink)' }}>{m.short}</span>
               </span>
               <span className="flex rounded-full overflow-hidden shrink-0" style={{ border: '1px solid var(--chip-border)' }}>
                 {LAYOUT_SIZES.map(z => (
-                  <button key={z} disabled={!b.on} onClick={() => { patch(b.id, { size: z }); setSel(b.id); haptic(6); }}
+                  <button key={z} onClick={() => { patch(b.id, { size: z }); setSel(b.id); haptic(6); }}
                     className="px-1.5 py-1 text-[10px] font-black"
                     style={b.size === z ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{SIZE_NAMES[z]}</button>
                 ))}
               </span>
-              <button disabled={m.lock} onClick={() => { patch(b.id, { on: !b.on }); setSel(b.id); haptic(8); }}
-                className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" aria-label={b.on ? '숨기기' : '보이기'}
-                style={{ color: m.lock ? 'var(--ink-off)' : b.on ? 'var(--accent)' : 'var(--ink2)' }}>
-                {b.on ? <Eye size={17}/> : <EyeOff size={17}/>}
+              <button disabled={m.lock} onClick={() => { patch(b.id, { on: false }); setSel(null); haptic(8); }}
+                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" aria-label="숨기기"
+                style={{ color: m.lock ? 'transparent' : 'var(--ink2)' }}>
+                <X size={15}/>
               </button>
             </div>
           );
         })}
       </div>
+
+      {/* 블록 추가: 숨긴 블록을 기능별로 */}
+      {offList.length > 0 && <>
+        <div className="text-[10px] font-black tracking-widest text-gray-500 mt-1">블록 추가 <span className="font-bold tracking-normal">(누르면 화면 아래쪽에 추가)</span></div>
+        {[...new Set(LAYOUT_BLOCKS[tab].map(k => k.group))].map(gname => {
+          const items = offList.filter(b => meta(b.id).group === gname);
+          if (!items.length) return null;
+          return (
+            <div key={gname}>
+              <div className="text-[10px] font-bold mb-1 ml-0.5" style={{ color: 'var(--ink2)' }}>{gname}</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {items.map(b => (
+                  <button key={b.id} onClick={() => { addBlock(b.id); haptic(10); }}
+                    className="flex flex-col items-center gap-1 rounded-xl py-1.5 px-1 active:scale-95"
+                    style={{ background: 'rgba(0,0,0,.25)', border: '1px dashed var(--chip-border)' }}>
+                    <BlockThumb id={b.id} on={false}/>
+                    <span className="text-[10px] font-black leading-tight text-center" style={{ color: 'var(--ink2)' }}>+ {meta(b.id).short}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </>}
       <div className="flex justify-between items-center">
-        <span className="text-[10px] text-gray-500 leading-snug">⋮⋮ 끌기 = 순서 · 이름 누르기 = 미리보기에 표시</span>
+        <span className="text-[10px] text-gray-500 leading-snug">이름 누르기 = 미리보기에 테두리 표시</span>
         <button onClick={() => { save(tab === 't1' ? makeLayout('t1', LAYOUT_PRESETS[0].on) : makeLayout('t2', DEFAULT_LAYOUT2_ON)); haptic(8); }}
           className="text-[11px] font-bold text-gray-400 shrink-0">↺ 기본 배치</button>
       </div>

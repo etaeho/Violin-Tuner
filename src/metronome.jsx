@@ -573,7 +573,7 @@ const LivePitchGraph = ({ tuner }) => {
   const labels = []; let prev = null, lastL = -1e9;
   pts.forEach(q => { if (q[2] !== prev && q[0] - lastL > WIN * 0.07) { labels.push(q); lastL = q[0]; } prev = q[2]; });
   const grid = METRO_CLICKS.grid.filter(g => g[0] >= w0 && g[0] <= now);
-  const recent = pts.filter(q => q[0] > now - 3000);
+  const recent = pts.filter(q => q[0] > now - 5000);   // 맞음 % = 최근 5초
   const okPct = recent.length ? Math.round(100 * recent.filter(q => Math.abs(q[1]) <= tol).length / recent.length) : null;
   return (
     <div className={`w-full max-w-sm rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
@@ -588,7 +588,7 @@ const LivePitchGraph = ({ tuner }) => {
         <span className="absolute left-1.5 bottom-1 text-[8px] font-bold text-gray-500">10초 전</span>
         <span className="absolute right-1.5 bottom-1 text-[8px] font-bold text-gray-500">지금</span>
         <span className="absolute right-1.5 top-1 text-[8px] font-bold text-gray-500">+50¢</span>
-        {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? '#4afc9d' : '#ffcc00', background: 'rgba(0,0,0,.6)' }}>최근 3초 맞음 {okPct}%</span>}
+        {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? '#4afc9d' : '#ffcc00', background: 'rgba(0,0,0,.6)' }}>맞음 {okPct}%</span>}
         {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-gray-600">연주하면 음정이 여기에 그려집니다</span>}
       </div>
     </div>
