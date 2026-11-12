@@ -1509,6 +1509,16 @@ const Tuner = ({ tuner, metro, openSettings }) => {
         </div>
       </div>
 
+      {/* 미니 메트로놈이 있고 메트로놈이 돌면: 박마다 튜너 화면 전체 테두리가 박 색으로 번쩍 (첫 박은 더 강하게) */}
+      {has('mini') && metro && (() => {
+        const f = beatFlash(metro);
+        const pal = document.documentElement.dataset.theme === 'vintage' ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
+        const c = pal[f.snd] || pal[1];
+        return <div className="absolute -inset-1 z-30 pointer-events-none rounded-3xl" style={{
+          boxShadow: f.fire ? `inset 0 0 0 ${f.down ? 6 : 4}px ${c}, inset 0 0 ${f.down ? 90 : 50}px ${c}` : 'inset 0 0 0 0 transparent',
+          background: f.fire ? `${c}${f.down ? '22' : '12'}` : 'transparent', transition: f.fire ? 'all 30ms' : 'all 280ms ease-out' }}/>;
+      })()}
+
       {/* 화면 배치 (설정 → 화면 배치): 켜진 블록을 순서대로 */}
       <div className="w-full flex-1 min-h-0 flex flex-col items-center gap-2 pt-1">
         {/* 남는 공간을 채우는 블록이 없으면 위아래 여백을 같게 → 블록들이 화면 가운데에 모임 */}
@@ -1516,7 +1526,6 @@ const Tuner = ({ tuner, metro, openSettings }) => {
         {blocks.map(b => (
           <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
-            {b.id === 'bars' && <StringBars tuner={tuner} size="fill"/>}
             {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
             {b.id === 'fine' && <FineGauge tuner={tuner}/>}
             {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}

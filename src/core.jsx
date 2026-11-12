@@ -152,7 +152,6 @@ const getTempoMarking = (bpm) => {
 const LAYOUT_BLOCKS = {
   t1: [
     { id: 'vtapes',  name: '현별 세로 테이프', short: '세로 테이프', group: '음정', grow: true },
-    { id: 'bars',    name: '현별 막대',       short: '현별 막대',   group: '음정', grow: true },
     { id: 'note',    name: '큰 음이름',       short: '큰 음이름',   group: '음정', grow: true },
     { id: 'fine',    name: '정밀 게이지 (±1¢ · Hz)', short: '정밀 게이지', group: '음정' },
     { id: 'meter',   name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
@@ -179,11 +178,11 @@ const LAYOUT_GROUPS = { '음정': '#4afc9d', '템포': '#ffcc00', '녹음': '#ef
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
   { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'fine', 'readout', 'mini'] },
-  { id: 'tapeTempo',  name: '막대 + 테이프 + 템포', on: ['bars', 'fine', 'tape', 'mini'] },
-  { id: 'tape',       name: '막대 + 테이프', on: ['bars', 'fine', 'tape'] },
+  { id: 'tapeTempo',  name: '가로 테이프 + 템포', on: ['history', 'fine', 'tape', 'mini'] },
+  { id: 'tape',       name: '가로 테이프', on: ['history', 'fine', 'tape'] },
   { id: 'fineOnly',   name: '정밀 튜닝', on: ['vtapes', 'fine'] },
-  { id: 'center',     name: '막대 + 큰 음이름', on: ['bars', 'note'] },
-  { id: 'both',       name: '큰 음이름 + 테이프', on: ['bars', 'note', 'tape'] },
+  { id: 'center',     name: '큰 음이름', on: ['note', 'fine'] },
+  { id: 'both',       name: '큰 음이름 + 테이프', on: ['note', 'tape'] },
 ];
 const LAYOUT_SIZES = ['s', 'm', 'l'];
 const makeLayout = (tab, onIds) => [
@@ -267,7 +266,9 @@ const loadSettings = () => {
     if (rev < 3) v.tunerLayout = 'vtapeTempo';   // 저장값 기준으로 판단
     if (!['vtapeTempo', 'tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'vtapeTempo';
     // 블록 배치: 저장값이 없으면 예전 '튜너 화면 구성'에서 만들어 줌
-    v.layout1 = normLayout('t1', stored.layout1 || makeLayout('t1', LAYOUT_PRESETS.find(p => p.id === v.tunerLayout).on));
+    // 11: '현별 막대' 블록 없앰 → 켜져 있었으면 그 자리에 세로 테이프 (이미 켜져 있으면 그냥 뺌)
+    const l1src = Array.isArray(stored.layout1) ? stored.layout1.map(b => b && b.id === 'bars' ? (stored.layout1.some(x => x && x.id === 'vtapes' && x.on) ? null : { ...b, id: 'vtapes' }) : b).filter(Boolean) : null;
+    v.layout1 = normLayout('t1', l1src || makeLayout('t1', LAYOUT_PRESETS.find(p => p.id === v.tunerLayout).on));
     v.layout2 = normLayout('t2', stored.layout2 || makeLayout('t2', DEFAULT_LAYOUT2_ON));
     v.parts = normParts(stored.parts);
     if (rev < 4) {

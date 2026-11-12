@@ -327,13 +327,12 @@ const RecPlayer = ({ it, recorder }) => {
   const W = Math.min(dur, 10000);
   const w0 = Math.max(0, Math.min(dur - W, p.pos - W * 0.3)), w1 = w0 + W;
   const xp = (t) => ((t - w0) / W) * 100;   // 시간 → 그래프 가로 위치(%) (X는 아이콘 이름이라 피함)
-  const Y = (c) => 50 - Math.max(-50, Math.min(50, c)) * 0.9;      // −50~+50¢ → 아래~위
-  const vintage = useVintage(), L = graphLook(vintage, useSkin());
+  const vintage = useVintage(), L = graphLook(vintage, useSkin(), useTheme() === 'light');
   const col = (c) => Math.abs(c) <= tol ? L.ok : c > 0 ? L.hi : L.lo;
-  const pts = tr ? tr.pts.filter(q => q[0] >= w0 && q[0] <= w1) : [];
-  // 음이름: 같은 음이 이어지는 구간의 시작에만
-  const labels = []; let prev = null, prevT = -1e9, lastL = -1e9;
-  pts.forEach(q => { if ((q[2] !== prev || q[0] - prevT > 400) && q[0] - lastL > W * 0.075) { labels.push(q); lastL = q[0]; } prev = q[2]; prevT = q[0]; });
+  // 음역 그래프: 세로 = 실제 음 높이 (보이는 구간 음역에 맞춰)
+  const pts = tr ? tr.pts.filter(q => q[0] >= w0 && q[0] <= w1).map(q => [q[0], q[1], q[2], noteSemi(q[2])]).filter(q => q[3] !== null) : [];
+  const [lo, hi] = pitchRange(pts.map(q => q[3] + q[1] / 100));
+  const yp = (v) => ((hi - v) / (hi - lo)) * 100;
   const grid = tr ? tr.grid.filter(g => g[0] >= w0 && g[0] <= w1) : [];
   const marks = tr ? (tr.marks || []).filter(m => m[0] >= w0 && m[0] <= w1) : [];
   // 전체 막대: 0.5초 칸마다 평균 센트
@@ -367,21 +366,17 @@ const RecPlayer = ({ it, recorder }) => {
       )}
       {/* 음정 그래프 */}
       {tr ? (
-        <div className="relative h-32 rounded-xl overflow-hidden cursor-grab" {...graphDrag} style={{ ...graphDrag.style, background: L.face, boxShadow: L.shadow }}>
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-            <rect x="0" y={Y(tol)} width="100" height={Y(-tol) - Y(tol)} fill={L.band}/>
-            <line x1="0" x2="100" y1="50" y2="50" stroke={L.zero} strokeWidth="0.4" vectorEffect="non-scaling-stroke"/>
+        <div className="relative h-36 rounded-xl overflow-hidden cursor-grab" {...graphDrag} style={{ ...graphDrag.style, background: L.face, boxShadow: L.shadow }}>
+          <PitchRows lo={lo} hi={hi} L={L} vintage={vintage}/>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none">
             {grid.map((g, i) => <line key={i} x1={xp(g[0])} x2={xp(g[0])} y1="0" y2="100" stroke={g[1] ? L.beat : L.sub} strokeWidth={g[1] ? 1 : 0.6} vectorEffect="non-scaling-stroke"/>)}
             {p.A !== null && <rect x={xp(p.A)} y="0" width={Math.max(0, xp(p.B ?? p.pos) - xp(p.A))} height="100" fill="rgba(255,204,0,.12)"/>}
           </svg>
           {/* 점: 맞음 초록 · 높음 빨강 · 낮음 파랑 */}
-          {pts.map((q, i) => <i key={i} className="absolute rounded-full" style={{ left: `${xp(q[0])}%`, top: `${Y(q[1])}%`, width: 4, height: 4, margin: -2, background: col(q[1]) }}/>)}
-          {labels.map((q, i) => <span key={'l' + i} className="absolute text-[9px] font-black" style={{ left: `${xp(q[0])}%`, top: 2, color: L.text, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{q[2].replace('#', '♯')}</span>)}
+          {pts.map((q, i) => <i key={i} className="absolute rounded-full pointer-events-none" style={{ left: `${xp(q[0])}%`, top: `${yp(q[3] + q[1] / 100)}%`, width: 5, height: 5, margin: -2.5, background: col(q[1]) }}/>)}
           {/* 소리 시작: 박보다 늦음 ▶ / 빠름 ◀ (아래 줄) */}
           {marks.map((m, i) => <span key={'m' + i} className="absolute text-[8px] font-black" style={{ left: `${xp(m[0])}%`, bottom: 1, transform: 'translateX(-50%)', color: Math.abs(m[1]) <= 50 ? L.ok : '#d97706' }}>{Math.abs(m[1]) <= 50 ? '●' : m[1] > 0 ? '▶' : '◀'}</span>)}
           <i className="absolute top-0 bottom-0 w-[2px]" style={{ left: `${xp(p.pos)}%`, background: L.head }}/>
-          <span className="absolute right-1 top-1 text-[8px] font-bold" style={{ color: L.dim }}>+50¢</span>
-          <span className="absolute right-1 bottom-3 text-[8px] font-bold" style={{ color: L.dim }}>−50¢</span>
         </div>
       ) : <p className="text-[10px] text-gray-500">이 녹음은 음정 기록이 없습니다 (이전 버전 녹음).</p>}
       {/* 전체 막대 */}

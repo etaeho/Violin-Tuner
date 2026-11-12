@@ -27,12 +27,13 @@
   - **BPM 끌기** `useBpmDrag(metro)`: 다이얼·네모 칸 BPM·미니 메트로놈 숫자를 오른쪽/위로 끌면 빠르게, 왼쪽/아래로 느리게 (6px = 1 BPM). 녹음 재생 그래프도 끌어서 앞뒤 이동
   - **메인 음정 표시기** `parts.meter` = 'needle'(`PitchStrip`, 가운데 ±10¢를 넓게 펼친 바늘) | 'fine'(`FineGauge`) | 'digits'(`PitchDigits`) → `MainPitchMeter`(metronome.jsx). 2번 탭 'pitch' 블록 · 1번 탭 'meter' 블록 · 지판(compact swapColors) · 드론(compact) 공용. **다른 탭에 음정 표시를 붙일 땐 항상 MainPitchMeter 사용**
   - **음정 그래프 색은 `graphLook(vintage, skin)`**(theme.jsx) — 다크·라이트 = 검은 표시창, 우드 = 디자인 다이얼 색(라디오·악보는 밝은 문자판 + 진한 점). 새 그래프도 이걸 쓸 것
-  - **실시간 음정 그래프** `LivePitchGraph`(metronome.jsx) = 화면 배치 'history' 블록(1·2번 탭, 기본 꺼짐): `tuner.noteListeners`로 최근 10초 음정 점 + 음이름 + 메트로놈 박 줄 + '맞음 %'(최근 5초)
+  - **실시간 음정 그래프** `LivePitchGraph`(metronome.jsx) = 화면 배치 'history' 블록: **음역 그래프**(세로 = 실제 음 높이, `PitchRows` 반음 줄·음이름·개방현 줄, 범위 자동 `pitchRange`) + 점 색 맞음/높음/낮음 + 메트로놈 박 줄 + '맞음 %'(최근 5초). 녹음 재생 그래프도 같은 방식
+  - 미니 메트로놈이 켜진 튜너 탭: 메트로놈이 돌면 박마다 화면 전체 테두리 번쩍. **현별 막대 블록은 없앰**
   - **정밀 튜닝**: `FineGauge`(1번 탭 'fine' 블록) = A4 기준 목표 Hz · 차이 0.1Hz · 1¢, ±12¢ 안이면 눈금 ±10¢로 확대. 세로/가로 테이프도 ±15¢ 안이면 확대(×4/×3)
   - **부드러운 움직임**: core.jsx `useSpring(목표값들, onFrame)` — 매 프레임 DOM을 직접 바꿈(리렌더 없음). 테이프·게이지 바늘에 사용
   - **음정 기준 통일**: 모든 음정 표시(테이프·막대·게이지·숫자·그래프)는 `tuner.cents`(가장 가까운 음 기준, 정수)·`tuner.centsExact`(소수) 하나만 씀. 현 기준(stringCents)은 표시에 쓰지 말 것
   - 블록 배치: 남는 공간을 채우는 블록이 없으면 위아래 빈칸 → 블록들이 화면 가운데에 모임
-  - **메트로놈 탭 기본 구성**: 음정(작게) · `BeatLight`(박 조명 — 화면 절반 이상, 박마다 판 전체가 박 색으로 번쩍, 큰 BPM, 끌면 빠르기·톡 누르면 시작/정지) · `MetroControls`(박자 | 템포 | 시작 한 판, 'ctrl' 블록, 숨기기 불가). ctrl이 있으면 위 줄 박자표는 '메트로놈' 제목으로 바뀜
+  - **메트로놈 탭 기본 구성**: 음정(작게) · `BeatLight`(박 조명 — 화면 절반 이상, 판을 가득 채우는 큰 박 원 + 박마다 판 전체 번쩍, BPM은 위에 작게·템포 바꿀 때만 크게 잠깐, 끌면 빠르기·톡 누르면 시작/정지) · `MetroControls`(박자 | 템포 | 시작 한 판, 'ctrl' 블록, 숨기기 불가). ctrl이 있으면 위 줄 박자표는 '메트로놈' 제목으로 바뀜
   - 메트로놈 박 표시: `beatFlash`/`flashWrap`/`flashFace` — 박마다 문자판이 박 색으로 차오르고 바깥이 빛남(첫 박 더 강하게). 다이얼은 최대 480px. 소리는 두 음 겹친 딸깍 + 증폭(×4) + 리미터(`masterRef`)
   - **흔들림 주의**: 박마다 바뀌는 표시는 크기(폰트·width)를 바꾸지 말고 transform·box-shadow만 (레이아웃이 밀려 화면 전체가 흔들림)
   - 저음 감지: `cleanBuffer`(직류·80Hz 이하 제거) 후 detectPitch. 330Hz 아래는 게이트 −6dB·신뢰도 −0.08 완화. 최저 주파수는 `MIN_FREQ_CAP`(170Hz) 넘게 못 올림

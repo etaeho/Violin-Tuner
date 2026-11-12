@@ -591,6 +591,7 @@ const PitchDigits = ({ tuner, compact, swapColors, big }) => {
 // 실시간 음정 그래프: 최근 10초 동안 연주한 음정을 점으로 (녹음 재생 그래프와 같은 모양, 화면 배치 'history' 블록)
 //  맞음 초록 · 높음 빨강 · 낮음 파랑, 음이 바뀌면 음이름, 메트로놈이 돌면 박 세로줄
 const LivePitchGraph = ({ tuner }) => {
+  // 최근 10초 연주를 음역 그래프로: 세로 = 실제 음 높이(반음 줄 + 음이름, 개방현 줄 강조), 점 색 = 맞음 초록 · 높음 빨강 · 낮음 파랑
   const WIN = 10000;
   const ptsRef = useRef([]);
   const [, setTick] = useState(0);
@@ -600,33 +601,26 @@ const LivePitchGraph = ({ tuner }) => {
     const iv = setInterval(() => { const a = ptsRef.current, cut = performance.now() - WIN; while (a.length && a[0][0] < cut) a.shift(); setTick(t => t + 1); }, 100);
     return () => { tuner.noteListeners.delete(f); clearInterval(iv); };
   }, []);
-  const vintage = useVintage(), skin = useSkin();
+  const vintage = useVintage(), skin = useSkin(), light = useTheme() === 'light';
+  const L = graphLook(vintage, skin, light);
   const now = performance.now(), w0 = now - WIN, tol = tuner.tolerance;
   const xp = (t) => ((t - w0) / WIN) * 100;
-  const Y = (c) => 50 - Math.max(-50, Math.min(50, c)) * 0.9;
-  const L = graphLook(vintage, skin);
   const col = (c) => Math.abs(c) <= tol ? L.ok : c > 0 ? L.hi : L.lo;
-  const pts = ptsRef.current;
-  const labels = []; let prev = null, lastL = -1e9;
-  pts.forEach(q => { if (q[2] !== prev && q[0] - lastL > WIN * 0.07) { labels.push(q); lastL = q[0]; } prev = q[2]; });
+  const pts = ptsRef.current.map(q => [q[0], q[1], q[2], noteSemi(q[2])]).filter(q => q[3] !== null);
+  const [lo, hi] = pitchRange(pts.map(q => q[3] + q[1] / 100));
+  const yp = (v) => ((hi - v) / (hi - lo)) * 100;
   const grid = METRO_CLICKS.grid.filter(g => g[0] >= w0 && g[0] <= now);
   const recent = pts.filter(q => q[0] > now - 5000);   // 맞음 % = 최근 5초
   const okPct = recent.length ? Math.round(100 * recent.filter(q => Math.abs(q[1]) <= tol).length / recent.length) : null;
   return (
     <div className={`w-full max-w-sm rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      <div className="relative h-28 rounded-xl overflow-hidden" style={{ background: L.face, boxShadow: L.shadow }}>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-          <rect x="0" y={Y(tol)} width="100" height={Y(-tol) - Y(tol)} fill={L.band}/>
-          <line x1="0" x2="100" y1="50" y2="50" stroke={L.zero} strokeWidth="1" vectorEffect="non-scaling-stroke"/>
-          {grid.map((g, i) => <line key={i} x1={xp(g[0])} x2={xp(g[0])} y1="0" y2="100" stroke={g[1] ? L.beat : L.sub} strokeWidth={g[1] ? 1 : 0.6} vectorEffect="non-scaling-stroke"/>)}
-        </svg>
-        {pts.map((q, i) => <i key={i} className="absolute rounded-full" style={{ left: `${xp(q[0])}%`, top: `${Y(q[1])}%`, width: 4, height: 4, margin: -2, background: col(q[1]) }}/>)}
-        {labels.map((q, i) => <span key={'l' + i} className="absolute text-[9px] font-black" style={{ left: `${xp(q[0])}%`, top: 2, color: L.text, fontFamily: vintage ? 'Georgia,serif' : undefined }}>{q[2].replace('#', '♯')}</span>)}
-        <span className="absolute left-1.5 bottom-1 text-[8px] font-bold" style={{ color: L.dim }}>10초 전</span>
-        <span className="absolute right-1.5 bottom-1 text-[8px] font-bold" style={{ color: L.dim }}>지금</span>
-        <span className="absolute right-1.5 top-1 text-[8px] font-bold" style={{ color: L.dim }}>+50¢</span>
+      <div className="relative h-36 rounded-xl overflow-hidden" style={{ background: L.face, boxShadow: L.shadow }}>
+        <PitchRows lo={lo} hi={hi} L={L} vintage={vintage}/>
+        {grid.map((g, i) => <i key={'g' + i} className="absolute top-0 bottom-0 pointer-events-none" style={{ left: `${xp(g[0])}%`, width: 1, background: g[1] ? L.beat : L.sub }}/>)}
+        {pts.map((q, i) => <i key={i} className="absolute rounded-full" style={{ left: `${xp(q[0])}%`, top: `${yp(q[3] + q[1] / 100)}%`, width: 5, height: 5, margin: -2.5, background: col(q[1]) }}/>)}
+        <span className="absolute right-1.5 bottom-1 text-[8px] font-bold" style={{ color: L.dim }}>지금 →</span>
         {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? L.ok : '#d97706', background: L.face, border: `1px solid ${L.sub}` }}>맞음 {okPct}%</span>}
-        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold" style={{ color: L.dim }}>연주하면 음정이 여기에 그려집니다</span>}
+        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold" style={{ color: L.dim }}>연주하면 음 높이가 여기에 그려집니다</span>}
       </div>
     </div>
   );
@@ -670,44 +664,56 @@ const BeatLight = ({ metro }) => {
   const drag = useBpmDrag(metro, () => { metro.toggleMetronome(); });
   const ref = useRef(null); const [box, setBox] = useState({ w: 300, h: 300 });
   useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight })); ro.observe(el); return () => ro.disconnect(); }, []);
+  // 숫자는 템포를 바꿀 때만 크게 잠깐 (끌기·−/+·TAP 모두)
+  const [showBig, setShowBig] = useState(false);
+  const firstRef = useRef(true);
+  useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const f = beatFlash(metro), sub = isPlayingMetro && visualFlash === 'sub';
   const k = vintage ? skin.dial : null;
   const base = vintage ? (k.face === 'cream' ? '#f3e8cc' : k.face) : null;
   let col = vintage ? (f.down ? k.on : k.strong && k.strong.startsWith('#') ? k.strong : k.on) : (pal[f.snd] || pal[1]);
   if (vintage && lum(base) > 0.6 && lum(col) > 0.6) col = k.needle || '#b3261e';   // 밝은 문자판(라디오)에 밝은 색이면 안 보임 → 바늘 빨강
-  const lit = f.fire ? (f.down ? 0.92 : 0.6) : sub ? 0.16 : 0;
+  const lit = f.fire ? (f.down ? 0.55 : 0.32) : sub ? 0.1 : 0;
   const restInk = vintage ? (k.text === '#2a1a0e' || lum(base) > 0.6 ? '#2a1a0e' : k.text) : 'var(--ink)';
-  const ink = f.fire && lit > 0.5 ? (lum(col) > 0.55 ? '#111' : '#fff') : restInk;
-  const n = beatSounds.length, dot = Math.max(14, Math.min(40, (box.w - 40) / n - 10));
-  const num = Math.max(56, Math.min(box.h * 0.42, box.w * 0.5, 220));
+  // 박 원: 판을 가득 채우게 (4박 = 한 줄, 5~8박 = 두 줄)
+  const n = beatSounds.length, cols = n <= 4 ? n : n <= 8 ? Math.ceil(n / 2) : Math.ceil(n / 3), rows = Math.ceil(n / cols);
+  const d = Math.max(36, Math.min((box.w - 32 - (cols - 1) * 14) / cols, (box.h - 96 - (rows - 1) * 22) / rows, 220));
+  const beatCol = (snd) => vintage ? (lum(base) > 0.6 ? (snd === 2 ? (k.needle || '#b3261e') : '#8a5a2b') : (snd === 2 ? k.on : k.strong)) : pal[snd];
   return (
     <div ref={ref} {...drag} className={`relative w-full flex-1 min-h-0 rounded-[28px] overflow-hidden flex flex-col items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
       style={{ ...drag.style, cursor: 'pointer', ...(vintage ? { background: base, border: `2px solid ${k.ring}` } : {}),
         boxShadow: f.fire ? `0 0 ${f.down ? 50 : 26}px ${col}` : 'none', transition: f.fire ? 'box-shadow 30ms' : 'box-shadow 300ms ease-out' }}
       aria-label="박 조명 (끌어서 빠르기, 누르면 시작/정지)">
       <div className="absolute inset-0 pointer-events-none" style={{ background: col, opacity: lit, transition: f.fire || sub ? 'opacity 30ms' : 'opacity 300ms ease-out' }}/>
-      {/* 박 점 */}
-      <div className="absolute top-4 inset-x-0 flex justify-center gap-2.5 pointer-events-none">
+      {/* 작은 빠르기 표시 (위) */}
+      <span className="absolute top-3 inset-x-0 text-center text-sm font-black tracking-widest pointer-events-none" style={{ color: restInk, opacity: 0.8, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        {bpm} BPM · {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm)}
+      </span>
+      {/* 큰 박 원 */}
+      <div className="relative grid justify-center content-center pointer-events-none" style={{ gridTemplateColumns: `repeat(${cols}, ${d}px)`, columnGap: 14, rowGap: 22 }}>
         {beatSounds.map((snd, i) => {
-          const on = isPlayingMetro && i === currentBeat;
-          const c = vintage ? (snd === 2 ? k.on : k.strong) : pal[snd];
+          const on = isPlayingMetro && i === currentBeat, fire = on && f.fire, c = beatCol(snd), nsub = beatSubdivisions[i] || 1;
           return (
-            <span key={i} className="flex flex-col items-center gap-1">
-              <span className="rounded-full" style={{ width: dot, height: dot, background: snd === 0 ? 'transparent' : c, border: `2px solid ${snd === 0 ? restInk : on ? ink : 'transparent'}`,
-                opacity: on ? 1 : snd === 0 ? 0.35 : 0.35, transform: `scale(${on ? 1.15 : 1})`, transition: 'transform 60ms, opacity 60ms' }}/>
-              {(beatSubdivisions[i] || 1) > 1 && <span className="flex gap-0.5">{Array.from({ length: beatSubdivisions[i] }, (_, j) => <i key={j} className="rounded-full" style={{ width: 5, height: 5, background: ink, opacity: on && (currentSub || 0) === j ? 1 : 0.25 }}/>)}</span>}
-            </span>
+            <div key={i} className="flex flex-col items-center gap-1.5">
+              <div className="rounded-full flex items-center justify-center font-black" style={{ width: d, height: d, fontSize: d * 0.36,
+                background: snd === 0 ? 'transparent' : c, border: snd === 0 ? `3px dashed ${restInk}` : `${fire ? 5 : 3}px solid ${on ? restInk : 'transparent'}`,
+                opacity: snd === 0 ? 0.35 : on ? 1 : 0.28, color: lum(c) > 0.55 ? '#111' : '#fff', fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace',
+                transform: `scale(${fire ? 1.08 : 1})`, boxShadow: fire ? `0 0 ${f.down ? 60 : 34}px ${c}` : 'none',
+                transition: fire ? 'transform 30ms, box-shadow 30ms, opacity 30ms' : 'transform 220ms ease-out, box-shadow 260ms, opacity 200ms' }}>{i + 1}</div>
+              <div className="flex gap-1 h-2">
+                {nsub > 1 && Array.from({ length: nsub }, (_, j) => <i key={j} className="rounded-full" style={{ width: 8, height: 8, background: restInk, opacity: on && (currentSub || 0) === j ? 1 : 0.22 }}/>)}
+              </div>
+            </div>
           );
         })}
       </div>
-      {/* 큰 BPM */}
-      <span className="relative font-black leading-none pointer-events-none" style={{ fontSize: num, color: ink, fontFamily: vintage ? 'Georgia,serif' : undefined, letterSpacing: '-0.03em', transition: 'color 60ms' }}>{bpm}</span>
-      <span className="relative text-sm font-black tracking-[0.25em] uppercase mt-1 pointer-events-none" style={{ color: ink, opacity: 0.75, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-        {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm)}
-      </span>
-      <span className="absolute bottom-3 inset-x-0 text-center text-[11px] font-bold pointer-events-none" style={{ color: ink, opacity: 0.55 }}>
+      <span className="absolute bottom-3 inset-x-0 text-center text-[11px] font-bold pointer-events-none" style={{ color: restInk, opacity: 0.5 }}>
         ◀ 끌어서 빠르기 ▶ · 누르면 {isPlayingMetro ? '정지' : '시작'}
       </span>
+      {/* 템포를 바꾸는 동안만 큰 숫자 */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: showBig ? 1 : 0, transition: showBig ? 'opacity 80ms' : 'opacity 400ms ease-out' }}>
+        <span className="font-black leading-none px-6 py-3 rounded-3xl" style={{ fontSize: Math.min(box.w * 0.4, 150), color: restInk, background: vintage ? base : 'var(--panel-bg)', boxShadow: '0 10px 40px rgba(0,0,0,.35)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
+      </div>
     </div>
   );
 };
@@ -940,7 +946,7 @@ const Metronome = ({ metro, tuner, openSettings }) => {
 // 우드 계열 템포 패널: 디자인 토큰(SKINS)으로 판·표시등·버튼·숫자·프리셋 모양이 바뀜
 const SkinLamp = ({ k, snd, fired, dense }) => {
   // 칸 크기는 고정(박마다 화면이 흔들리지 않게) — 켜질 때는 transform(확대)·빛만 바뀜
-  const L = k.lamp, sz = dense ? 12 : 18, box = sz + 8;
+  const L = k.lamp, sz = dense ? 16 : 26, box = sz + 8;
   const col = snd === 0 ? 'transparent' : fired ? L.on : snd === 2 ? L.strong : L.off;
   const glow = fired && snd ? `0 0 10px ${L.on}, 0 0 3px ${L.on}` : 'none';
   let inner;
@@ -1051,7 +1057,7 @@ const PlainMiniMetronome = ({ metro }) => {
             const fired = isPlayingMetro && i === currentBeat && visualFlash === 'main';
             const col = pal[snd];
             return (
-              <span key={i} className={`${dense ? 'w-3.5 h-3.5' : 'w-5 h-5'} rounded-full transition-all duration-75`}
+              <span key={i} className={`${dense ? 'w-5 h-5' : 'w-7 h-7'} rounded-full transition-all duration-75`}
                 style={snd === 0
                   ? { border: `1.5px solid ${pal[0]}` }
                   : { background: col, opacity: fired ? 1 : 0.3, transform: fired ? 'scale(1.4)' : 'none',
