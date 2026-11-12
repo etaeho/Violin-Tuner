@@ -634,19 +634,23 @@ const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
   return <PitchStrip tuner={tuner} compact={compact} swapColors={swapColors} big={big}/>;
 };
 
-// BPM 숫자 끌기: 오른쪽(+ 쪽)·위로 끌면 빨라지고, 왼쪽(− 쪽)·아래로 끌면 느려짐 (6px = 1 BPM, 주로 움직인 방향만)
+// BPM 숫자 끌기: 오른쪽(+ 쪽)·위로 끌면 빨라지고, 왼쪽(− 쪽)·아래로 끌면 느려짐 (끄는 속도에 따라 미세~크게, 처음 방향으로 고정)
 const useBpmDrag = (metro, onTap) => {
+  // 끌기 속도에 따라: 천천히 = 미세(12px당 1), 보통 = 6px당 1, 휙 = 2.5px당 1. 처음 움직인 방향(가로/세로)으로 고정
   const st = useRef(null);
   const mref = useRef(metro); mref.current = metro;
   return {
-    onPointerDown: (e) => { st.current = { x: e.clientX, y: e.clientY, bpm: mref.current.bpm, last: mref.current.bpm, moved: false }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} },
+    onPointerDown: (e) => { st.current = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, lt: performance.now(), bpm: mref.current.bpm, last: mref.current.bpm, acc: 0, axis: null, moved: false }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} },
     onPointerMove: (e) => {
       const s0 = st.current; if (!s0) return;
-      if (Math.abs(e.clientX - s0.x) + Math.abs(e.clientY - s0.y) > 8) s0.moved = true;
-      // 주로 움직인 방향 하나만 씀 (엄지로 오른쪽으로 끌면 살짝 아래로 휘어서 서로 상쇄되던 문제)
-      const dx = e.clientX - s0.x, dy = e.clientY - s0.y;
-      const delta = Math.abs(dx) >= Math.abs(dy) ? dx : -dy;          // 오른쪽 또는 위 = 빠르게
-      const v = Math.max(30, Math.min(250, s0.bpm + Math.round(delta / 6)));
+      const tx = e.clientX - s0.x, ty = e.clientY - s0.y;
+      if (!s0.axis) { if (Math.abs(tx) + Math.abs(ty) < 8) return; s0.axis = Math.abs(tx) >= Math.abs(ty) ? 'x' : 'y'; s0.moved = true; }
+      const now = performance.now(), dt = Math.max(8, now - s0.lt);
+      const step = s0.axis === 'x' ? e.clientX - s0.lx : -(e.clientY - s0.ly);   // 오른쪽 또는 위 = 빠르게
+      const speed = Math.abs(step) / dt;                                         // px/ms
+      s0.acc += step / (speed < 0.25 ? 12 : speed < 0.8 ? 6 : 2.5);
+      s0.lx = e.clientX; s0.ly = e.clientY; s0.lt = now;
+      const v = Math.max(30, Math.min(250, s0.bpm + Math.round(s0.acc)));
       if (v !== s0.last) { s0.last = v; mref.current.setBpm(v); haptic(4); }
     },
     onPointerUp: () => { const s0 = st.current; st.current = null; if (s0 && !s0.moved && onTap) onTap(); },   // 끌지 않고 톡 누르면 onTap (박 조명: 시작/정지)
