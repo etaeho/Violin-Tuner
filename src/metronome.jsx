@@ -795,7 +795,7 @@ const BeatRow = ({ metro }) => {
               transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>
               {/* 쪼갠 박 = 원을 틈을 두고 나눈 조각 (2 = 반원 · 3 = 세 조각 · 4 = 네 조각). 재생 중엔 지금 조각만 밝게 빛남 */}
               {nsub > 1 && (() => {
-                const D = S - 8, R0 = D / 2, g = Math.max(2.5, D * 0.035), rr = R0 - g, ri = rr * 0.3;
+                const D = S - 8, R0 = D / 2, g = Math.max(2.5, D * 0.035), rr = R0 - g, ri = 0;   // 가운데 구멍 없이 부채꼴
                 return (
                   <svg viewBox={`0 0 ${D} ${D}`} className="absolute inset-0 pointer-events-none" style={{ width: D, height: D, overflow: 'visible' }}>
                     {Array.from({ length: nsub }, (_, j) => {
