@@ -730,7 +730,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   const tolRef = useRef(tolerance); tolRef.current = tolerance;
   const zoomT = active && Math.abs(cents) <= 15 ? 1 : 0;
   // 벨트(bare): 칸을 좁혀 음을 더 많이 보이게, 확대는 조금만
-  const SP = bare ? 48 : TAPE_SP, ZM = bare ? 0 : 2.5;   // 벨트는 확대 없이 늘 9음 정도 보이게 (미세 센트는 아래 그래프)
+  const SP = bare ? 58 : TAPE_SP, ZM = bare ? 0 : 2.5;   // 벨트는 확대 없이 늘 9음 정도 보이게 (미세 센트는 아래 그래프)
   const place = ([sv, z]) => {
     const sp = SP * (1 + ZM * z);
     Object.entries(keyRefs.current).forEach(([k, el]) => {
@@ -752,7 +752,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   if (bare) {
     const okC = '#4afc9d', needleC = inTune ? okC : '#e11d2a';
     const belt = (
-      <div className="relative w-full h-[70px] overflow-hidden rounded-t-lg"
+      <div className="relative w-full h-[84px] overflow-hidden rounded-t-lg"
         style={vintage ? { background: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)' } : { background: '#070707' }}>
         {/* 허용 범위 */}
         <div ref={bandRef} className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2"
@@ -765,9 +765,9 @@ const NoteTape = ({ tuner, showMic, bare }) => {
               className="absolute top-0 bottom-0 will-change-transform flex flex-col items-center justify-center"
               style={{ left: '50%', width: sp0, marginLeft: -sp0 / 2, transform: `translateX(${(k - s0) * sp0}px)` }}>
               <i className="absolute top-0 left-1/2 w-px h-2.5" style={{ background: vintage ? 'rgba(59,42,26,.5)' : '#3f3f46' }}/>
-              <span className="font-black leading-none" style={{ fontFamily: vintage ? 'Georgia,serif' : undefined, fontSize: isCur ? 27 : 20,
+              <span className="font-black leading-none" style={{ fontFamily: vintage ? 'Georgia,serif' : undefined, fontSize: isCur ? 36 : 27,
                 color: isCur ? (inTune ? (vintage ? '#15803d' : okC) : (vintage ? '#1a0f05' : '#fff')) : vintage ? 'rgba(59,42,26,.55)' : name[1] === '#' ? '#3f3f46' : '#71717a' }}>
-                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="text-[11px] opacity-60 align-baseline">{oct}</sub>
+                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="text-[13px] opacity-60 align-baseline">{oct}</sub>
               </span>
               {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: vintage ? '#b8860b' : '#ffcc00' }}/>}
             </div>
@@ -785,7 +785,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         {STR.map(([nm], i) => {
           const on = i === strIdx, exact = on && openHit === i;
           const c = exact ? (inTune ? okC : '#ffcc00') : '#ffcc00';
-          return <div key={nm} className="h-7 flex items-center justify-center gap-1 text-[13px] font-black"
+          return <div key={nm} className="h-8 flex items-center justify-center gap-1 text-[15px] font-black"
             style={{ background: on ? (vintage ? '#3a2410' : 'rgba(255,204,0,.14)') : (vintage ? '#e9dfc6' : '#0b0b0b'),
               color: on ? (vintage ? '#f4d78a' : c) : vintage ? 'rgba(59,42,26,.5)' : '#52525b', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
             <i className="h-[2px] rounded-full" style={{ width: 14 - i * 2 + 6, background: 'currentColor', opacity: on ? 1 : 0.5 }}/>{nm}현{exact ? ' 개방' : ''}
@@ -793,7 +793,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         })}
       </div>
     );
-    return <div className="w-full max-w-sm shrink-0 rounded-lg overflow-hidden" style={vintage ? { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } : { border: '1px solid rgba(255,255,255,.08)' }}>{belt}{strings}</div>;
+    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={vintage ? { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } : { border: '1px solid rgba(255,255,255,.08)' }}>{belt}{strings}</div>;
   }
   const tape = (
     <div className="relative w-full h-[92px] overflow-hidden rounded-lg"
@@ -1584,7 +1584,7 @@ const Tuner = ({ tuner, metro, openSettings }) => {
             {b.id === 'rec' && <RecModule size={b.size}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter')} bare={has('history')}/>}
             {b.id === 'light' && <BeatRow metro={metro}/>}
-            {b.id === 'ctrl' && <MetroControls metro={metro}/>}
+            {b.id === 'ctrl' && <MetroControls metro={metro} scale={0.8}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}
           </LayoutBlock>
         ))}

@@ -174,7 +174,7 @@ const LAYOUT_BLOCKS = {
 const LAYOUT_GROUPS = { '음정': '#4afc9d', '템포': '#ffcc00', '녹음': '#ef4444' };
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
-  { id: 'practice',   name: '연습 한 화면 (벨트 · 그래프 · 박 원)', on: ['tape', 'history', 'light', 'ctrl'] },
+  { id: 'practice',   name: '연습 한 화면 (조작판 · 박 원 · 그래프 · 벨트)', on: ['ctrl', 'light', 'history', 'tape'] },
   { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'meter', 'mini'] },
   { id: 'tapeTempo',  name: '가로 테이프 + 템포', on: ['history', 'tape', 'mini'] },
   { id: 'tape',       name: '가로 테이프', on: ['history', 'tape'] },
@@ -254,7 +254,7 @@ const SETTINGS_KEY = 'vt.tunerSettings.v1';
 // 앱 설정 초기화 (사용자 요청: 예전 내 설정 말고 지금 개발한 기본값으로) — APP_RESET_REV를 올리면 업데이트 후 첫 실행에 한 번 실행
 //  지우는 것: 설정 시트 값 · 화면 배치 · 디자인 · 메트로놈(빠르기·박자·박 소리·박 나누기) · A4 · 허용 범위 · 지판 조표 · 드론
 //  남기는 것: 연습 기록(vt.log.*) · 히트맵(vt.fb.heat) · 녹음(IndexedDB) · 첫 실행 안내 완료 여부
-const APP_RESET_REV = 1;
+const APP_RESET_REV = 2;   // 2: 첫 화면 순서 = 조작판 · 박 원 · 음정 그래프 · 벨트
 (() => {
   try {
     if (Number(localStorage.getItem('vt.resetRev') || 0) >= APP_RESET_REV) return;
