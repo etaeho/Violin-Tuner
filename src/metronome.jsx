@@ -96,6 +96,16 @@ const useMetronomeLogic = () => {
     restartMetroIfNeeded(); haptic(12);
   };
 
+  // 박 원 톡: 기본 소리(강약은 박 위치대로) → 다른 소리(4) → 소리 없음(0) → 기본
+  const cycleBeatTone = (index) => {
+    setBeatSounds(prev => {
+      const next = [...prev], cur = next[index], base = getDefaultBeatSounds(prev.length)[index] || 1;
+      next[index] = cur === 0 ? base : cur === 4 ? 0 : 4;
+      return next;
+    });
+    haptic(8);
+  };
+
   const toggleBeatSound = (index) => {
     setBeatSounds(prev => {
       const next=[...prev];
@@ -153,6 +163,7 @@ const useMetronomeLogic = () => {
       if (soundType===2)  { freq=2000; vol=1.0; }
       else if (soundType===3) { freq=1500; vol=0.85; }
       else if (soundType===1) { freq=1000; vol=0.9; }
+      else if (soundType===4) { freq=700; vol=1.0; }    // 박 원에서 톡 눌러 바꾼 '다른 소리' (낮은 딸깍)
       else if (soundType===-1){ freq=1200; vol=0.7; }
       osc.frequency.value=freq;
       // 두 번째 음(5도 위)을 겹쳐 폰 스피커에서 더 크고 또렷하게
@@ -233,7 +244,7 @@ const useMetronomeLogic = () => {
 
   return {
     bpm, setBpm, isPlayingMetro, currentBeat, currentSub, timeSig, beatSounds, beatSubdivisions, visualFlash,
-    toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, setBeatSubdivision, toggleBeatSound,
+    toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, setBeatSubdivision, toggleBeatSound, cycleBeatTone,
     handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome,
     getMetroCtx: () => { initMetroAudioContext(); return metroAudioCtxRef.current; },   // 녹음 믹스용
     // 딸깍 한 번 (메트로놈 재생과 별개, 지금은 안 씀 — 예전 녹음 카운트인용). when = AudioContext 시각
@@ -255,8 +266,8 @@ const TEMPO_PRESETS = [60, 72, 80, 92, 108, 120];
 
 // 박 소리 종류별 색 (테마별 팔레트)  2=강박 3=중강박 1=약박 0=무음, sub=세분박
 const METRO_PALETTE = {
-  tape:    { 2:'#ffcc00', 3:'#f97316', 1:'#4afc9d', 0:'#374151', sub:'#0ea5e9', glow:1 },
-  vintage: { 2:'#f6dd94', 3:'#e0a94f', 1:'#b9853f', 0:'rgba(201,161,74,.22)', sub:'#efe3c2', glow:0.45 },
+  tape:    { 2:'#ffcc00', 3:'#f97316', 1:'#4afc9d', 4:'#2962ff', 0:'#374151', sub:'#0ea5e9', glow:1 },
+  vintage: { 2:'#f6dd94', 3:'#e0a94f', 1:'#b9853f', 4:'#5b8def', 0:'rgba(201,161,74,.22)', sub:'#efe3c2', glow:0.45 },
 };
 
 // 원형 다이얼의 박 구간 하나 (SVG arc)
@@ -711,17 +722,16 @@ const BeatRow = ({ metro }) => {
   const firstRef = useRef(true);
   useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const ink = vintage ? k.label : 'var(--ink)';
-  // 색 3개 = 소리 3가지 (강세 · 보통 · 소리 없음), 진한 색. 세기는 크기로 (강 100% · 중강 90% · 약 80%)
-  //  검정 = 일렉트릭 블루 · 인디고 / 흰색 = 에메랄드 · 틸 / 클래식 = 로열 블루 · 크림
+  // 색 3개 = 소리 3가지 (톡 눌러 바꿈): 기본 소리 A · 다른 소리 B(4) · 소리 없음(0). 강박·약박은 색이 같고 '크기'로만 (박 위치대로 강 100% · 중강 90% · 약 80%)
+  //  진하고 형광 — 검정: 일렉트릭 블루 · 로열 블루 / 흰색: 형광 그린 · 로열 블루 / 클래식: 로열 블루 · 일렉트릭 블루
   const light = useTheme() === 'light';
-  // 진하고 형광 — 딱 봐도 눈에 띄게
-  const TONES = vintage ? { 2: '#2979ff', 3: '#2979ff', 1: '#ffca28', 0: '#4a3c2c' }
-    : light ? { 2: '#00c853', 3: '#00c853', 1: '#00bfa5', 0: '#b0b0b8' }
-    : { 2: '#00b0ff', 3: '#00b0ff', 1: '#7c4dff', 0: '#3a3f4b' };
-  // 쉬는 원도 형광이 살아 있게 살짝만 어둡게, 지금 박은 원래 색 + 강한 빛
-  const idleFilter = light ? 'brightness(.92)' : 'brightness(.78)';
-  const beatColor = (snd) => TONES[snd] || TONES[1];
-  const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
+  const TONE = vintage ? { a: '#2962ff', b: '#00b0ff', off: '#4a3c2c' }
+    : light ? { a: '#00c853', b: '#2962ff', off: '#b0b0b8' }
+    : { a: '#00b0ff', b: '#2962ff', off: '#3a3f4b' };
+  const idleFilter = light ? 'brightness(.92)' : 'brightness(.78)';   // 쉬는 원도 형광이 살아 있게 살짝만 어둡게
+  const beatColor = (snd) => snd === 0 ? TONE.off : snd === 4 ? TONE.b : TONE.a;
+  const posSnd = getDefaultBeatSounds(beatSounds.length);
+  const beatScale = (i) => posSnd[i] === 2 ? 1 : posSnd[i] === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14;
   // 칸 크기에 맞춰 줄 수를 골라 원을 크게 (최대 크기의 2/3)
   const W = box.w - 64, H = box.h - 24;
@@ -744,7 +754,7 @@ const BeatRow = ({ metro }) => {
     onPointerDown: (e) => {
       drag.onPointerDown(e);
       const L0 = lp.current; clearTimeout(L0.timer); L0.x0 = e.clientX; L0.y0 = e.clientY;
-      const i = hitBeat(e); if (i < 0) return;
+      const i = hitBeat(e); L0.idx = i; if (i < 0) return;
       L0.timer = setTimeout(() => {
         const el = circleRefs.current[i], box0 = ref.current; if (!el || !box0) return;
         const r = el.getBoundingClientRect(), b = box0.getBoundingClientRect();
@@ -765,20 +775,21 @@ const BeatRow = ({ metro }) => {
         if (h !== L0.hover) { L0.hover = h; setHover(h); if (h) haptic(6); }
         return;
       }
-      if (Math.hypot(e.clientX - L0.x0, e.clientY - L0.y0) > 8) clearTimeout(L0.timer);
+      if (Math.hypot(e.clientX - L0.x0, e.clientY - L0.y0) > 8) { clearTimeout(L0.timer); L0.idx = -1; }
       drag.onPointerMove(e);
     },
     onPointerUp: (e) => {
       const L0 = lp.current; clearTimeout(L0.timer);
       if (L0.open) { if (menu && L0.hover) metro.setBeatSubdivision(menu.i, L0.hover); drag.onPointerCancel(); closeMenu(); return; }
-      drag.onPointerUp(e);
+      if (L0.idx >= 0) { drag.onPointerCancel(); metro.cycleBeatTone(L0.idx); L0.idx = -1; return; }   // 원 위 톡 = 색(소리) 바꾸기
+      drag.onPointerUp(e);   // 빈 곳 톡 = 시작/정지
     },
     onPointerCancel: () => { drag.onPointerCancel(); closeMenu(); },
   };
   const panelBg = vintage ? (k.frame.background || '#3a2410') : 'var(--panel-bg)';
   return (
     <div ref={ref} {...handlers} className={`relative w-full flex-1 min-h-0 rounded-[28px] flex flex-col items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
-      style={{ ...drag.style, cursor: 'pointer', ...(vintage ? k.frame : {}) }} aria-label="박 원 (위아래로 끌어 빠르기, 누르면 시작/정지, 원을 꾹 누르면 박 나누기)">
+      style={{ ...drag.style, cursor: 'pointer', ...(vintage ? k.frame : {}) }} aria-label="박 원 (위아래로 끌어 빠르기, 빈 곳 누르면 시작/정지, 원 톡 = 소리 바꾸기, 원 꾹 = 박 나누기)">
       {/* 위아래로 끌면 빠르기 — 작은 화살표만 */}
       <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 pointer-events-none" style={{ color: ink, opacity: 0.35 }}>
         <ChevronUp size={18} strokeWidth={3}/><i className="w-0.5 h-5 rounded-full" style={{ background: 'currentColor' }}/><ChevronDown size={18} strokeWidth={3}/>
@@ -789,12 +800,12 @@ const BeatRow = ({ metro }) => {
       </div>
       <div className="flex flex-wrap justify-center pointer-events-none" style={{ gap: gap * 1.5, width: best.cols * S + (best.cols - 1) * gap * 1.5 }}>
         {beatSounds.map((snd, i) => {
-          const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd), k0 = beatScale(snd), nsub = beatSubdivisions[i] || 1;
+          const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd), k0 = beatScale(i), nsub = beatSubdivisions[i] || 1;
           const r = S / 2, sub = on ? (currentSub || 0) : -1;
           return (
             <div key={i} ref={el => { circleRefs.current[i] = el; }} className="relative rounded-full" style={{ width: S, height: S, background: nsub > 1 ? 'transparent' : c,
               border: `4px solid ${on && nsub === 1 ? ink : 'transparent'}`, opacity: 1, filter: on || (menu && menu.i === i) ? 'none' : idleFilter,
-              transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 56 : 36}px ${c}, 0 0 ${snd === 2 ? 18 : 10}px ${c}` : 'none',
+              transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${k0 === 1 ? 56 : 36}px ${c}, 0 0 ${k0 === 1 ? 18 : 10}px ${c}` : 'none',
               transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, filter 150ms' }}>
               {/* 쪼갠 박 = 원을 틈을 두고 나눈 조각 (2 = 반원 · 3 = 세 조각 · 4 = 네 조각). 재생 중엔 지금 조각만 밝게 빛남 */}
               {nsub > 1 && (() => {
