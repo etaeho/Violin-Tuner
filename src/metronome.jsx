@@ -695,9 +695,11 @@ const lum = (hex) => { const m = /^#([0-9a-f]{6})/i.exec(hex || ''); if (!m) ret
 //  위아래로 끌면 빠르기 · 톡 누르면 시작/정지 · 원 하나를 꾹 누르면 둘레에 음표(♩ ♫ 셋잇단 ♬)가 펼쳐짐 → 밀어서 놓으면 그 박을 쪼갬
 //  쪼갠 박은 원 안 조각(2·3·4)으로 보이고, 재생 중엔 조각이 차례로 켜짐. 박마다 바뀌는 건 transform·그림자·투명도만 (흔들림 없게)
 const SUB_OPTS = [[1, 180], [2, 270], [3, 0], [4, 90]];   // [쪼갬 수, 각도(도, 0 = 오른쪽, 시계 방향)] — 왼쪽 ♩ · 위 ♫ · 오른쪽 셋잇단 · 아래 ♬
-const pieSlice = (r, j, nsub) => {
-  const a0 = (-90 + j * 360 / nsub) * Math.PI / 180, a1 = (-90 + (j + 1) * 360 / nsub) * Math.PI / 180;
-  return `M ${r} ${r} L ${r + r * Math.cos(a0)} ${r + r * Math.sin(a0)} A ${r} ${r} 0 ${360 / nsub > 180 ? 1 : 0} 1 ${r + r * Math.cos(a1)} ${r + r * Math.sin(a1)} Z`;
+// 고리 조각: 가운데 작은 구멍(ri)을 둔 부채꼴 — 쪼갠 박 표시용 (r = 바깥 반지름, 중심 = (r, r))
+const ringSlice = (r, ri, j, nsub) => {
+  const a0 = (-90 + j * 360 / nsub) * Math.PI / 180, a1 = (-90 + (j + 1) * 360 / nsub) * Math.PI / 180, big = 360 / nsub > 180 ? 1 : 0;
+  const P = (rad, a) => `${r + rad * Math.cos(a)} ${r + rad * Math.sin(a)}`;
+  return `M ${P(ri, a0)} L ${P(r, a0)} A ${r} ${r} 0 ${big} 1 ${P(r, a1)} L ${P(ri, a1)} A ${ri} ${ri} 0 ${big} 0 ${P(ri, a0)} Z`;
 };
 const BeatRow = ({ metro }) => {
   const vintage = useVintage(), k = useSkin();
@@ -783,18 +785,29 @@ const BeatRow = ({ metro }) => {
           const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd), k0 = beatScale(snd), nsub = beatSubdivisions[i] || 1;
           const r = S / 2, sub = on ? (currentSub || 0) : -1;
           return (
-            <div key={i} ref={el => { circleRefs.current[i] = el; }} className="relative rounded-full" style={{ width: S, height: S, background: c,
-              border: `4px solid ${on ? ink : 'transparent'}`, opacity: on ? 1 : menu && menu.i === i ? 0.9 : 0.3,
+            <div key={i} ref={el => { circleRefs.current[i] = el; }} className="relative rounded-full" style={{ width: S, height: S, background: nsub > 1 ? 'transparent' : c,
+              border: `4px solid ${on && nsub === 1 ? ink : 'transparent'}`, opacity: on ? 1 : menu && menu.i === i ? 0.9 : 0.3,
               transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none',
               transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>
-              {/* 쪼갠 박 = 원 안 조각. 재생 중엔 지금 조각만 밝게 */}
-              {nsub > 1 && (
-                <svg viewBox={`0 0 ${S} ${S}`} className="absolute pointer-events-none" style={{ inset: -4, width: S, height: S }}>
-                  {on && Array.from({ length: nsub }, (_, j) => <path key={'s' + j} d={pieSlice(r, j, nsub)} fill={j === sub ? '#fff' : '#000'} opacity={j === sub ? 0.38 : 0.28}/>)}
-                  {Array.from({ length: nsub }, (_, j) => { const a = (-90 + j * 360 / nsub) * Math.PI / 180; return <line key={j} x1={r} y1={r} x2={r + r * Math.cos(a)} y2={r + r * Math.sin(a)} stroke={vintage ? '#1a0f05' : '#000'} strokeWidth={Math.max(2, S * 0.035)} strokeLinecap="round" opacity=".7"/>; })}
-                  <circle cx={r} cy={r} r={Math.max(2.5, S * 0.04)} fill={vintage ? '#1a0f05' : '#000'} opacity=".7"/>
-                </svg>
-              )}
+              {/* 쪼갠 박 = 원을 틈을 두고 나눈 조각 (2 = 반원 · 3 = 세 조각 · 4 = 네 조각). 재생 중엔 지금 조각만 밝게 빛남 */}
+              {nsub > 1 && (() => {
+                const D = S - 8, R0 = D / 2, g = Math.max(2.5, D * 0.035), rr = R0 - g, ri = rr * 0.3;
+                return (
+                  <svg viewBox={`0 0 ${D} ${D}`} className="absolute inset-0 pointer-events-none" style={{ width: D, height: D, overflow: 'visible' }}>
+                    {Array.from({ length: nsub }, (_, j) => {
+                      const mid = (-90 + (j + 0.5) * 360 / nsub) * Math.PI / 180, dx = Math.cos(mid) * g, dy = Math.sin(mid) * g;
+                      const lit = j === sub;
+                      return (
+                        <g key={j} transform={`translate(${R0 - rr + dx} ${R0 - rr + dy})`}>
+                          <path d={ringSlice(rr, ri, j, nsub)} fill={c}
+                            opacity={on ? (lit ? 1 : 0.45) : 1} style={{ transition: lit ? 'opacity 30ms' : 'opacity 220ms ease-out' }}/>
+                          {lit && <path d={ringSlice(rr, ri, j, nsub)} fill="#fff" opacity=".35" style={{ filter: `drop-shadow(0 0 ${S * 0.08}px ${c})` }}/>}
+                        </g>
+                      );
+                    })}
+                  </svg>
+                );
+              })()}
             </div>
           );
         })}
