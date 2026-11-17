@@ -711,12 +711,13 @@ const BeatRow = ({ metro }) => {
   const firstRef = useRef(true);
   useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const ink = vintage ? k.label : 'var(--ink)';
-  // 색 3개 = 소리 3가지: 강세 소리(밝은 초록) · 보통 소리(청록) · 소리 없음(회색). 세기는 크기로 (강 100% · 중강 90% · 약 80%)
-  //  우드 계열은 판 글자색(k.label) 밝기에 맞춰: 어두운 판(피아노·가죽·라디오) = 밝은 금색, 밝은 판(바이올린·악보) = 진한 갈색 → 어디서나 또렷하게
-  const darkInk = vintage && lum(k.label) < 0.4;
-  const TONES = !vintage ? { 2: '#4afc9d', 3: '#4afc9d', 1: '#2dd4bf', 0: '#52525b' }
-    : darkInk ? { 2: '#2a1205', 3: '#2a1205', 1: '#8a4f1c', 0: '#b5a68f' } : { 2: '#f6dd94', 3: '#f6dd94', 1: '#d29b45', 0: '#857560' };
-  const idleOp = vintage ? 0.5 : 0.3;
+  // 색 3개 = 소리 3가지 (강세 · 보통 · 소리 없음), 진한 색. 세기는 크기로 (강 100% · 중강 90% · 약 80%)
+  //  검정 = 일렉트릭 블루 · 인디고 / 흰색 = 에메랄드 · 틸 / 클래식 = 로열 블루 · 크림
+  const light = useTheme() === 'light';
+  const TONES = vintage ? { 2: '#2f5fd0', 3: '#2f5fd0', 1: '#e8d3a0', 0: '#5a4a38' }
+    : light ? { 2: '#047857', 3: '#047857', 1: '#0d9488', 0: '#a1a1aa' }
+    : { 2: '#0b84ff', 3: '#0b84ff', 1: '#5b5bf0', 0: '#3f4654' };
+  const idleOp = vintage ? 0.55 : light ? 0.5 : 0.45;
   const beatColor = (snd) => TONES[snd] || TONES[1];
   const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14;
