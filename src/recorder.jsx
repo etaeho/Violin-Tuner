@@ -621,7 +621,7 @@ const RecChip = () => {
       className="t-chip rounded-full flex items-center gap-1 px-2 py-1.5 text-[11px] font-black shrink-0"
       style={rec || count ? { color: '#ef4444', borderColor: '#ef4444' } : { color: 'var(--ink2)' }}>
       {rec ? <Square size={9} fill="currentColor"/> : <span className="w-2 h-2 rounded-full bg-[#ef4444]"/>}
-      {rec ? <span className="font-mono">{recDur(elapsed)}</span> : count ? count.left : ''}
+      {rec ? <span className="font-mono">{recDur(elapsed)}</span> : count ? count.left : <span>녹음</span>}
     </button>
   );
 };
