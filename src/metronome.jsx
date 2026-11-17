@@ -714,10 +714,11 @@ const BeatRow = ({ metro }) => {
   // 색 3개 = 소리 3가지 (강세 · 보통 · 소리 없음), 진한 색. 세기는 크기로 (강 100% · 중강 90% · 약 80%)
   //  검정 = 일렉트릭 블루 · 인디고 / 흰색 = 에메랄드 · 틸 / 클래식 = 로열 블루 · 크림
   const light = useTheme() === 'light';
-  const TONES = vintage ? { 2: '#2f5fd0', 3: '#2f5fd0', 1: '#e8d3a0', 0: '#5a4a38' }
-    : light ? { 2: '#047857', 3: '#047857', 1: '#0d9488', 0: '#a1a1aa' }
-    : { 2: '#0b84ff', 3: '#0b84ff', 1: '#5b5bf0', 0: '#3f4654' };
-  const idleOp = vintage ? 0.55 : light ? 0.5 : 0.45;
+  const TONES = vintage ? { 2: '#1f4fbf', 3: '#1f4fbf', 1: '#e6c98a', 0: '#4a3c2c' }
+    : light ? { 2: '#065f46', 3: '#065f46', 1: '#0f766e', 0: '#9ca3af' }
+    : { 2: '#0a6cff', 3: '#0a6cff', 1: '#4f46e5', 0: '#374151' };
+  // 쉬는 원은 투명하게 바래지 않게 '어둡게'만 (색이 진하게 남음), 지금 박은 원래 색 + 빛
+  const idleFilter = light ? 'brightness(.82) saturate(.9)' : 'brightness(.62)';
   const beatColor = (snd) => TONES[snd] || TONES[1];
   const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14;
@@ -791,9 +792,9 @@ const BeatRow = ({ metro }) => {
           const r = S / 2, sub = on ? (currentSub || 0) : -1;
           return (
             <div key={i} ref={el => { circleRefs.current[i] = el; }} className="relative rounded-full" style={{ width: S, height: S, background: nsub > 1 ? 'transparent' : c,
-              border: `4px solid ${on && nsub === 1 ? ink : 'transparent'}`, opacity: on ? 1 : menu && menu.i === i ? 0.9 : idleOp,
+              border: `4px solid ${on && nsub === 1 ? ink : 'transparent'}`, opacity: 1, filter: on || (menu && menu.i === i) ? 'none' : idleFilter,
               transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none',
-              transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>
+              transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, filter 150ms' }}>
               {/* 쪼갠 박 = 원을 틈을 두고 나눈 조각 (2 = 반원 · 3 = 세 조각 · 4 = 네 조각). 재생 중엔 지금 조각만 밝게 빛남 */}
               {nsub > 1 && (() => {
                 const D = S - 8, R0 = D / 2, g = Math.max(2.5, D * 0.035), rr = R0 - g, ri = 0;   // 가운데 구멍 없이 부채꼴
