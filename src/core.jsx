@@ -236,7 +236,7 @@ const DEFAULT_SETTINGS = {
   minFreq: 150,      // 감지 최저 Hz (바이올린 G3 = 196Hz, 낮게 풀린 G현도 잡히게 여유)
   maxFreq: 4200,     // 감지 최고 Hz (E현 최상단 A7 ≈ 3.5kHz 포함)
   uiMode: 'tape',    // 바탕 테마(theme.css data-theme) — design에서 자동으로 정해짐
-  design: 'dark',    // 디자인 7가지 중 하나 → theme.jsx DESIGNS (dark·light·piano·leather·radio·violin·sheet)
+  design: 'dark',    // 디자인 3가지 → theme.jsx DESIGNS (dark 검정 · light 흰색 · radio 클래식)
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON).map(b => b.id === 'pitch' ? { ...b, size: 's' } : b),   // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
@@ -257,7 +257,8 @@ const loadSettings = () => {
     const v = { ...DEFAULT_SETTINGS, ...stored };
     if (!['tape', 'vintage', 'light'].includes(v.uiMode)) v.uiMode = 'tape';   // 예전 'modern' 등 → 기본값
     // 디자인: 예전 저장값은 테마에서 이어받음 (빈티지 → 라디오), 바탕 테마는 디자인에 맞춤
-    const DESIGN_BASE = { dark: 'tape', light: 'light', piano: 'vintage', leather: 'vintage', radio: 'vintage', violin: 'vintage', sheet: 'vintage' };
+    const DESIGN_BASE = { dark: 'tape', light: 'light', radio: 'vintage' };   // 검정 · 흰색 · 클래식 (예전 피아노·가죽·바이올린·악보 → 클래식)
+    if (['piano', 'leather', 'violin', 'sheet'].includes(stored.design)) v.design = 'radio';   // 폐기된 우드 디자인 → 클래식
     if (!stored.design || !DESIGN_BASE[v.design]) v.design = ({ tape: 'dark', light: 'light', vintage: 'radio' })[v.uiMode] || 'dark';
     v.uiMode = DESIGN_BASE[v.design];
     const rev = stored.layoutRev || 0;

@@ -730,7 +730,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   const tolRef = useRef(tolerance); tolRef.current = tolerance;
   const zoomT = active && Math.abs(cents) <= 15 ? 1 : 0;
   // 벨트(bare): 칸을 좁혀 음을 더 많이 보이게, 확대는 조금만
-  const SP = bare ? 40 : TAPE_SP, ZM = bare ? 0 : 2.5;   // 벨트는 확대 없이 늘 9음 정도 보이게 (미세 센트는 아래 그래프)
+  const SP = bare ? 48 : TAPE_SP, ZM = bare ? 0 : 2.5;   // 벨트는 확대 없이 늘 9음 정도 보이게 (미세 센트는 아래 그래프)
   const place = ([sv, z]) => {
     const sp = SP * (1 + ZM * z);
     Object.entries(keyRefs.current).forEach(([k, el]) => {
@@ -752,7 +752,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   if (bare) {
     const okC = '#4afc9d', needleC = inTune ? okC : '#e11d2a';
     const belt = (
-      <div className="relative w-full h-[58px] overflow-hidden rounded-t-lg"
+      <div className="relative w-full h-[70px] overflow-hidden rounded-t-lg"
         style={vintage ? { background: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)' } : { background: '#070707' }}>
         {/* 허용 범위 */}
         <div ref={bandRef} className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2"
@@ -764,19 +764,19 @@ const NoteTape = ({ tuner, showMic, bare }) => {
             <div key={k} ref={el => { if (el) keyRefs.current[k] = el; else delete keyRefs.current[k]; }}
               className="absolute top-0 bottom-0 will-change-transform flex flex-col items-center justify-center"
               style={{ left: '50%', width: sp0, marginLeft: -sp0 / 2, transform: `translateX(${(k - s0) * sp0}px)` }}>
-              <i className="absolute top-0 left-1/2 w-px h-2" style={{ background: vintage ? 'rgba(59,42,26,.5)' : '#3f3f46' }}/>
-              <span className="font-black leading-none" style={{ fontFamily: vintage ? 'Georgia,serif' : undefined, fontSize: isCur ? 22 : 17,
+              <i className="absolute top-0 left-1/2 w-px h-2.5" style={{ background: vintage ? 'rgba(59,42,26,.5)' : '#3f3f46' }}/>
+              <span className="font-black leading-none" style={{ fontFamily: vintage ? 'Georgia,serif' : undefined, fontSize: isCur ? 27 : 20,
                 color: isCur ? (inTune ? (vintage ? '#15803d' : okC) : (vintage ? '#1a0f05' : '#fff')) : vintage ? 'rgba(59,42,26,.55)' : name[1] === '#' ? '#3f3f46' : '#71717a' }}>
-                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="text-[9px] opacity-60 align-baseline">{oct}</sub>
+                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="text-[11px] opacity-60 align-baseline">{oct}</sub>
               </span>
-              {open && <i className="absolute bottom-1 w-1.5 h-1.5 rounded-full" style={{ background: vintage ? '#b8860b' : '#ffcc00' }}/>}
+              {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: vintage ? '#b8860b' : '#ffcc00' }}/>}
             </div>
           );
         })}
         <div className="absolute inset-0 pointer-events-none" style={{ background: vintage
           ? 'linear-gradient(90deg,rgba(60,40,20,.55),transparent 18%,transparent 82%,rgba(60,40,20,.55))'
           : 'linear-gradient(90deg,#000,transparent 18%,transparent 82%,#000)' }}/>
-        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[2px] z-10" style={{ background: needleC, boxShadow: `0 0 6px ${needleC}`, opacity: active ? 1 : 0.35 }}/>
+        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[3px] z-10" style={{ background: needleC, boxShadow: `0 0 6px ${needleC}`, opacity: active ? 1 : 0.35 }}/>
       </div>
     );
     // 4현: 지금 소리를 내는 현 표시 (개방현 음이면 더 강하게)
@@ -785,7 +785,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         {STR.map(([nm], i) => {
           const on = i === strIdx, exact = on && openHit === i;
           const c = exact ? (inTune ? okC : '#ffcc00') : '#ffcc00';
-          return <div key={nm} className="h-6 flex items-center justify-center gap-1 text-[11px] font-black"
+          return <div key={nm} className="h-7 flex items-center justify-center gap-1 text-[13px] font-black"
             style={{ background: on ? (vintage ? '#3a2410' : 'rgba(255,204,0,.14)') : (vintage ? '#e9dfc6' : '#0b0b0b'),
               color: on ? (vintage ? '#f4d78a' : c) : vintage ? 'rgba(59,42,26,.5)' : '#52525b', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
             <i className="h-[2px] rounded-full" style={{ width: 14 - i * 2 + 6, background: 'currentColor', opacity: on ? 1 : 0.5 }}/>{nm}현{exact ? ' 개방' : ''}
