@@ -656,15 +656,13 @@ const LivePitchGraph = ({ tuner, fill }) => {   // fill: 남는 공간을 채움
             </span>
           </div>
           <span className="mt-1 font-black font-mono text-lg leading-none" style={{ color: nmCol }}>{nm ? `${nm.c > 0 ? '+' : ''}${Math.round(nm.c)}¢` : '0¢'}</span>
-          <span className="mt-1 text-[9px] font-black tracking-wider" style={{ color: nmCol }}>{!nm ? '대기' : Math.abs(nm.c) <= tol ? '맞음' : nm.c > 0 ? '▼ 내리기' : '▲ 올리기'}</span>
+          <span className="mt-1 text-sm font-black leading-none" style={{ color: nmCol, height: 14 }}>{!nm ? '' : Math.abs(nm.c) <= tol ? '✓' : nm.c > 0 ? '▼' : '▲'}</span>
         </div>
         <div className="relative flex-1 min-w-0 h-full">
         <PitchRows lo={lo} hi={hi} L={L} vintage={vintage}/>
         {grid.map((g, i) => <i key={'g' + i} className="absolute top-0 bottom-0 pointer-events-none" style={{ left: `${xp(g[0])}%`, width: 1, background: g[1] ? L.beat : L.sub }}/>)}
         {pts.map((q, i) => <i key={i} className="absolute rounded-full" style={{ left: `${xp(q[0])}%`, top: `${yp(q[3] + q[1] / 100)}%`, width: 5, height: 5, margin: -2.5, background: col(q[1]) }}/>)}
-        <span className="absolute right-1.5 bottom-1 text-[8px] font-bold" style={{ color: L.dim }}>지금 →</span>
-        {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? L.ok : '#d97706', background: L.face, border: `1px solid ${L.sub}` }}>맞음 {okPct}%</span>}
-        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-center px-2" style={{ color: L.dim }}>연주하면 음 높이가 여기에 그려집니다</span>}
+        {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? L.ok : '#d97706', background: L.face, border: `1px solid ${L.sub}` }}>{okPct}%</span>}
         </div>
       </div>
     </div>

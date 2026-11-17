@@ -151,7 +151,8 @@ const App = () => {
             <button
               key={id}
               onClick={() => switchTab(id)}
-              className="flex flex-col items-center gap-0.5 py-1 px-2 rounded-2xl transition-all duration-200 active:scale-90"
+              aria-label={label}
+              className="flex flex-col items-center gap-0.5 py-2 px-3 rounded-2xl transition-all duration-200 active:scale-90"
               style={{ color: active ? color : '#4b5563' }}
             >
               {/* Active indicator dot (녹음 탭은 녹음 중이면 빨간 점이 깜빡임 — 다른 탭에서도 보이게) */}
@@ -162,7 +163,7 @@ const App = () => {
                     style={{ background: active ? color : 'transparent', boxShadow: active ? `0 0 6px ${color}` : 'none' }}
                   />}
               {id === 'log' ? (() => {
-                // 기록 탭: 오늘 목표 진행 링 + 오늘 연습 분
+                // 기록 탭: 오늘 목표 진행 링 (글자 없음 — 아이콘만)
                 const ms = practiceMs(log.today), pct = Math.min(1, ms / (log.goalMin * 60000)), c = 2 * Math.PI * 11;
                 const ring = theme === 'vintage' ? '#f6dd94' : '#4afc9d';
                 return (
@@ -174,20 +175,11 @@ const App = () => {
                       </svg>
                       <Icon size={13} strokeWidth={active ? 2.5 : 2}/>
                     </span>
-                    <span className="text-[9px] font-black tracking-widest transition-all duration-200" style={{ color: active ? color : (ms >= 60000 ? ring : '#4b5563') }}>
-                      {ms >= 60000 ? `${Math.floor(ms / 60000)}분` : label}
-                    </span>
                   </>
                 );
               })() : (
                 <>
                   <Icon size={22} strokeWidth={active ? 2.5 : 2}/>
-                  <span
-                    className="text-[9px] font-black uppercase tracking-widest transition-all duration-200"
-                    style={{ color: active ? color : '#4b5563' }}
-                  >
-                    {label}
-                  </span>
                 </>
               )}
             </button>
