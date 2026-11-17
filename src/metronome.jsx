@@ -699,9 +699,9 @@ const BeatRow = ({ metro }) => {
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
   const L = vintage ? k.lamp : null;
   const ink = vintage ? k.label : 'var(--ink)', dim = vintage ? k.unit : '#6b7280';
-  // 투톤: 강박(강세 소리) 색 · 약박(보통 소리) 색 — 색이 곧 소리. 세기는 크기로 미묘하게 (강 100% · 중강 90% · 약 80%)
-  const toneStrong = vintage ? pal[2] : pal[2], toneWeak = vintage ? pal[1] : pal[1];
-  const beatColor = (snd) => snd === 0 ? 'transparent' : snd === 1 ? toneWeak : toneStrong;
+  // 색은 모두 한 색(초록 계열), 세기는 크기로만 미묘하게 (강 100% · 중강 90% · 약 80%)
+  const tone = pal[1];
+  const beatColor = (snd) => snd === 0 ? 'transparent' : tone;
   const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14, hasSub = beatSubdivisions.some(s => s > 1);
   // 칸 크기에 맞춰 줄 수를 골라 원을 가장 크게
