@@ -657,7 +657,7 @@ const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
 };
 
 // BPM 숫자 끌기: 오른쪽(+ 쪽)·위로 끌면 빨라지고, 왼쪽(− 쪽)·아래로 끌면 느려짐 (끄는 속도에 따라 미세~크게, 처음 방향으로 고정)
-const useBpmDrag = (metro, onTap) => {
+const useBpmDrag = (metro, onTap, onlyY) => {   // onlyY: 위아래로만 (좌우로 끌면 무시)
   // 끌기 속도에 따라: 천천히 = 미세(12px당 1), 보통 = 6px당 1, 휙 = 2.5px당 1. 처음 움직인 방향(가로/세로)으로 고정
   const st = useRef(null);
   const mref = useRef(metro); mref.current = metro;
@@ -666,7 +666,8 @@ const useBpmDrag = (metro, onTap) => {
     onPointerMove: (e) => {
       const s0 = st.current; if (!s0) return;
       const tx = e.clientX - s0.x, ty = e.clientY - s0.y;
-      if (!s0.axis) { if (Math.abs(tx) + Math.abs(ty) < 8) return; s0.axis = Math.abs(tx) >= Math.abs(ty) ? 'x' : 'y'; s0.moved = true; }
+      if (!s0.axis) { if (Math.abs(tx) + Math.abs(ty) < 8) return; s0.axis = Math.abs(tx) >= Math.abs(ty) ? (onlyY ? 'none' : 'x') : 'y'; s0.moved = true; }
+      if (s0.axis === 'none') return;
       const now = performance.now(), dt = Math.max(8, now - s0.lt);
       const step = s0.axis === 'x' ? e.clientX - s0.lx : -(e.clientY - s0.ly);   // 오른쪽 또는 위 = 빠르게
       const speed = Math.abs(step) / dt;                                         // px/ms
@@ -690,7 +691,7 @@ const lum = (hex) => { const m = /^#([0-9a-f]{6})/i.exec(hex || ''); if (!m) ret
 const BeatRow = ({ metro }) => {
   const vintage = useVintage(), k = useSkin();
   const { bpm, isPlayingMetro, currentBeat, beatSounds, beatSubdivisions, visualFlash, currentSub, timeSig } = metro;
-  const drag = useBpmDrag(metro, () => { metro.toggleMetronome(); });
+  const drag = useBpmDrag(metro, () => { metro.toggleMetronome(); }, true);
   const ref = useRef(null); const [box, setBox] = useState({ w: 330, h: 260 });
   useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight })); ro.observe(el); return () => ro.disconnect(); }, []);
   const [showBig, setShowBig] = useState(false);
@@ -699,9 +700,9 @@ const BeatRow = ({ metro }) => {
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
   const L = vintage ? k.lamp : null;
   const ink = vintage ? k.label : 'var(--ink)', dim = vintage ? k.unit : '#6b7280';
-  // 색은 모두 한 색(초록 계열), 세기는 크기로만 미묘하게 (강 100% · 중강 90% · 약 80%)
-  const tone = pal[1];
-  const beatColor = (snd) => snd === 0 ? 'transparent' : tone;
+  // 색 3개 = 소리 3가지: 강세 소리(밝은 초록) · 보통 소리(청록) · 소리 없음(회색). 세기는 크기로 (강 100% · 중강 90% · 약 80%)
+  const TONES = vintage ? { 2: '#f6dd94', 3: '#f6dd94', 1: '#b9853f', 0: '#6b5a44' } : { 2: '#4afc9d', 3: '#4afc9d', 1: '#2dd4bf', 0: '#52525b' };
+  const beatColor = (snd) => TONES[snd] || TONES[1];
   const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14, hasSub = beatSubdivisions.some(s => s > 1);
   // 칸 크기에 맞춰 줄 수를 골라 원을 가장 크게
@@ -730,7 +731,7 @@ const BeatRow = ({ metro }) => {
           return (
             <div key={i} className="flex flex-col items-center gap-1" style={{ width: S }}>
               <div className="rounded-full flex items-center justify-center font-black" style={{ width: S, height: S, background: c,
-                border: snd === 0 ? `3px dashed ${dim}` : `4px solid ${on ? ink : 'transparent'}`, opacity: snd === 0 ? 0.4 : on ? 1 : 0.3,
+                border: `4px solid ${on ? ink : 'transparent'}`, opacity: on ? 1 : 0.3,
                 transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none', color: vintage ? '#1a0f05' : '#000', fontSize: S * 0.5, lineHeight: 1,
                 transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}/>
               {hasSub && <div className="flex gap-1 h-2">{nsub > 1 && Array.from({ length: nsub }, (_, j) => <i key={j} className="rounded-full" style={{ width: 7, height: 7, background: ink, opacity: on && (currentSub || 0) === j ? 1 : 0.25 }}/>)}</div>}
