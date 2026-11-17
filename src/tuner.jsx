@@ -1063,6 +1063,7 @@ const BlockThumb = ({ id, on = true }) => {
     case 'boxes': return svg(<><rect x="5" y="3" width="38" height="24" rx="4" fill={d}/>{[12, 20, 28, 36].map((x, i) => <circle key={i} cx={x} cy="17" r="3.3" fill={i === 1 ? g : i ? '#14532d' : y}/>)}<text x="24" y="10" textAnchor="middle" fontSize="6" fontWeight="900" fill={m}>60</text></>);
     case 'tempo': return svg(<><line x1="5" x2="43" y1="10" y2="10" stroke={d} strokeWidth="2.5"/><circle cx="17" cy="10" r="3.5" fill={g}/>{[5, 15, 25, 35].map(x => <rect key={x} x={x} y="18" width="8" height="6" rx="3" fill={x === 5 ? g : d}/>)}</>);
     case 'rec': return svg(<><circle cx="12" cy="15" r="8" fill="#dc2626"/><circle cx="12" cy="15" r="3" fill="#fff"/><text x="23" y="19" fontSize="10" fontWeight="900" fill={m}>0:12</text></>);
+    case 'beatpanel': return svg(<>{[[9, 9], [19, 9], [9, 20], [19, 20]].map(([x, yy], i) => <circle key={i} cx={x} cy={yy} r="4" fill={y} opacity={i === 1 ? 1 : 0.4}/>)}<line x1="29" y1="3" x2="29" y2="27" stroke={y} strokeWidth="1" opacity=".4"/><text x="38" y="12" textAnchor="middle" fontSize="7" fontWeight="900" fill={y}>4/4</text><text x="38" y="24" textAnchor="middle" fontSize="9" fontWeight="900" fill={y}>72</text></>);
     case 'light': return svg(<>{[9, 19, 29, 39].map((x, i) => <circle key={x} cx={x} cy="15" r="4.5" fill={y} opacity={i === 1 ? 1 : 0.35}/>)}</>);
     case 'ctrl': return svg(<><rect x="2" y="7" width="44" height="17" rx="4" fill={d}/><text x="9" y="19" textAnchor="middle" fontSize="7" fontWeight="900" fill={m}>4/4</text><text x="24" y="19" textAnchor="middle" fontSize="8" fontWeight="900" fill={m}>92</text><circle cx="39" cy="15.5" r="5.5" fill={g}/><path d="M37.5 13 L42 15.5 L37.5 18 Z" fill="#000"/></>);
     case 'controls': return svg(<><rect x="4" y="8" width="13" height="14" rx="3" fill={d}/><text x="10.5" y="18" textAnchor="middle" fontSize="5" fontWeight="900" fill={m}>TAP</text><rect x="20" y="8" width="24" height="14" rx="3" fill="rgba(74,252,157,.25)"/><path d="M29 11 L36 15 L29 19 Z" fill={g}/></>);
@@ -1584,6 +1585,7 @@ const Tuner = ({ tuner, metro, openSettings }) => {
             {b.id === 'rec' && <RecModule size={b.size}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter')} bare={has('history')}/>}
             {b.id === 'light' && <BeatRow metro={metro}/>}
+            {b.id === 'beatpanel' && <BeatRow metro={metro} strip/>}
             {b.id === 'ctrl' && <MetroControls metro={metro} scale={0.8}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}
           </LayoutBlock>
