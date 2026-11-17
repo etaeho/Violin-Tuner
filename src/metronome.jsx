@@ -696,9 +696,10 @@ const BeatRow = ({ metro }) => {
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
   const L = vintage ? k.lamp : null;
   const ink = vintage ? k.label : 'var(--ink)', dim = vintage ? k.unit : '#6b7280';
-  const beatColor = (snd, on) => vintage
-    ? (snd === 0 ? 'transparent' : on ? (L.shape === 'note' ? '#b3261e' : L.on) : snd === 2 ? L.strong : L.off)
-    : (snd === 0 ? 'transparent' : pal[snd]);
+  // 투톤: 강박(강세 소리) 색 · 약박(보통 소리) 색 — 색이 곧 소리. 세기는 크기로 미묘하게 (강 100% · 중강 90% · 약 80%)
+  const toneStrong = vintage ? pal[2] : pal[2], toneWeak = vintage ? pal[1] : pal[1];
+  const beatColor = (snd) => snd === 0 ? 'transparent' : snd === 1 ? toneWeak : toneStrong;
+  const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14, hasSub = beatSubdivisions.some(s => s > 1);
   // 칸 크기에 맞춰 줄 수를 골라 원을 가장 크게
   const W = box.w - 24, H = box.h - 44 - (hasSub ? 14 : 0);
@@ -718,13 +719,13 @@ const BeatRow = ({ metro }) => {
       <span className="absolute top-2.5 right-4 text-[10px] font-bold pointer-events-none" style={{ color: ink, opacity: 0.45 }}>끌기 = 빠르기 · 누르면 {isPlayingMetro ? '정지' : '시작'}</span>
       <div className="flex flex-wrap justify-center pointer-events-none mt-5" style={{ gap: gap * 1.5, width: best.cols * S + (best.cols - 1) * gap * 1.5 }}>
         {beatSounds.map((snd, i) => {
-          const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd, on), nsub = beatSubdivisions[i] || 1;
+          const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd), k0 = beatScale(snd), nsub = beatSubdivisions[i] || 1;
           return (
             <div key={i} className="flex flex-col items-center gap-1" style={{ width: S }}>
               <div className="rounded-full flex items-center justify-center font-black" style={{ width: S, height: S, background: c,
-                border: snd === 0 ? `3px dashed ${dim}` : `4px solid ${on ? ink : 'transparent'}`, opacity: snd === 0 ? 0.4 : on ? 1 : vintage ? 0.7 : 0.28,
-                transform: `scale(${fire ? 1.08 : 1})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none', color: vintage ? '#1a0f05' : '#000', fontSize: S * 0.5, lineHeight: 1,
-                transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>{snd === 2 ? <span style={{ transform: 'scaleX(1.5)', display: 'inline-block', opacity: 0.75 }}>&gt;</span> : null}</div>
+                border: snd === 0 ? `3px dashed ${dim}` : `4px solid ${on ? ink : 'transparent'}`, opacity: snd === 0 ? 0.4 : on ? 1 : 0.3,
+                transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none', color: vintage ? '#1a0f05' : '#000', fontSize: S * 0.5, lineHeight: 1,
+                transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}/>
               {hasSub && <div className="flex gap-1 h-2">{nsub > 1 && Array.from({ length: nsub }, (_, j) => <i key={j} className="rounded-full" style={{ width: 7, height: 7, background: ink, opacity: on && (currentSub || 0) === j ? 1 : 0.25 }}/>)}</div>}
             </div>
           );
