@@ -1583,7 +1583,7 @@ const Tuner = ({ tuner, metro, openSettings }) => {
             {b.id === 'history' && <LivePitchGraph tuner={tuner}/>}
             {b.id === 'rec' && <RecModule size={b.size}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter')} bare={has('history')}/>}
-            {b.id === 'light' && <BeatLight metro={metro}/>}
+            {b.id === 'light' && <BeatShow metro={metro}/>}
             {b.id === 'ctrl' && <MetroControls metro={metro}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}
           </LayoutBlock>

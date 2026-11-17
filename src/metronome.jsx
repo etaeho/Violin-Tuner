@@ -756,6 +756,126 @@ const BeatLight = ({ metro }) => {
   );
 };
 
+// ── 클래식 진자 메트로놈 (피라미드형, 아래 받침 없음) ──
+//  추가 박에 맞춰 좌우로 흔들림(박 순간 = 끝에 닿음), 추를 위로 끌면 느리게 · 아래로 끌면 빠르게 (실제 메트로놈과 같음),
+//  톡 누르면 시작/정지. 추 위에 BPM, 눈금은 진짜 메트로놈 숫자
+const PEND_Y0 = 58, PEND_Y1 = 258, PEND_PIV = 300;
+const pendY = (b) => PEND_Y0 + (Math.log(b) - Math.log(30)) / (Math.log(250) - Math.log(30)) * (PEND_Y1 - PEND_Y0);
+const pendBpm = (y) => Math.round(Math.exp(Math.log(30) + (Math.min(PEND_Y1, Math.max(PEND_Y0, y)) - PEND_Y0) / (PEND_Y1 - PEND_Y0) * (Math.log(250) - Math.log(30))));
+const PEND_TICKS = [30, 32, 35, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 63, 66, 69, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 126, 132, 138, 144, 152, 160, 168, 176, 184, 192, 200, 208, 220, 232, 250];
+const PEND_LABELS = [30, 40, 50, 60, 72, 84, 96, 108, 120, 138, 160, 184, 208, 250];
+const PEND_WORDS = [['Largo', 48], ['Adagio', 70], ['Andante', 92], ['Moderato', 114], ['Allegro', 138], ['Presto', 180]];
+const PendulumMetronome = ({ metro }) => {
+  const { bpm, timeSig, beatSounds, beatSubdivisions, currentBeat, currentSub, isPlayingMetro } = metro;
+  const pal = METRO_PALETTE.vintage;
+  const f = beatFlash(metro);
+  const flashCol = f.down ? '#e8b04a' : '#f4d78a';
+  const armRef = useRef(null), svgRef = useRef(null);
+  const uid = 'pm' + React.useId().replace(/[^a-zA-Z0-9]/g, '');   // 탭마다 그라데이션 id 따로 (숨은 탭과 겹치면 안 그려짐)
+  const live = useRef({}); live.current = { bpm, den: timeSig.den, playing: isPlayingMetro };
+  // 박 시각(METRO_CLICKS.grid)에 맞춰 매 프레임 각도 계산 — 리렌더 없이 DOM 직접
+  useEffect(() => {
+    let raf, lastB = -1, side = 1, ang = 0;
+    const A = 9;   // 최대 흔들림 각도
+    const loop = () => {
+      const L = live.current, now = performance.now();
+      let target = 0;
+      if (L.playing) {
+        const g = METRO_CLICKS.grid; let tB = -1;
+        for (let i = g.length - 1; i >= 0; i--) if (g[i][1] && g[i][0] <= now) { tB = g[i][0]; break; }
+        if (tB > 0) {
+          if (tB !== lastB) { lastB = tB; side = -side; }
+          const per = 60000 / L.bpm * (4 / L.den);
+          const p = Math.min(1, (now - tB) / per);
+          target = side * A * Math.cos(Math.PI * p);
+        }
+        ang = target;
+      } else ang += (0 - ang) * 0.12;     // 멈추면 천천히 가운데로
+      if (armRef.current) armRef.current.setAttribute('transform', `rotate(${ang.toFixed(2)} 100 ${PEND_PIV})`);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  // 끌기 = 추 위치 / 톡 = 시작·정지
+  const st = useRef(null);
+  const toY = (e) => { const svg = svgRef.current; if (!svg) return 0; const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY; return pt.matrixTransform(svg.getScreenCTM().inverse()).y; };
+  const onDown = (e) => { st.current = { y: e.clientY, moved: false, last: bpm }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} };
+  const onMove = (e) => {
+    const s = st.current; if (!s) return;
+    if (!s.moved && Math.abs(e.clientY - s.y) < 8) return;
+    s.moved = true;
+    const v = Math.max(30, Math.min(250, pendBpm(toY(e))));
+    if (v !== s.last) { s.last = v; metro.setBpm(v); haptic(3); }
+  };
+  const onUp = () => { const s = st.current; st.current = null; if (s && !s.moved) metro.toggleMetronome(); };
+  const wy = pendY(bpm);
+  const n = beatSounds.length;
+  return (
+    <div className="relative w-full flex-1 min-h-0 flex flex-col items-center select-none" aria-label="진자 메트로놈 (추를 끌어 빠르기, 누르면 시작/정지)">
+      <span className="text-xs font-black tracking-widest shrink-0" style={{ color: 'var(--ink2)', fontFamily: 'Georgia,serif' }}>
+        {timeSig.num}/{timeSig.den} · <i>{getTempoMarking(bpm)}</i>
+      </span>
+      <svg ref={svgRef} viewBox="0 0 200 318" preserveAspectRatio="xMidYMid meet" className="w-full flex-1 min-h-0"
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { st.current = null; }}
+        style={{ touchAction: 'none', cursor: 'ns-resize' }}>
+        <defs>
+          <linearGradient id={uid + "Wood"} x1="0" x2="1">
+            <stop offset="0" stopColor="#2e1a0c"/><stop offset=".18" stopColor="#5b3519"/><stop offset=".5" stopColor="#6e4220"/><stop offset=".82" stopColor="#5b3519"/><stop offset="1" stopColor="#2e1a0c"/>
+          </linearGradient>
+          <linearGradient id={uid + "Cav"} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#120c08"/><stop offset="1" stopColor="#231710"/></linearGradient>
+          <linearGradient id={uid + "Scale"} x1="0" x2="1"><stop offset="0" stopColor="#d9ccaa"/><stop offset=".5" stopColor="#f3ead2"/><stop offset="1" stopColor="#d9ccaa"/></linearGradient>
+          <linearGradient id={uid + "Steel"} x1="0" x2="1"><stop offset="0" stopColor="#8a8a8a"/><stop offset=".5" stopColor="#e6e6e6"/><stop offset="1" stopColor="#8a8a8a"/></linearGradient>
+          <linearGradient id={uid + "Brass"} x1="0" x2="1"><stop offset="0" stopColor="#8a6a2a"/><stop offset=".45" stopColor="#f0d58a"/><stop offset="1" stopColor="#8a6a2a"/></linearGradient>
+          <clipPath id={uid + "Clip"}><polygon points="70,34 130,34 174,306 26,306"/></clipPath>
+        </defs>
+        {/* 나무 케이스 (위 뾰족 지붕 + 사다리꼴 몸통, 받침 없음) */}
+        <polygon points="100,2 120,22 80,22" fill={`url(#${uid}Wood)`} stroke="#1e1108" strokeWidth="1"/>
+        <polygon points="62,22 138,22 186,316 14,316" fill={`url(#${uid}Wood)`} stroke="#1e1108" strokeWidth="1.2"/>
+        <rect x="90" y="13" width="20" height="9" rx="1.5" fill={`url(#${uid}Steel)`}/>
+        {/* 안쪽 공간 — 박마다 은은하게 밝아짐 */}
+        <polygon points="70,34 130,34 174,306 26,306" fill={`url(#${uid}Cav)`}/>
+        <polygon points="70,34 130,34 174,306 26,306" fill={flashCol} opacity={f.fire ? (f.down ? 0.28 : 0.14) : 0}
+          style={{ transition: f.fire ? 'opacity 30ms' : 'opacity 300ms ease-out' }}/>
+        {/* 눈금 판 */}
+        <rect x="80" y="40" width="34" height="236" rx="2" fill={`url(#${uid}Scale)`}/>
+        {PEND_TICKS.map(t => { const y = pendY(t), lab = PEND_LABELS.includes(t); return (
+          <g key={t}>
+            <line x1={lab ? 103 : 106} x2="114" y1={y} y2={y} stroke="#5a3a1e" strokeWidth={lab ? 0.8 : 0.5}/>
+            {lab && <text x="96" y={y + 2.4} textAnchor="end" fontSize="7" fontWeight="700" fill="#3a2410" fontFamily="Georgia,serif">{t}</text>}
+          </g>); })}
+        {PEND_WORDS.map(([w, b]) => <text key={w} x="116" y={pendY(b) + 2} fontSize="6" fontStyle="italic" fill="#c9a77a" opacity=".75" fontFamily="Georgia,serif">{w}</text>)}
+        {/* 진자 막대 + 추 */}
+        <g clipPath={`url(#${uid}Clip)`}>
+          <g ref={armRef} transform={`rotate(0 100 ${PEND_PIV})`}>
+            <rect x="98.6" y="30" width="2.8" height={PEND_PIV - 30} fill={`url(#${uid}Steel)`}/>
+            <g style={{ filter: f.fire ? `drop-shadow(0 0 ${f.down ? 8 : 5}px ${flashCol})` : 'none', transition: f.fire ? 'filter 30ms' : 'filter 300ms ease-out' }}>
+              <polygon points={`86,${wy - 11} 114,${wy - 11} 119,${wy + 11} 81,${wy + 11}`} fill={`url(#${uid}Brass)`} stroke="#5a4318" strokeWidth=".8"/>
+              <text x="100" y={wy + 4.2} textAnchor="middle" fontSize="12.5" fontWeight="900" fill="#2a1a0e" fontFamily="Georgia,serif">{bpm}</text>
+            </g>
+          </g>
+        </g>
+        <circle cx="100" cy={PEND_PIV} r="5" fill={`url(#${uid}Brass)`} stroke="#5a4318" strokeWidth=".8"/>
+      </svg>
+      {/* 박 점: 지금 박 크게 · 첫 박 강조 */}
+      <div className="flex items-center justify-center gap-2.5 shrink-0 h-7">
+        {beatSounds.map((snd, i) => {
+          const on = isPlayingMetro && i === currentBeat, c = pal[snd] || pal[1];
+          const sz = snd === 2 ? 14 : 10;
+          return <span key={i} className="flex items-center gap-0.5">
+            <i className="rounded-full block" style={{ width: sz, height: sz, background: snd === 0 ? 'transparent' : c, border: snd === 0 ? '1.5px solid var(--ink2)' : 'none',
+              opacity: on ? 1 : 0.35, transform: `scale(${on ? 1.5 : 1})`, boxShadow: on ? `0 0 10px ${c}` : 'none', transition: 'transform 80ms, opacity 80ms' }}/>
+            {on && (beatSubdivisions[i] || 1) > 1 && Array.from({ length: beatSubdivisions[i] - 1 }, (_, j) => <i key={j} className="w-1 h-1 rounded-full block" style={{ background: 'var(--ink2)', opacity: (currentSub || 0) > j ? 1 : 0.3 }}/>)}
+          </span>;
+        })}
+      </div>
+      <span className="text-[10px] font-bold shrink-0" style={{ color: 'var(--ink2)', opacity: 0.6 }}>추를 위아래로 끌어 빠르기 · 누르면 {isPlayingMetro ? '정지' : '시작'}</span>
+    </div>
+  );
+};
+// 박 표시 블록: 클래식(우드) 디자인 = 진자 메트로놈, 디지털 = 큰 불빛
+const BeatShow = ({ metro }) => useVintage() ? <PendulumMetronome metro={metro}/> : <BeatLight metro={metro}/>;
+
 // ── 박자 · 템포 · 시작: 한 판에 세 칸 (간단하게) ──
 const MetroControls = ({ metro, withRec }) => {
   const vintage = useVintage(), skin = useSkin();
@@ -892,7 +1012,7 @@ const Metronome = ({ metro, tuner, openSettings }) => {
           {b.id === 'pitch' && tuner && <MainPitchMeter tuner={tuner}/>}
           {b.id === 'history' && tuner && <LivePitchGraph tuner={tuner}/>}
           {b.id === 'rec' && <RecModule size={b.size}/>}
-          {b.id === 'light' && <BeatLight metro={metro}/>}
+          {b.id === 'light' && <BeatShow metro={metro}/>}
           {b.id === 'ctrl' && <MetroControls metro={metro} withRec={!visibleBlocks('t2', layout).some(x => x.id === 'rec')}/>}
           {b.id === 'beats' && (
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">
