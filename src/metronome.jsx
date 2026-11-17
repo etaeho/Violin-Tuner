@@ -11,7 +11,14 @@ const useMetronomeLogic = () => {
   const [isPlayingMetro, setIsPlayingMetro] = useState(false);
   const [currentBeat, setCurrentBeat] = useState(0);
   const [timeSig, setTimeSig] = usePersistentState('metro.timeSig', { num:4, den:4 }, v => v?.num >= 1 && v.num <= 16 && [2,4,8,16].includes(v.den));
-  const [beatSounds, setBeatSounds] = usePersistentState('metro.beatSounds', [2,1,1,1], v => Array.isArray(v) && v.length >= 1);
+  const [beatSounds, setBeatSounds] = usePersistentState('metro.beatSounds', [1,1,1,1], v => Array.isArray(v) && v.length >= 1);
+  // 강박 없앰(사용자 요청): 예전 저장값의 강세(2)·중강(3)을 기본 소리(1)로 한 번 바꿈
+  useEffect(() => {
+    let done = false; try { done = localStorage.getItem('vt.metro.noAccent') === '1'; } catch (_) {}
+    if (done) return;
+    setBeatSounds(prev => prev.map(v => v === 2 || v === 3 ? 1 : v));
+    try { localStorage.setItem('vt.metro.noAccent', '1'); } catch (_) {}
+  }, []);
   const [beatSubdivisions, setBeatSubdivisions] = usePersistentState('metro.beatSubdivisions', [1,1,1,1], v => Array.isArray(v) && v.length >= 1);
   const [visualFlash, setVisualFlash] = useState(false);
   const [currentSub, setCurrentSub] = useState(0);     // 지금 박 안의 몇 번째 쪼갠 박인지 (다이얼·네모 칸 표시용)
@@ -60,7 +67,7 @@ const useMetronomeLogic = () => {
   const changeNumerator = (delta) => {
     setTimeSig(prev => {
       const nextNum=Math.max(1,Math.min(16,prev.num+delta));
-      setBeatSounds(getDefaultBeatSounds(nextNum));
+      setBeatSounds(Array(nextNum).fill(1));   // 강박 없음
       setBeatSubdivisions(prevSub => {
         const nextSub=[...prevSub];
         if (nextNum>nextSub.length) for (let i=nextSub.length;i<nextNum;i++) nextSub.push(1);
@@ -96,11 +103,11 @@ const useMetronomeLogic = () => {
     restartMetroIfNeeded(); haptic(12);
   };
 
-  // 박 원 톡: 기본 소리(강약은 박 위치대로) → 다른 소리(4) → 소리 없음(0) → 기본
+  // 박 원 톡: 기본 소리(1) → 다른 소리(4) → 소리 없음(0) → 기본 (강박 없음)
   const cycleBeatTone = (index) => {
     setBeatSounds(prev => {
-      const next = [...prev], cur = next[index], base = getDefaultBeatSounds(prev.length)[index] || 1;
-      next[index] = cur === 0 ? base : cur === 4 ? 0 : 4;
+      const next = [...prev], cur = next[index];
+      next[index] = cur === 0 ? 1 : cur === 4 ? 0 : 4;
       return next;
     });
     haptic(8);
@@ -722,7 +729,7 @@ const BeatRow = ({ metro }) => {
   const firstRef = useRef(true);
   useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const ink = vintage ? k.label : 'var(--ink)';
-  // 색 3개 = 소리 3가지 (톡 눌러 바꿈): 기본 소리 A · 다른 소리 B(4) · 소리 없음(0). 강박·약박은 색이 같고 '크기'로만 (박 위치대로 강 100% · 중강 90% · 약 80%)
+  // 색 3개 = 소리 3가지 (톡 눌러 바꿈): 기본 소리 A · 다른 소리 B(4) · 소리 없음(0). 강박 없음 (모두 같은 색 · 같은 크기 · 같은 소리)
   //  진하고 형광 — 검정: 일렉트릭 블루 · 로열 블루 / 흰색: 형광 그린 · 로열 블루 / 클래식: 로열 블루 · 일렉트릭 블루
   const light = useTheme() === 'light';
   const TONE = vintage ? { a: '#2962ff', b: '#00b0ff', off: '#4a3c2c' }
@@ -730,8 +737,7 @@ const BeatRow = ({ metro }) => {
     : { a: '#00b0ff', b: '#2962ff', off: '#3a3f4b' };
   const idleFilter = light ? 'brightness(.92)' : 'brightness(.78)';   // 쉬는 원도 형광이 살아 있게 살짝만 어둡게
   const beatColor = (snd) => snd === 0 ? TONE.off : snd === 4 ? TONE.b : TONE.a;
-  const posSnd = getDefaultBeatSounds(beatSounds.length);
-  const beatScale = (i) => posSnd[i] === 2 ? 1 : posSnd[i] === 3 ? 0.9 : 0.8;
+  const beatScale = () => 1;   // 강박 없음 → 모두 같은 크기
   const n = beatSounds.length, gap = 14;
   // 칸 크기에 맞춰 줄 수를 골라 원을 크게 (최대 크기의 2/3)
   const W = box.w - 64, H = box.h - 24;
@@ -805,7 +811,7 @@ const BeatRow = ({ metro }) => {
           return (
             <div key={i} ref={el => { circleRefs.current[i] = el; }} className="relative rounded-full" style={{ width: S, height: S, background: nsub > 1 ? 'transparent' : c,
               border: `4px solid ${on && nsub === 1 ? ink : 'transparent'}`, opacity: 1, filter: on || (menu && menu.i === i) ? 'none' : idleFilter,
-              transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${k0 === 1 ? 56 : 36}px ${c}, 0 0 ${k0 === 1 ? 18 : 10}px ${c}` : 'none',
+              transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 46px ${c}, 0 0 14px ${c}` : 'none',
               transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, filter 150ms' }}>
               {/* 쪼갠 박 = 원을 틈을 두고 나눈 조각 (2 = 반원 · 3 = 세 조각 · 4 = 네 조각). 재생 중엔 지금 조각만 밝게 빛남 */}
               {nsub > 1 && (() => {
