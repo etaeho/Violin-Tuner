@@ -91,6 +91,11 @@ const useMetronomeLogic = () => {
     restartMetroIfNeeded(); haptic(8);
   };
 
+  const setBeatSubdivision = (index, v) => {   // 박 하나를 v개로 쪼갬 (1~4) — 박 원 꾹 누르기 메뉴
+    setBeatSubdivisions(prev => { if (prev[index] === v) return prev; const next = [...prev]; next[index] = v; return next; });
+    restartMetroIfNeeded(); haptic(12);
+  };
+
   const toggleBeatSound = (index) => {
     setBeatSounds(prev => {
       const next=[...prev];
@@ -228,7 +233,7 @@ const useMetronomeLogic = () => {
 
   return {
     bpm, setBpm, isPlayingMetro, currentBeat, currentSub, timeSig, beatSounds, beatSubdivisions, visualFlash,
-    toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, toggleBeatSound,
+    toggleMetronome, changeNumerator, changeDenominator, toggleBeatSubdivision, setBeatSubdivision, toggleBeatSound,
     handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome,
     getMetroCtx: () => { initMetroAudioContext(); return metroAudioCtxRef.current; },   // 녹음 믹스용
     // 딸깍 한 번 (메트로놈 재생과 별개, 지금은 안 씀 — 예전 녹음 카운트인용). when = AudioContext 시각
@@ -686,59 +691,131 @@ const DragHint = ({ color }) => <span className="block text-center text-[9px] fo
 
 // 밝기(0~1) — 밝은 바탕이면 진한 글자로
 const lum = (hex) => { const m = /^#([0-9a-f]{6})/i.exec(hex || ''); if (!m) return 0; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
-// ── 박 원: 박 수만큼 큰 원, 지금 박이 박 색으로 켜짐 (칸에 맞춰 가장 크게 — 필요하면 두 줄) ──
-//  끌면 빠르기 · 톡 누르면 시작/정지. 박마다 바뀌는 건 transform·그림자만 (흔들림 없게)
+// ── 박 원: 박 수만큼 큰 원, 지금 박이 박 색으로 켜짐 (칸에 맞춰 크게 — 필요하면 두 줄) ──
+//  위아래로 끌면 빠르기 · 톡 누르면 시작/정지 · 원 하나를 꾹 누르면 둘레에 음표(♩ ♫ 셋잇단 ♬)가 펼쳐짐 → 밀어서 놓으면 그 박을 쪼갬
+//  쪼갠 박은 원 안 조각(2·3·4)으로 보이고, 재생 중엔 조각이 차례로 켜짐. 박마다 바뀌는 건 transform·그림자·투명도만 (흔들림 없게)
+const SUB_OPTS = [[1, 180], [2, 270], [3, 0], [4, 90]];   // [쪼갬 수, 각도(도, 0 = 오른쪽, 시계 방향)] — 왼쪽 ♩ · 위 ♫ · 오른쪽 셋잇단 · 아래 ♬
+const pieSlice = (r, j, nsub) => {
+  const a0 = (-90 + j * 360 / nsub) * Math.PI / 180, a1 = (-90 + (j + 1) * 360 / nsub) * Math.PI / 180;
+  return `M ${r} ${r} L ${r + r * Math.cos(a0)} ${r + r * Math.sin(a0)} A ${r} ${r} 0 ${360 / nsub > 180 ? 1 : 0} 1 ${r + r * Math.cos(a1)} ${r + r * Math.sin(a1)} Z`;
+};
 const BeatRow = ({ metro }) => {
   const vintage = useVintage(), k = useSkin();
-  const { bpm, isPlayingMetro, currentBeat, beatSounds, beatSubdivisions, visualFlash, currentSub, timeSig } = metro;
+  const { bpm, isPlayingMetro, currentBeat, beatSounds, beatSubdivisions, visualFlash, currentSub } = metro;
   const drag = useBpmDrag(metro, () => { metro.toggleMetronome(); }, true);
   const ref = useRef(null); const [box, setBox] = useState({ w: 330, h: 260 });
   useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight })); ro.observe(el); return () => ro.disconnect(); }, []);
   const [showBig, setShowBig] = useState(false);
   const firstRef = useRef(true);
   useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
-  const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
-  const L = vintage ? k.lamp : null;
-  const ink = vintage ? k.label : 'var(--ink)', dim = vintage ? k.unit : '#6b7280';
+  const ink = vintage ? k.label : 'var(--ink)';
   // 색 3개 = 소리 3가지: 강세 소리(밝은 초록) · 보통 소리(청록) · 소리 없음(회색). 세기는 크기로 (강 100% · 중강 90% · 약 80%)
   const TONES = vintage ? { 2: '#f6dd94', 3: '#f6dd94', 1: '#b9853f', 0: '#6b5a44' } : { 2: '#4afc9d', 3: '#4afc9d', 1: '#2dd4bf', 0: '#52525b' };
   const beatColor = (snd) => TONES[snd] || TONES[1];
   const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
-  const n = beatSounds.length, gap = 14, hasSub = beatSubdivisions.some(s => s > 1);
-  // 칸 크기에 맞춰 줄 수를 골라 원을 가장 크게
-  const W = box.w - 64, H = box.h - 24 - (hasSub ? 14 : 0);
+  const n = beatSounds.length, gap = 14;
+  // 칸 크기에 맞춰 줄 수를 골라 원을 크게 (최대 크기의 2/3)
+  const W = box.w - 64, H = box.h - 24;
   let best = { size: 0, cols: n };
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
     const size = Math.min((W - (cols - 1) * gap * 1.5) / cols, (H - (rows - 1) * gap * 1.5) / rows, 170);
     if (size > best.size + 0.5) best = { size, cols };
   }
-  const S = Math.max(24, Math.floor(best.size * 2 / 3));   // 칸에 맞는 최대 크기의 2/3
+  const S = Math.max(24, Math.floor(best.size * 2 / 3));
+  // ── 꾹 누르기 → 음표 메뉴 ──
+  const circleRefs = useRef([]);
+  const lp = useRef({ timer: null, open: false, x0: 0, y0: 0, hover: null });
+  const [menu, setMenu] = useState(null);           // { i, cx, cy } (칸 기준 px)
+  const [hover, setHover] = useState(null);
+  const OPT_R = Math.max(S * 0.5 + 40, 76), OPT_SZ = 56;
+  const hitBeat = (e) => circleRefs.current.findIndex(el => { if (!el) return false; const r = el.getBoundingClientRect(); const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2); return Math.hypot(dx, dy) <= r.width / 2 + 6; });
+  const closeMenu = () => { clearTimeout(lp.current.timer); lp.current.open = false; lp.current.hover = null; setMenu(null); setHover(null); };
+  const handlers = {
+    onPointerDown: (e) => {
+      drag.onPointerDown(e);
+      const L0 = lp.current; clearTimeout(L0.timer); L0.x0 = e.clientX; L0.y0 = e.clientY;
+      const i = hitBeat(e); if (i < 0) return;
+      L0.timer = setTimeout(() => {
+        const el = circleRefs.current[i], box0 = ref.current; if (!el || !box0) return;
+        const r = el.getBoundingClientRect(), b = box0.getBoundingClientRect();
+        L0.open = true; L0.hover = null;
+        setMenu({ i, cx: r.left + r.width / 2 - b.left, cy: r.top + r.height / 2 - b.top }); setHover(null); haptic(18);
+      }, 420);
+    },
+    onPointerMove: (e) => {
+      const L0 = lp.current;
+      if (L0.open && menu) {
+        const b = ref.current.getBoundingClientRect();
+        const dx = e.clientX - b.left - menu.cx, dy = e.clientY - b.top - menu.cy;
+        let h = null;
+        if (Math.hypot(dx, dy) > S * 0.3) {
+          const ang = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+          h = SUB_OPTS.reduce((acc, [v, a]) => { const d = Math.min(Math.abs(ang - a), 360 - Math.abs(ang - a)); return d < acc.d ? { v, d } : acc; }, { v: null, d: 999 }).v;
+        }
+        if (h !== L0.hover) { L0.hover = h; setHover(h); if (h) haptic(6); }
+        return;
+      }
+      if (Math.hypot(e.clientX - L0.x0, e.clientY - L0.y0) > 8) clearTimeout(L0.timer);
+      drag.onPointerMove(e);
+    },
+    onPointerUp: (e) => {
+      const L0 = lp.current; clearTimeout(L0.timer);
+      if (L0.open) { if (menu && L0.hover) metro.setBeatSubdivision(menu.i, L0.hover); drag.onPointerCancel(); closeMenu(); return; }
+      drag.onPointerUp(e);
+    },
+    onPointerCancel: () => { drag.onPointerCancel(); closeMenu(); },
+  };
+  const panelBg = vintage ? (k.frame.background || '#3a2410') : 'var(--panel-bg)';
   return (
-    <div ref={ref} {...drag} className={`relative w-full flex-1 min-h-0 rounded-[28px] flex flex-col items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
-      style={{ ...drag.style, cursor: 'pointer', ...(vintage ? k.frame : {}) }} aria-label="박 원 (끌어서 빠르기, 누르면 시작/정지)">
+    <div ref={ref} {...handlers} className={`relative w-full flex-1 min-h-0 rounded-[28px] flex flex-col items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
+      style={{ ...drag.style, cursor: 'pointer', ...(vintage ? k.frame : {}) }} aria-label="박 원 (위아래로 끌어 빠르기, 누르면 시작/정지, 원을 꾹 누르면 박 나누기)">
       {/* 위아래로 끌면 빠르기 — 작은 화살표만 */}
       <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 pointer-events-none" style={{ color: ink, opacity: 0.35 }}>
         <ChevronUp size={18} strokeWidth={3}/><i className="w-0.5 h-5 rounded-full" style={{ background: 'currentColor' }}/><ChevronDown size={18} strokeWidth={3}/>
       </div>
       {/* 끄는 동안만 큰 BPM */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10" style={{ opacity: showBig ? 1 : 0, transition: showBig ? 'opacity 80ms' : 'opacity 400ms ease-out' }}>
-        <span className="font-black leading-none px-6 py-3 rounded-3xl" style={{ fontSize: Math.min(box.w * 0.32, 120), color: ink, background: vintage ? (k.frame.background || '#3a2410') : 'var(--panel-bg)', boxShadow: '0 10px 40px rgba(0,0,0,.35)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
+        <span className="font-black leading-none px-6 py-3 rounded-3xl" style={{ fontSize: Math.min(box.w * 0.32, 120), color: ink, background: panelBg, boxShadow: '0 10px 40px rgba(0,0,0,.35)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
       </div>
       <div className="flex flex-wrap justify-center pointer-events-none" style={{ gap: gap * 1.5, width: best.cols * S + (best.cols - 1) * gap * 1.5 }}>
         {beatSounds.map((snd, i) => {
           const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd), k0 = beatScale(snd), nsub = beatSubdivisions[i] || 1;
+          const r = S / 2, sub = on ? (currentSub || 0) : -1;
           return (
-            <div key={i} className="flex flex-col items-center gap-1" style={{ width: S }}>
-              <div className="rounded-full flex items-center justify-center font-black" style={{ width: S, height: S, background: c,
-                border: `4px solid ${on ? ink : 'transparent'}`, opacity: on ? 1 : 0.3,
-                transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none', color: vintage ? '#1a0f05' : '#000', fontSize: S * 0.5, lineHeight: 1,
-                transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}/>
-              {hasSub && <div className="flex gap-1 h-2">{nsub > 1 && Array.from({ length: nsub }, (_, j) => <i key={j} className="rounded-full" style={{ width: 7, height: 7, background: ink, opacity: on && (currentSub || 0) === j ? 1 : 0.25 }}/>)}</div>}
+            <div key={i} ref={el => { circleRefs.current[i] = el; }} className="relative rounded-full" style={{ width: S, height: S, background: c,
+              border: `4px solid ${on ? ink : 'transparent'}`, opacity: on ? 1 : menu && menu.i === i ? 0.9 : 0.3,
+              transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none',
+              transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>
+              {/* 쪼갠 박 = 원 안 조각. 재생 중엔 지금 조각만 밝게 */}
+              {nsub > 1 && (
+                <svg viewBox={`0 0 ${S} ${S}`} className="absolute pointer-events-none" style={{ inset: -4, width: S, height: S }}>
+                  {on && Array.from({ length: nsub }, (_, j) => <path key={'s' + j} d={pieSlice(r, j, nsub)} fill={j === sub ? '#fff' : '#000'} opacity={j === sub ? 0.38 : 0.28}/>)}
+                  {Array.from({ length: nsub }, (_, j) => { const a = (-90 + j * 360 / nsub) * Math.PI / 180; return <line key={j} x1={r} y1={r} x2={r + r * Math.cos(a)} y2={r + r * Math.sin(a)} stroke={vintage ? '#1a0f05' : '#000'} strokeWidth={Math.max(2, S * 0.035)} strokeLinecap="round" opacity=".7"/>; })}
+                  <circle cx={r} cy={r} r={Math.max(2.5, S * 0.04)} fill={vintage ? '#1a0f05' : '#000'} opacity=".7"/>
+                </svg>
+              )}
             </div>
           );
         })}
       </div>
+      {/* 꾹 누른 박: 둘레에 음표 4개 (밀어서 놓으면 선택, 가운데서 놓으면 취소) */}
+      {menu && (
+        <div className="absolute inset-0 z-20 pointer-events-none rounded-[28px]" style={{ background: 'rgba(0,0,0,.45)' }}>
+          {SUB_OPTS.map(([v, a]) => {
+            const rad = a * Math.PI / 180, x = menu.cx + Math.cos(rad) * OPT_R, y = menu.cy + Math.sin(rad) * OPT_R;
+            const cur = (beatSubdivisions[menu.i] || 1) === v, hv = hover === v;
+            return (
+              <div key={v} className="absolute rounded-full flex items-center justify-center" style={{ left: x - OPT_SZ / 2, top: y - OPT_SZ / 2, width: OPT_SZ, height: OPT_SZ,
+                background: hv ? beatColor(beatSounds[menu.i]) : panelBg, color: hv ? '#000' : ink,
+                border: `2px solid ${cur ? beatColor(beatSounds[menu.i]) : 'rgba(255,255,255,.15)'}`, boxShadow: '0 6px 18px rgba(0,0,0,.45)',
+                transform: `scale(${hv ? 1.22 : 1})`, transition: 'transform 90ms, background 90ms' }}>
+                {renderSubdivisionIcon(v, 'h-8 w-auto')}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };
