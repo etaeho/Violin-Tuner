@@ -693,6 +693,9 @@ const BeatRow = ({ metro }) => {
   const drag = useBpmDrag(metro, () => { metro.toggleMetronome(); });
   const ref = useRef(null); const [box, setBox] = useState({ w: 330, h: 260 });
   useEffect(() => { const el = ref.current; if (!el) return; const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight })); ro.observe(el); return () => ro.disconnect(); }, []);
+  const [showBig, setShowBig] = useState(false);
+  const firstRef = useRef(true);
+  useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const pal = vintage ? METRO_PALETTE.vintage : METRO_PALETTE.tape;
   const L = vintage ? k.lamp : null;
   const ink = vintage ? k.label : 'var(--ink)', dim = vintage ? k.unit : '#6b7280';
@@ -702,7 +705,7 @@ const BeatRow = ({ metro }) => {
   const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14, hasSub = beatSubdivisions.some(s => s > 1);
   // 칸 크기에 맞춰 줄 수를 골라 원을 가장 크게
-  const W = box.w - 24, H = box.h - 44 - (hasSub ? 14 : 0);
+  const W = box.w - 64, H = box.h - 24 - (hasSub ? 14 : 0);
   let best = { size: 0, cols: n };
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
@@ -713,11 +716,15 @@ const BeatRow = ({ metro }) => {
   return (
     <div ref={ref} {...drag} className={`relative w-full flex-1 min-h-0 rounded-[28px] flex flex-col items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
       style={{ ...drag.style, cursor: 'pointer', ...(vintage ? k.frame : {}) }} aria-label="박 원 (끌어서 빠르기, 누르면 시작/정지)">
-      <span className="absolute top-2.5 left-4 text-[11px] font-black tracking-wider pointer-events-none" style={{ color: ink, opacity: 0.7, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-        {bpm} BPM · {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm)}
-      </span>
-      <span className="absolute top-2.5 right-4 text-[10px] font-bold pointer-events-none" style={{ color: ink, opacity: 0.45 }}>끌기 = 빠르기 · 누르면 {isPlayingMetro ? '정지' : '시작'}</span>
-      <div className="flex flex-wrap justify-center pointer-events-none mt-5" style={{ gap: gap * 1.5, width: best.cols * S + (best.cols - 1) * gap * 1.5 }}>
+      {/* 위아래로 끌면 빠르기 — 작은 화살표만 */}
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 pointer-events-none" style={{ color: ink, opacity: 0.35 }}>
+        <ChevronUp size={18} strokeWidth={3}/><i className="w-0.5 h-5 rounded-full" style={{ background: 'currentColor' }}/><ChevronDown size={18} strokeWidth={3}/>
+      </div>
+      {/* 끄는 동안만 큰 BPM */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10" style={{ opacity: showBig ? 1 : 0, transition: showBig ? 'opacity 80ms' : 'opacity 400ms ease-out' }}>
+        <span className="font-black leading-none px-6 py-3 rounded-3xl" style={{ fontSize: Math.min(box.w * 0.32, 120), color: ink, background: vintage ? (k.frame.background || '#3a2410') : 'var(--panel-bg)', boxShadow: '0 10px 40px rgba(0,0,0,.35)', fontFamily: vintage ? 'Georgia,serif' : undefined }}>{bpm}</span>
+      </div>
+      <div className="flex flex-wrap justify-center pointer-events-none" style={{ gap: gap * 1.5, width: best.cols * S + (best.cols - 1) * gap * 1.5 }}>
         {beatSounds.map((snd, i) => {
           const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd), k0 = beatScale(snd), nsub = beatSubdivisions[i] || 1;
           return (
@@ -761,7 +768,7 @@ const MetroControls = ({ metro, withRec }) => {
           </button>;
           return c ? <>{sig}<div className="flex items-center gap-1">{minus}{plus}</div></> : <div className="flex items-center gap-1">{minus}{sig}{plus}</div>;
         })()}
-        {!c && <span className="text-[9px] font-bold" style={{ color: lab }}>/숫자 누르면 바뀜</span>}
+        {!c && <span className="h-5" aria-hidden="true"/>}
       </div>
       <span className="w-px self-stretch" style={{ background: 'var(--chip-border)' }}/>
       {/* 템포 */}
@@ -772,7 +779,7 @@ const MetroControls = ({ metro, withRec }) => {
           <span {...drag} className="font-black leading-none font-mono px-1" style={{ ...drag.style, fontSize: c ? 30 : 34, color: vintage ? skin.label : ink, fontFamily: vintage ? 'Georgia,serif' : undefined }} aria-label="끌어서 빠르기">{bpm}</span>
           <button {...btn({ ...press(1), 'aria-label': 'BPM 올리기', style: { ...press(1).style, ...(knob || {}) } })}><Plus size={c ? 12 : 14} className="pointer-events-none" style={{ color: knob ? knob.color : '#9ca3af' }}/></button>
         </div>
-        <button onClick={tapTempo} className="text-[10px] font-black px-2.5 py-0.5 rounded-full t-chip" style={{ color: vintage ? skin.label : 'var(--ink2)' }}>{c ? 'TAP' : 'TAP 두드려서'}</button>
+        <button onClick={tapTempo} className="text-[10px] font-black px-2.5 py-0.5 rounded-full t-chip" style={{ color: vintage ? skin.label : 'var(--ink2)' }}>TAP</button>
       </div>
       <span className="w-px self-stretch" style={{ background: 'var(--chip-border)' }}/>
       {/* 시작 */}
