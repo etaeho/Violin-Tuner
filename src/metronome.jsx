@@ -705,10 +705,10 @@ const BeatRow = ({ metro }) => {
   let best = { size: 0, cols: n };
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
-    const size = Math.min((W - (cols - 1) * gap) / cols, (H - (rows - 1) * gap) / rows, 170);
+    const size = Math.min((W - (cols - 1) * gap * 1.5) / cols, (H - (rows - 1) * gap * 1.5) / rows, 170);
     if (size > best.size + 0.5) best = { size, cols };
   }
-  const S = Math.max(28, Math.floor(best.size));
+  const S = Math.max(24, Math.floor(best.size * 2 / 3));   // 칸에 맞는 최대 크기의 2/3
   return (
     <div ref={ref} {...drag} className={`relative w-full flex-1 min-h-0 rounded-[28px] flex flex-col items-center justify-center select-none ${vintage ? '' : 't-panel'}`}
       style={{ ...drag.style, cursor: 'pointer', ...(vintage ? k.frame : {}) }} aria-label="박 원 (끌어서 빠르기, 누르면 시작/정지)">
@@ -716,16 +716,15 @@ const BeatRow = ({ metro }) => {
         {bpm} BPM · {timeSig.num}/{timeSig.den} · {getTempoMarking(bpm)}
       </span>
       <span className="absolute top-2.5 right-4 text-[10px] font-bold pointer-events-none" style={{ color: ink, opacity: 0.45 }}>끌기 = 빠르기 · 누르면 {isPlayingMetro ? '정지' : '시작'}</span>
-      <div className="flex flex-wrap justify-center pointer-events-none mt-5" style={{ gap, width: best.cols * S + (best.cols - 1) * gap }}>
+      <div className="flex flex-wrap justify-center pointer-events-none mt-5" style={{ gap: gap * 1.5, width: best.cols * S + (best.cols - 1) * gap * 1.5 }}>
         {beatSounds.map((snd, i) => {
           const on = isPlayingMetro && i === currentBeat, fire = on && visualFlash === 'main', c = beatColor(snd, on), nsub = beatSubdivisions[i] || 1;
           return (
             <div key={i} className="flex flex-col items-center gap-1" style={{ width: S }}>
               <div className="rounded-full flex items-center justify-center font-black" style={{ width: S, height: S, background: c,
                 border: snd === 0 ? `3px dashed ${dim}` : `4px solid ${on ? ink : 'transparent'}`, opacity: snd === 0 ? 0.4 : on ? 1 : vintage ? 0.7 : 0.28,
-                transform: `scale(${fire ? 1.08 : 1})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none', color: vintage ? '#1a0f05' : '#000', fontSize: S * 0.42,
-                fontFamily: vintage ? 'Georgia,serif' : 'ui-monospace,monospace',
-                transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>{i + 1}</div>
+                transform: `scale(${fire ? 1.08 : 1})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none', color: vintage ? '#1a0f05' : '#000', fontSize: S * 0.5, lineHeight: 1,
+                transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>{snd === 2 ? <span style={{ transform: 'scaleX(1.5)', display: 'inline-block', opacity: 0.75 }}>&gt;</span> : null}</div>
               {hasSub && <div className="flex gap-1 h-2">{nsub > 1 && Array.from({ length: nsub }, (_, j) => <i key={j} className="rounded-full" style={{ width: 7, height: 7, background: ink, opacity: on && (currentSub || 0) === j ? 1 : 0.25 }}/>)}</div>}
             </div>
           );
