@@ -156,14 +156,14 @@ const LAYOUT_BLOCKS = {
     { id: 'history', name: '음정 그래프 + 큰 음이름', short: '음정 그래프', group: '음정' },
     { id: 'tape',    name: '가로 음 벨트',    short: '가로 벨트', group: '음정' },
     { id: 'mini',    name: '미니 메트로놈',   short: '미니 메트로놈', group: '템포' },
-    { id: 'light',   name: '박 조명 (큰 불빛)', short: '박 조명', group: '템포', grow: true },
+    { id: 'light',   name: '박 원 (박마다 켜짐, 크게)', short: '박 원', group: '템포', grow: true },
     { id: 'ctrl',    name: '박자 · 템포 · 시작 · 녹음', short: '박자·템포·시작', group: '템포' },
     { id: 'rec',     name: '녹음 버튼',       short: '녹음',        group: '녹음', sizes: ['s', 'l'], noZoom: true },
   ],
   t2: [
     { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
     { id: 'history',  name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정' },
-    { id: 'light',    name: '박 조명 (화면 크게 번쩍)', short: '박 조명',   group: '템포', grow: true },
+    { id: 'light',    name: '박 원 (박마다 켜짐, 크게)', short: '박 원',   group: '템포', grow: true },
     { id: 'ctrl',     name: '박자 · 템포 · 시작 · 녹음',       short: '박자·템포·시작', group: '템포', lock: true },
     { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '템포' },
     { id: 'boxes',    name: '박자 네모 칸 원',  short: '네모 칸 원',  group: '템포', grow: true },
@@ -174,7 +174,7 @@ const LAYOUT_BLOCKS = {
 const LAYOUT_GROUPS = { '음정': '#4afc9d', '템포': '#ffcc00', '녹음': '#ef4444' };
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
-  { id: 'practice',   name: '연습 한 화면 (벨트 · 그래프 · 박 조명)', on: ['tape', 'history', 'light', 'ctrl'] },
+  { id: 'practice',   name: '연습 한 화면 (벨트 · 그래프 · 박 원)', on: ['tape', 'history', 'light', 'ctrl'] },
   { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'meter', 'mini'] },
   { id: 'tapeTempo',  name: '가로 테이프 + 템포', on: ['history', 'tape', 'mini'] },
   { id: 'tape',       name: '가로 테이프', on: ['history', 'tape'] },
