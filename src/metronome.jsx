@@ -865,7 +865,7 @@ const MetroControls = ({ metro, withRec, scale = 1 }) => {   // scale: 판 전�
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
   const knob = vintage ? skin.knob : null;
   const c = !!recorder;   // 녹음 칸이 붙으면 4칸 → 조금씩 줄임
-  const btn = (extra) => ({ className: `${c ? 'w-7 h-7' : 'w-9 h-9'} rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`, ...extra });
+  const btn = (extra) => ({ className: `${c ? 'w-9 h-9' : 'w-11 h-11'} rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`, ...extra });
   const ink = 'var(--ink)', lab = vintage ? (lum(skin.dial.sub) < 0.4 && lum(skin.label) > 0.5 ? skin.label : skin.dial.sub) : '#6b7280';
   const Label = ({ c, children }) => <span className={`${scale < 1 ? 'text-[9px]' : 'text-[10px]'} font-black tracking-widest flex items-center gap-1`} style={{ color: c || lab }}>{children}</span>;
   return (
@@ -875,8 +875,11 @@ const MetroControls = ({ metro, withRec, scale = 1 }) => {   // scale: 판 전�
         {(() => {
           const minus = <button {...btn({ onClick: () => changeNumerator(-1), 'aria-label': '박 수 줄이기', style: knob || undefined })}><Minus size={c ? 12 : 14} style={{ color: knob ? knob.color : '#9ca3af' }}/></button>;
           const plus = <button {...btn({ onClick: () => changeNumerator(1), 'aria-label': '박 수 늘리기', style: knob || undefined })}><Plus size={c ? 12 : 14} style={{ color: knob ? knob.color : '#9ca3af' }}/></button>;
-          const sig = <button onClick={() => changeDenominator(1)} aria-label="박자표 바꾸기" className="flex items-baseline font-black leading-none px-1" style={{ color: vintage ? skin.label : ink, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-            <span className="text-2xl">{timeSig.num}</span><span className="text-sm opacity-60">/{timeSig.den}</span>
+          // 4/4 칸: 손가락이 닿기 쉽게 넓고 높게 (누르면 아래 숫자 4→8→2), 살짝 칸 표시
+          const sig = <button onClick={() => changeDenominator(1)} aria-label="박자표 바꾸기"
+            className={`flex items-baseline justify-center font-black leading-none rounded-2xl active:scale-95 ${c ? 'min-w-[60px] h-11 px-2' : 'min-w-[68px] h-14 px-3'}`}
+            style={{ color: vintage ? skin.label : ink, fontFamily: vintage ? 'Georgia,serif' : undefined, background: vintage ? 'rgba(0,0,0,.18)' : 'rgba(128,128,128,.10)', alignItems: 'center' }}>
+            <span className={c ? 'text-[28px]' : 'text-[32px]'}>{timeSig.num}</span><span className={c ? 'text-base opacity-60' : 'text-lg opacity-60'}>/{timeSig.den}</span>
           </button>;
           return c ? <>{sig}<div className="flex items-center gap-1">{minus}{plus}</div></> : <div className="flex items-center gap-1">{minus}{sig}{plus}</div>;
         })()}
