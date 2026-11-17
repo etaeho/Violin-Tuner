@@ -251,6 +251,21 @@ const DEFAULT_SETTINGS = {
   cmdWindowMs: 3000, // 패턴을 이 시간 안에 연주해야 인정
 };
 const SETTINGS_KEY = 'vt.tunerSettings.v1';
+// 앱 설정 초기화 (사용자 요청: 예전 내 설정 말고 지금 개발한 기본값으로) — APP_RESET_REV를 올리면 업데이트 후 첫 실행에 한 번 실행
+//  지우는 것: 설정 시트 값 · 화면 배치 · 디자인 · 메트로놈(빠르기·박자·박 소리·박 나누기) · A4 · 허용 범위 · 지판 조표 · 드론
+//  남기는 것: 연습 기록(vt.log.*) · 히트맵(vt.fb.heat) · 녹음(IndexedDB) · 첫 실행 안내 완료 여부
+const APP_RESET_REV = 1;
+(() => {
+  try {
+    if (Number(localStorage.getItem('vt.resetRev') || 0) >= APP_RESET_REV) return;
+    let onboarded = false;
+    try { onboarded = !!JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').onboarded; } catch (_) {}
+    const drop = Object.keys(localStorage).filter(k => k === SETTINGS_KEY || /^vt\.(metro\.|a4Freq$|tolerance$|fb\.key$|drone)/.test(k));
+    drop.forEach(k => localStorage.removeItem(k));
+    if (onboarded) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onboarded: true, layoutRev: 14 }));
+    localStorage.setItem('vt.resetRev', String(APP_RESET_REV));
+  } catch (_) {}
+})();
 const loadSettings = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');

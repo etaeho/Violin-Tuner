@@ -49,6 +49,7 @@
   `https://appassets.androidplatform.net/index.html` 로 띄움. 마이크 권한(RECORD_AUDIO)을 WebView에 연결.
 - `docs/` — 기획·조사 문서. `research.md`(타 앱 장단점 조사), `drone-mode-plan.md`(드론 모드 구성안), `practice-log-plan.md`(연습 기록 구상안), `redesign-v2.md`(전면 재구성안)
 - **사용자가 바꾸는 값은 다음 실행 때 유지돼야 함**: 설정 시트 값은 `DEFAULT_SETTINGS`(core.jsx), 그 외 상태(템포·A4·조표 등)는 `usePersistentState('키', 기본값, 검증함수)` 사용 (localStorage `vt.` 접두사). 직접 저장할 땐 `vtSave(키, 값)` — 백업 가져오기 중엔 `VT_STORAGE.locked`로 막힘
+- **설정 한 번 초기화** `APP_RESET_REV`(core.jsx): 올리면 업데이트 후 첫 실행에 설정 시트·화면 배치·디자인·메트로놈·A4·허용 범위·지판 조표·드론 값을 지우고 지금 기본값으로 (연습 기록·히트맵·녹음·첫 실행 안내 완료는 남김). 지금 1
 - 백업: 설정 → 백업 (`vt.*` 전부 JSON). 안드로이드는 `VTNative.saveFile` + 파일 선택 창(MainActivity)
 - `Verson_*`, `verson_*`, `tuner_tab_*`, `tempo_tab_*` — 예전 버전 백업. 수정하지 말 것.
 
