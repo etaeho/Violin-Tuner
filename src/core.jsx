@@ -156,17 +156,15 @@ const LAYOUT_BLOCKS = {
     { id: 'history', name: '음정 그래프 + 큰 음이름', short: '음정 그래프', group: '음정', grow: true },   // 박 원과 남는 공간을 반씩
     { id: 'tape',    name: '가로 음 벨트',    short: '가로 벨트', group: '음정' },
     { id: 'mini',    name: '미니 메트로놈',   short: '미니 메트로놈', group: '템포' },
-    { id: 'beatpanel', name: '박 원 + 박자 · 템포 · 시작 (한 판)', short: '박 원 한 판', group: '템포', grow: true },
     { id: 'light',   name: '박 원 (박마다 켜짐, 크게)', short: '박 원', group: '템포', grow: true },
     { id: 'ctrl',    name: '박자 · 템포 · 시작 · 녹음', short: '박자·템포·시작', group: '템포' },
     { id: 'rec',     name: '녹음 버튼',       short: '녹음',        group: '녹음', sizes: ['s', 'l'], noZoom: true },
   ],
   t2: [
-    { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
+    { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정', size: 's' },
     { id: 'history',  name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정', grow: true },
-    { id: 'beatpanel', name: '박 원 + 박자 · 템포 · 시작 (한 판)', short: '박 원 한 판', group: '템포', grow: true },
     { id: 'light',    name: '박 원 (박마다 켜짐, 크게)', short: '박 원',   group: '템포', grow: true },
-    { id: 'ctrl',     name: '박자 · 템포 · 시작 · 녹음',       short: '박자·템포·시작', group: '템포' },
+    { id: 'ctrl',     name: '박자 · 템포 · 시작 · 녹음',       short: '박자·템포·시작', group: '템포', lock: true },
     { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '템포' },
     { id: 'boxes',    name: '박자 네모 칸 원',  short: '네모 칸 원',  group: '템포', grow: true },
     { id: 'controls', name: 'TAP · 시작 (큰 버튼)', short: 'TAP · 시작',  group: '템포' },
@@ -176,7 +174,7 @@ const LAYOUT_BLOCKS = {
 const LAYOUT_GROUPS = { '음정': '#4afc9d', '템포': '#ffcc00', '녹음': '#ef4444' };
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
-  { id: 'practice',   name: '연습 한 화면 (박 원 한 판 · 그래프 · 벨트)', on: ['beatpanel', 'history', 'tape'] },
+  { id: 'practice',   name: '연습 한 화면 (조작판 · 박 원 · 그래프 · 벨트)', on: ['ctrl', 'light', 'history', 'tape'] },
   { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'meter', 'mini'] },
   { id: 'tapeTempo',  name: '가로 테이프 + 템포', on: ['history', 'tape', 'mini'] },
   { id: 'tape',       name: '가로 테이프', on: ['history', 'tape'] },
@@ -189,18 +187,19 @@ const makeLayout = (tab, onIds) => [
   ...onIds.map(id => ({ id, on: true, size: 'm' })),
   ...LAYOUT_BLOCKS[tab].filter(b => !onIds.includes(b.id)).map(b => ({ id: b.id, on: !!b.lock, size: 'm' })),
 ];
-const DEFAULT_LAYOUT2_ON = ['pitch', 'beatpanel'];   // 메트로놈 탭 기본: 음정(작게) · 박 원 한 판(박 원 + 박자·템포·시작)
+const DEFAULT_LAYOUT2_ON = ['pitch', 'light', 'ctrl'];   // 메트로놈 탭 기본: 음정(작게) · 박 원 · 박자·템포·시작
 // 저장값 정리: 모르는 블록 제거, 빠진 블록은 꺼진 채로 뒤에 추가
+// 블록 크기 = 고정 기본값 (사용자 요청: 크기는 못 바꾸고 위치만) — size가 있으면 그것, 녹음처럼 sizes가 있으면 첫 값, 나머지 'm'
+const blockSize = (b) => b.size || (b.sizes ? b.sizes[0] : 'm');
 const normLayout = (tab, list) => {
   const known = LAYOUT_BLOCKS[tab], seen = new Set(), out = [];
   (Array.isArray(list) ? list : []).forEach(it => {
     const b = it && known.find(k => k.id === it.id);
     if (!b || seen.has(b.id)) return;
     seen.add(b.id);
-    const sizes = b.sizes || LAYOUT_SIZES;
-    out.push({ id: b.id, on: b.lock ? true : !!it.on, size: sizes.includes(it.size) ? it.size : sizes[0] === 's' && sizes.length === 2 ? 's' : 'm' });
+    out.push({ id: b.id, on: b.lock ? true : !!it.on, size: blockSize(b) });   // 크기는 고정 (화면 배치에선 순서·보이기만)
   });
-  known.forEach(b => { if (!seen.has(b.id)) out.push({ id: b.id, on: !!b.lock, size: b.sizes ? b.sizes[0] : 'm' }); });
+  known.forEach(b => { if (!seen.has(b.id)) out.push({ id: b.id, on: !!b.lock, size: blockSize(b) }); });
   return out;
 };
 
@@ -246,7 +245,7 @@ const DEFAULT_SETTINGS = {
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
   recDelay: 3,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10), 기본 3초
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 15,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 16,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -264,7 +263,7 @@ const APP_RESET_REV = 2;   // 2: 첫 화면 순서 = 조작판 · 박 원 · 음
     try { onboarded = !!JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').onboarded; } catch (_) {}
     const drop = Object.keys(localStorage).filter(k => k === SETTINGS_KEY || /^vt\.(metro\.|a4Freq$|tolerance$|fb\.key$|drone)/.test(k));
     drop.forEach(k => localStorage.removeItem(k));
-    if (onboarded) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onboarded: true, layoutRev: 15 }));
+    if (onboarded) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onboarded: true, layoutRev: 16 }));
     localStorage.setItem('vt.resetRev', String(APP_RESET_REV));
   } catch (_) {}
 })();
@@ -296,10 +295,12 @@ const loadSettings = () => {
       l1src = l1src.map(b => b.id === 'note' ? { ...b, id: 'history' } : b);   // 큰 음이름 → 음정 그래프(이름 포함)로 합침
       const seen = new Set(); l1src = l1src.filter(b => !seen.has(b.id) && seen.add(b.id));
     }
-    // 15: '조작판' + '박 원'이 같이 켜져 있으면 → '박 원 한 판'(박 원 + 박자·템포·시작) 하나로
-    const toPanel = (src) => { if (!src || rev >= 15) return src; const on = (id) => src.some(b => b && b.id === id && b.on);
-      return on('ctrl') && on('light') && !on('beatpanel') ? src.map(b => b.id === 'light' ? { ...b, id: 'beatpanel' } : b.id === 'ctrl' ? { ...b, on: false } : b) : src; };
-    l1src = toPanel(l1src);
+    // 16: '박 원 한 판'(박 원 + 오른쪽 띠) 폐기 → 그 자리에 '조작판' + '박 원'
+    const fromPanel = (src, ctrlFirst) => { if (!src || !src.some(b => b && b.id === 'beatpanel')) return src; const out = [];
+      src.forEach(b => { if (!b) return; if (b.id === 'beatpanel') { if (b.on) { const c = { id: 'ctrl', on: true, size: 'm' }, l = { id: 'light', on: true, size: 'm' }; ctrlFirst ? out.push(c, l) : out.push(l, c); } }
+        else if (!(b.id === 'ctrl' || b.id === 'light') || !src.some(x => x && x.id === 'beatpanel' && x.on)) out.push(b); });
+      return out; };
+    l1src = fromPanel(l1src, true);   // 1번 탭: 조작판 위 · 박 원 아래 / 2번 탭: 박 원 · 조작판 아래
     v.layout1 = normLayout('t1', l1src || makeLayout('t1', LAYOUT_PRESETS[0].on));
     // 13: '원형 다이얼'·'템포 슬라이더' 블록 없앰 → 다이얼이 켜져 있었으면 그 자리에 박 조명 (이미 켜져 있으면 그냥 뺌)
     let l2src = Array.isArray(stored.layout2) ? stored.layout2 : null;
@@ -312,7 +313,7 @@ const loadSettings = () => {
       }).filter(Boolean);
       const seen = new Set(); l2src = l2src.filter(b => !seen.has(b.id) && seen.add(b.id));
     }
-    l2src = toPanel(l2src);
+    l2src = fromPanel(l2src, false);
     v.layout2 = normLayout('t2', l2src || makeLayout('t2', DEFAULT_LAYOUT2_ON));
     v.parts = normParts(stored.parts);
     if (rev < 4) {
@@ -337,7 +338,7 @@ const loadSettings = () => {
       if (keepRec) { const i = l.findIndex(b => b.id === 'rec'); l.splice(i, 1); l.splice(2, 0, keepRec); }
       v.layout2 = normLayout('t2', l);
     }
-    v.layoutRev = 15;
+    v.layoutRev = 16;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }
