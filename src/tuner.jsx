@@ -1580,7 +1580,7 @@ const Tuner = ({ tuner, metro, openSettings }) => {
           <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
             {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
-            {b.id === 'history' && <LivePitchGraph tuner={tuner}/>}
+            {b.id === 'history' && <LivePitchGraph tuner={tuner} fill={b.grow}/>}
             {b.id === 'rec' && <RecModule size={b.size}/>}
             {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter')} bare={has('history')}/>}
             {b.id === 'light' && <BeatRow metro={metro}/>}

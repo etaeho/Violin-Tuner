@@ -153,7 +153,7 @@ const LAYOUT_BLOCKS = {
   t1: [
     { id: 'vtapes',  name: '현별 세로 테이프', short: '세로 테이프', group: '음정', grow: true },
     { id: 'meter',   name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
-    { id: 'history', name: '음정 그래프 + 큰 음이름', short: '음정 그래프', group: '음정' },
+    { id: 'history', name: '음정 그래프 + 큰 음이름', short: '음정 그래프', group: '음정', grow: true },   // 박 원과 남는 공간을 반씩
     { id: 'tape',    name: '가로 음 벨트',    short: '가로 벨트', group: '음정' },
     { id: 'mini',    name: '미니 메트로놈',   short: '미니 메트로놈', group: '템포' },
     { id: 'light',   name: '박 원 (박마다 켜짐, 크게)', short: '박 원', group: '템포', grow: true },
@@ -162,7 +162,7 @@ const LAYOUT_BLOCKS = {
   ],
   t2: [
     { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
-    { id: 'history',  name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정' },
+    { id: 'history',  name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정', grow: true },
     { id: 'light',    name: '박 원 (박마다 켜짐, 크게)', short: '박 원',   group: '템포', grow: true },
     { id: 'ctrl',     name: '박자 · 템포 · 시작 · 녹음',       short: '박자·템포·시작', group: '템포', lock: true },
     { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '템포' },

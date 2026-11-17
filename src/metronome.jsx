@@ -595,7 +595,7 @@ const PitchDigits = ({ tuner, compact, swapColors, big }) => {
 
 // 실시간 음정 그래프: 최근 10초 동안 연주한 음정을 점으로 (녹음 재생 그래프와 같은 모양, 화면 배치 'history' 블록)
 //  맞음 초록 · 높음 빨강 · 낮음 파랑, 음이 바뀌면 음이름, 메트로놈이 돌면 박 세로줄
-const LivePitchGraph = ({ tuner }) => {
+const LivePitchGraph = ({ tuner, fill }) => {   // fill: 남는 공간을 채움 (화면 배치에서 grow 블록)
   // 최근 10초 연주를 음역 그래프로: 세로 = 실제 음 높이(반음 줄 + 음이름, 개방현 줄 강조), 점 색 = 맞음 초록 · 높음 빨강 · 낮음 파랑
   const WIN = 10000;
   const ptsRef = useRef([]);
@@ -626,8 +626,8 @@ const LivePitchGraph = ({ tuner }) => {
   const nmCol = nm ? col(nm.c) : L.dim;
   const serif = vintage ? 'Georgia,serif' : 'ui-monospace,monospace';
   return (
-    <div className={`w-full max-w-sm rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      <div className="relative h-36 rounded-xl overflow-hidden flex" style={{ background: L.face, boxShadow: L.shadow }}>
+    <div className={`w-full max-w-sm rounded-2xl p-1.5 ${fill ? 'flex-1 min-h-0 flex flex-col' : 'shrink-0'} ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
+      <div className={`relative rounded-xl overflow-hidden flex ${fill ? 'flex-1 min-h-[120px]' : 'h-36'}`} style={{ background: L.face, boxShadow: L.shadow }}>
         {/* 왼쪽: 큰 음이름 + 센트 */}
         <div className="w-[92px] shrink-0 flex flex-col items-center justify-center relative z-10" style={{ borderRight: `1px solid ${L.sub}`, opacity: live ? 1 : hold ? 0.45 : 0.3, transition: 'opacity 200ms' }}>
           <div className="flex items-start leading-none">
@@ -712,7 +712,11 @@ const BeatRow = ({ metro }) => {
   useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const ink = vintage ? k.label : 'var(--ink)';
   // 색 3개 = 소리 3가지: 강세 소리(밝은 초록) · 보통 소리(청록) · 소리 없음(회색). 세기는 크기로 (강 100% · 중강 90% · 약 80%)
-  const TONES = vintage ? { 2: '#f6dd94', 3: '#f6dd94', 1: '#b9853f', 0: '#6b5a44' } : { 2: '#4afc9d', 3: '#4afc9d', 1: '#2dd4bf', 0: '#52525b' };
+  //  우드 계열은 판 글자색(k.label) 밝기에 맞춰: 어두운 판(피아노·가죽·라디오) = 밝은 금색, 밝은 판(바이올린·악보) = 진한 갈색 → 어디서나 또렷하게
+  const darkInk = vintage && lum(k.label) < 0.4;
+  const TONES = !vintage ? { 2: '#4afc9d', 3: '#4afc9d', 1: '#2dd4bf', 0: '#52525b' }
+    : darkInk ? { 2: '#2a1205', 3: '#2a1205', 1: '#8a4f1c', 0: '#b5a68f' } : { 2: '#f6dd94', 3: '#f6dd94', 1: '#d29b45', 0: '#857560' };
+  const idleOp = vintage ? 0.5 : 0.3;
   const beatColor = (snd) => TONES[snd] || TONES[1];
   const beatScale = (snd) => snd === 2 ? 1 : snd === 3 ? 0.9 : 0.8;
   const n = beatSounds.length, gap = 14;
@@ -786,7 +790,7 @@ const BeatRow = ({ metro }) => {
           const r = S / 2, sub = on ? (currentSub || 0) : -1;
           return (
             <div key={i} ref={el => { circleRefs.current[i] = el; }} className="relative rounded-full" style={{ width: S, height: S, background: nsub > 1 ? 'transparent' : c,
-              border: `4px solid ${on && nsub === 1 ? ink : 'transparent'}`, opacity: on ? 1 : menu && menu.i === i ? 0.9 : 0.3,
+              border: `4px solid ${on && nsub === 1 ? ink : 'transparent'}`, opacity: on ? 1 : menu && menu.i === i ? 0.9 : idleOp,
               transform: `scale(${k0 * (fire ? 1.08 : 1)})`, boxShadow: fire && snd ? `0 0 ${snd === 2 ? 46 : 28}px ${c}` : 'none',
               transition: fire ? 'transform 30ms, box-shadow 30ms' : 'transform 200ms ease-out, box-shadow 250ms, opacity 150ms' }}>
               {/* 쪼갠 박 = 원을 틈을 두고 나눈 조각 (2 = 반원 · 3 = 세 조각 · 4 = 네 조각). 재생 중엔 지금 조각만 밝게 빛남 */}
@@ -967,7 +971,7 @@ const Metronome = ({ metro, tuner, openSettings }) => {
       {visibleBlocks('t2', layout).map(b => (
         <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
           {b.id === 'pitch' && tuner && <MainPitchMeter tuner={tuner}/>}
-          {b.id === 'history' && tuner && <LivePitchGraph tuner={tuner}/>}
+          {b.id === 'history' && tuner && <LivePitchGraph tuner={tuner} fill={b.grow}/>}
           {b.id === 'rec' && <RecModule size={b.size}/>}
           {b.id === 'light' && <BeatRow metro={metro}/>}
           {b.id === 'ctrl' && <MetroControls metro={metro} withRec={!visibleBlocks('t2', layout).some(x => x.id === 'rec')}/>}
