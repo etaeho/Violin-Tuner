@@ -152,18 +152,19 @@ const getTempoMarking = (bpm) => {
 const LAYOUT_BLOCKS = {
   t1: [
     { id: 'vtapes',  name: '현별 세로 테이프', short: '세로 테이프', group: '음정', grow: true },
-    { id: 'note',    name: '큰 음이름',       short: '큰 음이름',   group: '음정', grow: true },
     { id: 'meter',   name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
-    { id: 'history', name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정' },
-    { id: 'tape',    name: '가로 음 테이프',  short: '가로 테이프', group: '음정' },
+    { id: 'history', name: '음정 그래프 + 큰 음이름', short: '음정 그래프', group: '음정' },
+    { id: 'tape',    name: '가로 음 벨트',    short: '가로 벨트', group: '음정' },
     { id: 'mini',    name: '미니 메트로놈',   short: '미니 메트로놈', group: '템포' },
+    { id: 'light',   name: '박 조명 (큰 불빛)', short: '박 조명', group: '템포', grow: true },
+    { id: 'ctrl',    name: '박자 · 템포 · 시작 · 녹음', short: '박자·템포·시작', group: '템포' },
     { id: 'rec',     name: '녹음 버튼',       short: '녹음',        group: '녹음', sizes: ['s', 'l'], noZoom: true },
   ],
   t2: [
     { id: 'pitch',    name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
     { id: 'history',  name: '실시간 음정 그래프 (최근 10초)', short: '음정 그래프', group: '음정' },
     { id: 'light',    name: '박 조명 (화면 크게 번쩍)', short: '박 조명',   group: '템포', grow: true },
-    { id: 'ctrl',     name: '박자 · 템포 · 시작',       short: '박자·템포·시작', group: '템포', lock: true },
+    { id: 'ctrl',     name: '박자 · 템포 · 시작 · 녹음',       short: '박자·템포·시작', group: '템포', lock: true },
     { id: 'beats',    name: '박 설정',          short: '박 설정',     group: '템포' },
     { id: 'boxes',    name: '박자 네모 칸 원',  short: '네모 칸 원',  group: '템포', grow: true },
     { id: 'controls', name: 'TAP · 시작 (큰 버튼)', short: 'TAP · 시작',  group: '템포' },
@@ -173,12 +174,13 @@ const LAYOUT_BLOCKS = {
 const LAYOUT_GROUPS = { '음정': '#4afc9d', '템포': '#ffcc00', '녹음': '#ef4444' };
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
+  { id: 'practice',   name: '연습 한 화면 (벨트 · 그래프 · 박 조명)', on: ['tape', 'history', 'light', 'ctrl'] },
   { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'meter', 'mini'] },
   { id: 'tapeTempo',  name: '가로 테이프 + 템포', on: ['history', 'tape', 'mini'] },
   { id: 'tape',       name: '가로 테이프', on: ['history', 'tape'] },
   { id: 'fineOnly',   name: '세로 테이프', on: ['vtapes', 'meter'] },
-  { id: 'center',     name: '큰 음이름', on: ['note', 'meter'] },
-  { id: 'both',       name: '큰 음이름 + 테이프', on: ['note', 'tape'] },
+  { id: 'center',     name: '음정 그래프', on: ['history', 'meter'] },
+  { id: 'both',       name: '그래프 + 벨트', on: ['tape', 'history'] },
 ];
 const LAYOUT_SIZES = ['s', 'm', 'l'];
 const makeLayout = (tab, onIds) => [
@@ -242,7 +244,7 @@ const DEFAULT_SETTINGS = {
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
   recDelay: 3,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10), 기본 3초
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 10,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 14,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -263,7 +265,8 @@ const loadSettings = () => {
     if (!['vtapeTempo', 'tapeTempo', 'tape', 'center', 'both'].includes(v.tunerLayout)) v.tunerLayout = 'vtapeTempo';
     // 블록 배치: 저장값이 없으면 예전 '튜너 화면 구성'에서 만들어 줌
     // 11: '현별 막대' 블록 없앰 → 켜져 있었으면 그 자리에 세로 테이프 (이미 켜져 있으면 그냥 뺌)
-    let l1src = Array.isArray(stored.layout1) ? stored.layout1.map(b => b && b.id === 'bars' ? (stored.layout1.some(x => x && x.id === 'vtapes' && x.on) ? null : { ...b, id: 'vtapes' }) : b).filter(Boolean) : null;
+    // 14: 첫 화면 새 구성(벨트 · 음정 그래프+큰 음이름 · 박 조명 · 박자·템포·시작·녹음) — 모두 1회 적용
+    let l1src = rev < 14 ? null : Array.isArray(stored.layout1) ? stored.layout1.map(b => b && b.id === 'bars' ? (stored.layout1.some(x => x && x.id === 'vtapes' && x.on) ? null : { ...b, id: 'vtapes' }) : b).filter(Boolean) : null;
     // 12: '정밀 게이지'·'숫자창' 블록 없앰 → 켜져 있었으면 첫 자리에 '음정 표시기' (이미 켜져 있으면 그냥 뺌)
     if (l1src) {
       let meterOn = l1src.some(x => x && x.id === 'meter' && x.on);
@@ -272,9 +275,10 @@ const loadSettings = () => {
         if (b.on && !meterOn) { meterOn = true; return { id: 'meter', on: true, size: b.size }; }
         return null;
       }).filter(Boolean);
+      l1src = l1src.map(b => b.id === 'note' ? { ...b, id: 'history' } : b);   // 큰 음이름 → 음정 그래프(이름 포함)로 합침
       const seen = new Set(); l1src = l1src.filter(b => !seen.has(b.id) && seen.add(b.id));
     }
-    v.layout1 = normLayout('t1', l1src || makeLayout('t1', LAYOUT_PRESETS.find(p => p.id === v.tunerLayout).on));
+    v.layout1 = normLayout('t1', l1src || makeLayout('t1', LAYOUT_PRESETS[0].on));
     // 13: '원형 다이얼'·'템포 슬라이더' 블록 없앰 → 다이얼이 켜져 있었으면 그 자리에 박 조명 (이미 켜져 있으면 그냥 뺌)
     let l2src = Array.isArray(stored.layout2) ? stored.layout2 : null;
     if (l2src) {
@@ -292,13 +296,6 @@ const loadSettings = () => {
       // 4: 낮게 풀린 G현도 잡히게 최저 주파수 180 → 150, 1번 탭에 정밀 게이지 추가
       if (v.minFreq === 180) v.minFreq = 150;
 
-      // (예전 정밀 게이지 추가 → 지금은 정밀 게이지 블록이 없어서 '음정 표시기'로)
-      if (stored.layout1 && !v.layout1.some(b => b.id === 'meter' && b.on)) {
-        const l = v.layout1.filter(b => b.id !== 'meter');
-        let at = l.findIndex(b => b.on && LAYOUT_BLOCKS.t1.find(k => k.id === b.id)?.grow) + 1;
-        l.splice(Math.max(0, at), 0, { id: 'meter', on: true, size: 'm' });
-        v.layout1 = normLayout('t1', l);
-      }
     }
     if (rev < 5 && v.maxFreq === 3500) v.maxFreq = 4200;   // 5: 지판 최상단 포지션(A7)까지 감지
     if (rev < 7) v.recClicks = true;    // 7: 박 소리 넣기 + 에코 제거 마이크로 다시 켬 (6에서 껐던 값 되돌림)
@@ -317,7 +314,7 @@ const loadSettings = () => {
       if (keepRec) { const i = l.findIndex(b => b.id === 'rec'); l.splice(i, 1); l.splice(2, 0, keepRec); }
       v.layout2 = normLayout('t2', l);
     }
-    v.layoutRev = 10;
+    v.layoutRev = 14;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }

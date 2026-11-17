@@ -612,15 +612,37 @@ const LivePitchGraph = ({ tuner }) => {
   const grid = METRO_CLICKS.grid.filter(g => g[0] >= w0 && g[0] <= now);
   const recent = pts.filter(q => q[0] > now - 5000);   // 맞음 % = 최근 5초
   const okPct = recent.length ? Math.round(100 * recent.filter(q => Math.abs(q[1]) <= tol).length / recent.length) : null;
+  // 큰 음이름(그래프 왼쪽): 지금 소리 → 없으면 마지막 음을 흐리게 1.5초 남김
+  const live = tuner.isStarted && tuner.pitch > 0 && tuner.currentNote;
+  const lastPt = pts.length ? pts[pts.length - 1] : null;
+  const hold = !live && lastPt && now - lastPt[0] < 1500;
+  const nm = live ? { n: tuner.currentNote.name, s: tuner.currentNote.symbol, o: tuner.currentNote.octave, c: tuner.cents }
+    : hold ? (() => { const m = /^([A-G])(#?)(\d)$/.exec(lastPt[2]) || []; return { n: m[1] || '', s: m[2] || '', o: m[3] || '', c: lastPt[1] }; })() : null;
+  const nmCol = nm ? col(nm.c) : L.dim;
+  const serif = vintage ? 'Georgia,serif' : 'ui-monospace,monospace';
   return (
     <div className={`w-full max-w-sm rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      <div className="relative h-36 rounded-xl overflow-hidden" style={{ background: L.face, boxShadow: L.shadow }}>
+      <div className="relative h-44 rounded-xl overflow-hidden flex" style={{ background: L.face, boxShadow: L.shadow }}>
+        {/* 왼쪽: 큰 음이름 + 센트 */}
+        <div className="w-[92px] shrink-0 flex flex-col items-center justify-center relative z-10" style={{ borderRight: `1px solid ${L.sub}`, opacity: live ? 1 : hold ? 0.45 : 0.3, transition: 'opacity 200ms' }}>
+          <div className="flex items-start leading-none">
+            <span className="font-black leading-none" style={{ fontSize: 58, color: live ? L.head : L.dim, fontFamily: serif }}>{nm ? nm.n : '–'}</span>
+            <span className="flex flex-col ml-0.5 mt-1 leading-none">
+              <span className="text-xl font-black" style={{ color: nmCol, height: 20 }}>{nm && nm.s ? '♯' : ''}</span>
+              <span className="text-lg font-black" style={{ color: L.dim }}>{nm ? nm.o : ''}</span>
+            </span>
+          </div>
+          <span className="mt-1 font-black font-mono text-lg leading-none" style={{ color: nmCol }}>{nm ? `${nm.c > 0 ? '+' : ''}${Math.round(nm.c)}¢` : '0¢'}</span>
+          <span className="mt-1 text-[9px] font-black tracking-wider" style={{ color: nmCol }}>{!nm ? '대기' : Math.abs(nm.c) <= tol ? '맞음' : nm.c > 0 ? '▼ 내리기' : '▲ 올리기'}</span>
+        </div>
+        <div className="relative flex-1 min-w-0 h-full">
         <PitchRows lo={lo} hi={hi} L={L} vintage={vintage}/>
         {grid.map((g, i) => <i key={'g' + i} className="absolute top-0 bottom-0 pointer-events-none" style={{ left: `${xp(g[0])}%`, width: 1, background: g[1] ? L.beat : L.sub }}/>)}
         {pts.map((q, i) => <i key={i} className="absolute rounded-full" style={{ left: `${xp(q[0])}%`, top: `${yp(q[3] + q[1] / 100)}%`, width: 5, height: 5, margin: -2.5, background: col(q[1]) }}/>)}
         <span className="absolute right-1.5 bottom-1 text-[8px] font-bold" style={{ color: L.dim }}>지금 →</span>
         {okPct !== null && <span className="absolute left-1/2 -translate-x-1/2 bottom-1 text-[10px] font-black px-1.5 rounded" style={{ color: okPct >= 70 ? L.ok : '#d97706', background: L.face, border: `1px solid ${L.sub}` }}>맞음 {okPct}%</span>}
-        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold" style={{ color: L.dim }}>연주하면 음 높이가 여기에 그려집니다</span>}
+        {!pts.length && <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-center px-2" style={{ color: L.dim }}>연주하면 음 높이가 여기에 그려집니다</span>}
+        </div>
       </div>
     </div>
   );
@@ -735,52 +757,73 @@ const BeatLight = ({ metro }) => {
 };
 
 // ── 박자 · 템포 · 시작: 한 판에 세 칸 (간단하게) ──
-const MetroControls = ({ metro }) => {
+const MetroControls = ({ metro, withRec }) => {
   const vintage = useVintage(), skin = useSkin();
+  const recCtx = React.useContext(RecorderContext), recorder = withRec ? recCtx : null;
+  const recBeat = !!(recorder && recorder.rec && metro.isPlayingMetro && metro.visualFlash === 'main' && metro.beatSounds[metro.currentBeat] !== 0);
   const { bpm, timeSig, isPlayingMetro, toggleMetronome, changeNumerator, changeDenominator, handlePressStart, handlePressEnd, tapTempo } = metro;
   const drag = useBpmDrag(metro);
   const press = (d) => ({ onPointerDown: () => handlePressStart(d), onPointerUp: handlePressEnd, onPointerLeave: handlePressEnd, style: { touchAction: 'none' } });
   const knob = vintage ? skin.knob : null;
-  const btn = (extra) => ({ className: `w-9 h-9 rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`, ...extra });
-  const ink = 'var(--ink)', lab = vintage ? skin.dial.sub : '#6b7280';
+  const c = !!recorder;   // 녹음 칸이 붙으면 4칸 → 조금씩 줄임
+  const btn = (extra) => ({ className: `${c ? 'w-7 h-7' : 'w-9 h-9'} rounded-full flex items-center justify-center active:scale-90 shrink-0 ${vintage ? '' : 't-chip'}`, ...extra });
+  const ink = 'var(--ink)', lab = vintage ? (lum(skin.dial.sub) < 0.4 && lum(skin.label) > 0.5 ? skin.label : skin.dial.sub) : '#6b7280';
   const Label = ({ c, children }) => <span className="text-[10px] font-black tracking-widest flex items-center gap-1" style={{ color: c || lab }}>{children}</span>;
   return (
-    <div className={`w-full rounded-3xl px-3 py-3 shrink-0 flex items-stretch gap-2 ${vintage ? '' : 't-panel'}`} style={vintage ? skin.frame : undefined}>
+    <div className={`w-full rounded-3xl ${c ? 'px-2' : 'px-3'} py-3 shrink-0 flex items-stretch ${c ? 'gap-1.5' : 'gap-2'} ${vintage ? '' : 't-panel'}`} style={vintage ? skin.frame : undefined}>
       {/* 박자 */}
       <div className="flex flex-col items-center justify-between gap-1.5 shrink-0">
         <Label>박자</Label>
-        <div className="flex items-center gap-1">
-          <button {...btn({ onClick: () => changeNumerator(-1), 'aria-label': '박 수 줄이기', style: knob || undefined })}><Minus size={14} style={{ color: knob ? knob.color : '#9ca3af' }}/></button>
-          <button onClick={() => changeDenominator(1)} aria-label="박자표 바꾸기" className="flex items-baseline font-black leading-none px-1" style={{ color: vintage ? skin.label : ink, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        {(() => {
+          const minus = <button {...btn({ onClick: () => changeNumerator(-1), 'aria-label': '박 수 줄이기', style: knob || undefined })}><Minus size={c ? 12 : 14} style={{ color: knob ? knob.color : '#9ca3af' }}/></button>;
+          const plus = <button {...btn({ onClick: () => changeNumerator(1), 'aria-label': '박 수 늘리기', style: knob || undefined })}><Plus size={c ? 12 : 14} style={{ color: knob ? knob.color : '#9ca3af' }}/></button>;
+          const sig = <button onClick={() => changeDenominator(1)} aria-label="박자표 바꾸기" className="flex items-baseline font-black leading-none px-1" style={{ color: vintage ? skin.label : ink, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
             <span className="text-2xl">{timeSig.num}</span><span className="text-sm opacity-60">/{timeSig.den}</span>
-          </button>
-          <button {...btn({ onClick: () => changeNumerator(1), 'aria-label': '박 수 늘리기', style: knob || undefined })}><Plus size={14} style={{ color: knob ? knob.color : '#9ca3af' }}/></button>
-        </div>
-        <span className="text-[9px] font-bold" style={{ color: lab }}>/숫자 누르면 바뀜</span>
+          </button>;
+          return c ? <>{sig}<div className="flex items-center gap-1">{minus}{plus}</div></> : <div className="flex items-center gap-1">{minus}{sig}{plus}</div>;
+        })()}
+        {!c && <span className="text-[9px] font-bold" style={{ color: lab }}>/숫자 누르면 바뀜</span>}
       </div>
       <span className="w-px self-stretch" style={{ background: 'var(--chip-border)' }}/>
       {/* 템포 */}
       <div className="flex-1 min-w-0 flex flex-col items-center justify-between gap-1.5">
-        <Label>템포 · {getTempoMarking(bpm)}</Label>
-        <div className="flex items-center gap-1.5">
-          <button {...btn({ ...press(-1), 'aria-label': 'BPM 내리기', style: { ...press(-1).style, ...(knob || {}) } })}><Minus size={14} className="pointer-events-none" style={{ color: knob ? knob.color : '#9ca3af' }}/></button>
-          <span {...drag} className="font-black leading-none font-mono px-1" style={{ ...drag.style, fontSize: 34, color: vintage ? skin.label : ink, fontFamily: vintage ? 'Georgia,serif' : undefined }} aria-label="끌어서 빠르기">{bpm}</span>
-          <button {...btn({ ...press(1), 'aria-label': 'BPM 올리기', style: { ...press(1).style, ...(knob || {}) } })}><Plus size={14} className="pointer-events-none" style={{ color: knob ? knob.color : '#9ca3af' }}/></button>
+        <Label>{c ? '템포' : `템포 · ${getTempoMarking(bpm)}`}</Label>
+        <div className={`flex items-center ${c ? 'gap-1' : 'gap-1.5'}`}>
+          <button {...btn({ ...press(-1), 'aria-label': 'BPM 내리기', style: { ...press(-1).style, ...(knob || {}) } })}><Minus size={c ? 12 : 14} className="pointer-events-none" style={{ color: knob ? knob.color : '#9ca3af' }}/></button>
+          <span {...drag} className="font-black leading-none font-mono px-1" style={{ ...drag.style, fontSize: c ? 30 : 34, color: vintage ? skin.label : ink, fontFamily: vintage ? 'Georgia,serif' : undefined }} aria-label="끌어서 빠르기">{bpm}</span>
+          <button {...btn({ ...press(1), 'aria-label': 'BPM 올리기', style: { ...press(1).style, ...(knob || {}) } })}><Plus size={c ? 12 : 14} className="pointer-events-none" style={{ color: knob ? knob.color : '#9ca3af' }}/></button>
         </div>
-        <button onClick={tapTempo} className="text-[10px] font-black px-2.5 py-0.5 rounded-full t-chip" style={{ color: vintage ? skin.label : 'var(--ink2)' }}>TAP 두드려서</button>
+        <button onClick={tapTempo} className="text-[10px] font-black px-2.5 py-0.5 rounded-full t-chip" style={{ color: vintage ? skin.label : 'var(--ink2)' }}>{c ? 'TAP' : 'TAP 두드려서'}</button>
       </div>
       <span className="w-px self-stretch" style={{ background: 'var(--chip-border)' }}/>
       {/* 시작 */}
       <div className="flex flex-col items-center justify-between gap-1.5 shrink-0">
         <Label>시작</Label>
         <button onClick={toggleMetronome} aria-label={isPlayingMetro ? '메트로놈 정지' : '메트로놈 시작'}
-          className="w-16 h-16 rounded-full flex items-center justify-center active:scale-95 transition-all"
+          className={`${c ? 'w-14 h-14' : 'w-16 h-16'} rounded-full flex items-center justify-center active:scale-95 transition-all`}
           style={vintage ? (isPlayingMetro ? skin.playOn : skin.play)
             : { background: isPlayingMetro ? 'rgba(255,204,0,.15)' : '#4afc9d', color: isPlayingMetro ? '#ffcc00' : '#000', border: `2px solid ${isPlayingMetro ? '#ffcc00' : '#4afc9d'}`, boxShadow: isPlayingMetro ? '0 0 16px rgba(255,204,0,.4)' : '0 6px 16px rgba(74,252,157,.3)' }}>
           {isPlayingMetro ? <Square size={24} fill="currentColor"/> : <Play size={26} fill="currentColor"/>}
         </button>
         <span className="text-[9px] font-bold" style={{ color: lab }}>{isPlayingMetro ? '정지' : '시작'}</span>
       </div>
+      {/* 녹음 (맨 오른쪽 — 활 잡은 오른손). 메트로놈과 따로 동작 */}
+      {recorder && <>
+        <span className="w-px self-stretch" style={{ background: 'var(--chip-border)' }}/>
+        <div className="flex flex-col items-center justify-between gap-1.5 shrink-0">
+          <Label>녹음</Label>
+          <button onClick={recorder.toggle} disabled={!recorder.supported} aria-label={recorder.rec ? '녹음 정지' : recorder.count ? '녹음 대기 취소' : '녹음 시작'}
+            className="w-14 h-14 rounded-full flex items-center justify-center active:scale-95"
+            style={{ background: recorder.rec ? (recBeat ? 'rgba(239,68,68,.32)' : 'rgba(239,68,68,.12)') : 'radial-gradient(circle at 40% 35%,#f87171,#dc2626)',
+              border: `3px solid ${recorder.rec ? '#ef4444' : 'rgba(255,255,255,.18)'}`, transform: `scale(${recBeat ? 1.06 : 1})`,
+              transition: recBeat ? 'transform 40ms' : 'transform 160ms ease-out', boxShadow: recorder.rec ? `0 0 ${recBeat ? 26 : 14}px rgba(239,68,68,.6)` : '0 6px 16px rgba(220,38,38,.3)' }}>
+            {recorder.rec ? <Square size={22} fill="#ef4444" color="#ef4444"/>
+              : recorder.count ? <span className="text-2xl font-black text-white font-mono">{recorder.count.left}</span>
+              : <span className="w-6 h-6 rounded-full bg-white"/>}
+          </button>
+          <span className="text-[9px] font-bold font-mono" style={{ color: recorder.rec ? '#ef4444' : lab }}>{recorder.rec ? recDur(recorder.elapsed) : '녹음'}</span>
+        </div>
+      </>}
     </div>
   );
 };
@@ -850,7 +893,7 @@ const Metronome = ({ metro, tuner, openSettings }) => {
           {b.id === 'history' && tuner && <LivePitchGraph tuner={tuner}/>}
           {b.id === 'rec' && <RecModule size={b.size}/>}
           {b.id === 'light' && <BeatLight metro={metro}/>}
-          {b.id === 'ctrl' && <MetroControls metro={metro}/>}
+          {b.id === 'ctrl' && <MetroControls metro={metro} withRec={!visibleBlocks('t2', layout).some(x => x.id === 'rec')}/>}
           {b.id === 'beats' && (
       <div className="w-full t-panel rounded-3xl px-3 py-3 shrink-0">
         <div className={`grid justify-center justify-items-center w-full ${isDense ? 'gap-x-1.5 gap-y-2' : 'gap-x-3'}`}

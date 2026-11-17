@@ -714,7 +714,7 @@ const TunerReadout = ({ tuner }) => {
 // ==========================================
 const TAPE_SP = 60;    // 반음 간격(px) → 한 화면에 음 6개쯤 (가까우면 ×3 확대)
 
-const NoteTape = ({ tuner, showMic }) => {
+const NoteTape = ({ tuner, showMic, bare }) => {
   const vintage = useVintage();
   const { isStarted, pitch, a4Freq, cents, tolerance } = tuner;
   const active = isStarted && pitch > 0;
@@ -819,6 +819,7 @@ const NoteTape = ({ tuner, showMic }) => {
     </div>
   );
 
+  if (bare) return <div className="w-full max-w-sm shrink-0">{tape}</div>;   // 벨트만 (음이름·센트는 아래 음정 그래프에)
   if (!vintage) {
     return <div className="w-full max-w-sm shrink-0 mt-2 pb-1">{tape}{footer}</div>;
   }
@@ -1526,11 +1527,12 @@ const Tuner = ({ tuner, metro, openSettings }) => {
         {blocks.map(b => (
           <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
-            {b.id === 'note' && <BigNote tuner={tuner} showCents={!has('tape')}/>}
             {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
             {b.id === 'history' && <LivePitchGraph tuner={tuner}/>}
             {b.id === 'rec' && <RecModule size={b.size}/>}
-            {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter') && !has('note')}/>}
+            {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter')} bare={has('history')}/>}
+            {b.id === 'light' && <BeatLight metro={metro}/>}
+            {b.id === 'ctrl' && <MetroControls metro={metro} withRec={!has('rec')}/>}
             {b.id === 'mini' && <MiniMetronome metro={metro}/>}
           </LayoutBlock>
         ))}
