@@ -766,6 +766,10 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   };
   const [s0, z0] = useSpring([semi, zoomT], place, { k: 0.18, snap: 6 });
   const sp0 = SP * (1 + ZM * z0);
+  // 벨트 위 작은 세부 음정 줄: ±30¢ (넘으면 끝에 붙음), 바늘이 부드럽게 움직임
+  const FINE = 30, fineRef = useRef(null);
+  const fineX = (c) => 50 + Math.max(-1, Math.min(1, c / FINE)) * 50;
+  const [f0] = useSpring([active ? tuner.centsExact : 0], ([c]) => { if (fineRef.current) fineRef.current.style.left = fineX(c) + '%'; }, { k: 0.22, snap: 0.05 });
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
   const ink = vintage ? '#3b2a1a' : '#e5e5e5';
 
@@ -776,7 +780,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   if (bare) {
     const okC = '#4afc9d', needleC = inTune ? okC : '#e11d2a';
     const belt = (
-      <div className="relative w-full h-[84px] overflow-hidden rounded-t-lg"
+      <div className="relative w-full h-[84px] overflow-hidden"
         style={vintage ? { background: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)' } : { background: '#070707' }}>
         {/* 허용 범위 */}
         <div ref={bandRef} className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2"
@@ -817,7 +821,20 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         })}
       </div>
     );
-    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={vintage ? { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } : { border: '1px solid rgba(255,255,255,.08)' }}>{belt}{strings}</div>;
+    // 세부 음정 줄 (벨트 윗단, 작게): 눈금 5¢ · 허용 범위 · 바늘 + 오른쪽 센트 숫자
+    const fc = !active ? (vintage ? 'rgba(59,42,26,.45)' : '#52525b') : inTune ? (vintage ? '#15803d' : okC) : cents > 0 ? '#ef4444' : '#3b82f6';
+    const fine = (
+      <div className="flex items-center gap-2 h-[26px] px-2" style={{ background: vintage ? '#e9dfc6' : '#0b0b0b', borderBottom: `1px solid ${vintage ? 'rgba(59,42,26,.25)' : '#1f1f1f'}` }}>
+        <div className="relative flex-1 h-full">
+          <i className="absolute top-1 bottom-1 -translate-x-1/2 rounded-sm" style={{ left: '50%', width: `${(tolerance / FINE) * 100}%`, background: inTune ? 'rgba(74,252,157,.35)' : 'rgba(74,252,157,.14)' }}/>
+          {Array.from({ length: 13 }, (_, j) => { const c = -FINE + j * 5, big = c % 10 === 0;
+            return <i key={j} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-px" style={{ left: `${fineX(c)}%`, height: c === 0 ? 16 : big ? 10 : 5, background: vintage ? 'rgba(59,42,26,.55)' : c === 0 ? '#a1a1aa' : '#3f3f46' }}/>; })}
+          <i ref={fineRef} className="absolute top-0 bottom-0 -translate-x-1/2 w-[3px] rounded-full" style={{ left: `${fineX(f0)}%`, background: fc, boxShadow: active ? `0 0 5px ${fc}` : 'none', opacity: active ? 1 : 0.4 }}/>
+        </div>
+        <span className="w-[42px] text-right font-mono font-black text-[13px] leading-none tabular-nums" style={{ color: fc }}>{active ? `${cents > 0 ? '+' : ''}${cents}¢` : '0¢'}</span>
+      </div>
+    );
+    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={vintage ? { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } : { border: '1px solid rgba(255,255,255,.08)' }}>{fine}{belt}{strings}</div>;
   }
   const tape = (
     <div className="relative w-full h-[92px] overflow-hidden rounded-lg"
