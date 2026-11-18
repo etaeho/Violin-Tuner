@@ -47,6 +47,7 @@ const useMetronomeLogic = () => {
 
   // 소리 최대: 딸깍(두 음 겹침) → 증폭(×4) → 리미터(찌그러짐 없이 최대 음량) → 스피커
   const masterRef = useRef(null);
+  const softSqRef = useRef(null);   // 박 소리 파형(부드러운 사각) — AudioContext마다 한 번 만듦
   const initMetroAudioContext = () => {
     if (!metroAudioCtxRef.current) {
       const ctx = new (window.AudioContext||window.webkitAudioContext)();
@@ -163,25 +164,29 @@ const useMetronomeLogic = () => {
     }
     const soundType=subBeatNumber===0?beatSoundsRef.current[beatNumber]:-1;
     if (soundType>0||soundType===-1) {
-      const osc=metroAudioCtxRef.current.createOscillator();
-      const gain=metroAudioCtxRef.current.createGain();
-      osc.type='square';
-      let freq=1000, vol=1.0;
-      if (soundType===2)  { freq=2000; vol=1.0; }
-      else if (soundType===3) { freq=1500; vol=0.85; }
-      else if (soundType===1) { freq=1000; vol=0.9; }
-      else if (soundType===4) { freq=700; vol=1.0; }    // 박 원에서 톡 눌러 바꾼 '다른 소리' (낮은 딸깍)
-      else if (soundType===-1){ freq=1200; vol=0.7; }
-      osc.frequency.value=freq;
-      // 두 번째 음(5도 위)을 겹쳐 폰 스피커에서 더 크고 또렷하게
-      const osc2=metroAudioCtxRef.current.createOscillator();
-      osc2.type='square'; osc2.frequency.value=freq*1.5;
-      gain.gain.setValueAtTime(vol,time);
-      const dur=soundType===-1?0.04:0.07;
-      gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
-      osc.connect(gain); osc2.connect(gain); gain.connect(masterRef.current || metroAudioCtxRef.current.destination);
+      // 박 소리 = '부드러운 사각' 한 음 (사용자 선택): 홀수 배음을 1/n^1.3로 둥글린 사각파 + 시작 음 꺾임(×1.3 → 12ms) + 평평한 음량
+      const ctx=metroAudioCtxRef.current;
+      if (!softSqRef.current || softSqRef.current.ctx!==ctx) {
+        const n=13, re=new Float32Array(n), im=new Float32Array(n);
+        for (let k=1;k<n;k+=2) im[k]=1/Math.pow(k,1.3);
+        softSqRef.current={ ctx, wave: ctx.createPeriodicWave(re, im) };
+      }
+      let freq=2000, vol=0.6, dur=0.075;
+      if (soundType===2)  { freq=2400; vol=0.6; }
+      else if (soundType===3) { freq=2200; vol=0.55; }
+      else if (soundType===4) { freq=1400; vol=0.65; }    // 박 원에서 톡 눌러 바꾼 '다른 소리' (같은 결, 낮게)
+      else if (soundType===-1){ freq=2400; vol=0.4; dur=0.04; }   // 쪼갠 박: 짧고 작게
+      const osc=ctx.createOscillator(), gain=ctx.createGain();
+      osc.setPeriodicWave(softSqRef.current.wave);
+      osc.frequency.setValueAtTime(freq*1.3,time);
+      osc.frequency.exponentialRampToValueAtTime(freq,time+0.012);
+      gain.gain.setValueAtTime(0,time);
+      gain.gain.linearRampToValueAtTime(vol,time+0.001);
+      gain.gain.setValueAtTime(vol,time+dur-0.002);
+      gain.gain.linearRampToValueAtTime(0,time+dur);
+      osc.connect(gain); gain.connect(masterRef.current || ctx.destination);
       if (recordTapRef.current) gain.connect(recordTapRef.current);   // 녹음에 메트로놈 소리 넣기
-      osc.start(time); osc.stop(time+dur+0.01); osc2.start(time); osc2.stop(time+dur+0.01);
+      osc.start(time); osc.stop(time+dur+0.02);
     }
   };
 
