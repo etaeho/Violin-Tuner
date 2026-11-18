@@ -236,6 +236,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // 전화 등으로 앱이 가려졌다 돌아오면 웹 쪽에 알려서 마이크를 다시 연다 (tuner.jsx window.__vtResume)
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized) webView.postDelayed({ webView.evaluateJavascript("window.__vtResume && window.__vtResume()", null) }, 600)
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         runCatching { webView.saveState(outState) }

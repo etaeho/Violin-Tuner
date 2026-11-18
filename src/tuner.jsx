@@ -33,6 +33,10 @@ const useTunerLogic = () => {
   const lastGoodRef    = useRef(0);
   const calibRef       = useRef(null);
   const startingRef    = useRef(null);
+  const lastSigRef     = useRef(NaN);   // 마이크 감시: 마지막 소리 데이터
+  const aliveAtRef     = useRef(0);     //   마지막으로 소리 데이터가 바뀐 시각
+  const userStopRef    = useRef(false); //   사용자가 직접 끔 → 자동으로 다시 켜지 않음
+  const permDeniedRef  = useRef(false); //   권한 거부 → 자동 재시도 안 함
   const trackerRef     = useRef(null);
   const practiceSinkRef = useRef(null);
   const [noteListeners] = useState(() => new Set());   // 확정된 음을 받아볼 곳 (지판 스케일 연습)  // 연습 기록(practice.jsx) — app.jsx에서 연결
@@ -59,7 +63,21 @@ const useTunerLogic = () => {
     };
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('pointerdown', resumeAudio);
+    // 마이크 감시: 전화가 오거나 다른 앱이 마이크를 쓰면 마이크 트랙이 끝나거나(ended), 오디오가 멈추거나(suspended/interrupted),
+    //  데이터가 그대로 멈춤 → 화면이 보이는 동안 1.5초마다 확인해서 마이크를 처음부터 다시 연다 (통화 중이면 실패 → 다음 확인 때 또 시도)
+    const watchdog = setInterval(() => {
+      if (document.visibilityState !== 'visible' || !settingsRef.current.onboarded || userStopRef.current || permDeniedRef.current || startingRef.current) return;
+      const ctx = audioContextRef.current, st = streamRef.current;
+      if (!st) { ensureMic(); return; }
+      const tr = st.getAudioTracks()[0];
+      if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+      const dead = !tr || tr.readyState === 'ended' || (ctx && ctx.state === 'closed')
+        || (aliveAtRef.current && performance.now() - aliveAtRef.current > 2500);
+      if (dead) { stopTuner(); ensureMic(); }
+    }, 1500);
+    window.__vtResume = () => { if (settingsRef.current.onboarded && !userStopRef.current) { permDeniedRef.current = false; ensureMic(); } };   // 안드로이드 onResume
     return () => {
+      clearInterval(watchdog);
       document.removeEventListener('visibilitychange', onVisibility);
       document.removeEventListener('pointerdown', resumeAudio);
       stopTuner(); stopTone();
@@ -120,6 +138,8 @@ const useTunerLogic = () => {
       return;
     }
     analyserRef.current.getFloatTimeDomainData(bufferRef.current);
+    { const b = bufferRef.current, sig = b[0] + b[701] * 3 + b[1499] * 7;   // 마이크가 살아 있으면 잡음 때문에 매번 값이 바뀜
+      if (sig !== lastSigRef.current) { lastSigRef.current = sig; aliveAtRef.current = now; } }
     const { freq: raw, clarity, rms } = detectPitch(bufferRef.current, audioContextRef.current.sampleRate, S.minFreq, S.maxFreq);
     const db = rmsToDb(rms);
     if (calibRef.current) calibRef.current.push(db);
@@ -201,6 +221,7 @@ const useTunerLogic = () => {
     if (startingRef.current) return startingRef.current;
     setError(null);
     startingRef.current = (async () => { try {
+      if (audioContextRef.current?.state === 'closed') audioContextRef.current = null;
       await initAudioContext();
       if (!navigator.mediaDevices?.getUserMedia)
         throw new Error("브라우저에서 마이크 기능을 지원하지 않습니다.");
@@ -208,7 +229,8 @@ const useTunerLogic = () => {
         audio: { echoCancellation:false, autoGainControl:false, noiseSuppression:false }
       });
       streamRef.current = stream;
-      if (audioContextRef.current.state==='suspended') await audioContextRef.current.resume();
+      aliveAtRef.current = performance.now(); permDeniedRef.current = false;
+      if (audioContextRef.current.state!=='running') await audioContextRef.current.resume().catch(() => {});
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 2048;
       bufferRef.current = new Float32Array(analyserRef.current.fftSize);
@@ -218,6 +240,7 @@ const useTunerLogic = () => {
       return true;
     } catch (err) {
       if (err.name==='NotAllowedError'||err.name==='NotFoundError'||err.message.includes('Permission dismissed')) {
+        permDeniedRef.current = true;
         setError("마이크 권한이 거부되었습니다.\n설정 > 앱 > Violin Tuner > 권한에서\n마이크를 허용한 뒤 다시 시도해주세요.");
       } else {
         setError("마이크를 사용할 수 없습니다: "+err.message);
@@ -229,7 +252,8 @@ const useTunerLogic = () => {
   };
 
   const startTuner = async () => {
-    if (streamRef.current) { stopTuner(); return; }
+    if (streamRef.current) { userStopRef.current = true; stopTuner(); return; }
+    userStopRef.current = false; permDeniedRef.current = false;
     haptic(20);
     await ensureMic();
   };
@@ -269,7 +293,7 @@ const useTunerLogic = () => {
     if (animationRef.current) { cancelAnimationFrame(animationRef.current); animationRef.current=null; }
     streamRef.current?.getTracks().forEach(t=>t.stop());
     streamRef.current=null;
-    analyserRef.current=null;
+    analyserRef.current=null; aliveAtRef.current=0;
     freqHistoryRef.current=[];
     gateOpenRef.current=false; candidateRef.current={ freq:0, count:0 }; lastGoodRef.current=0;
     levelRef.current={ db:-100, clarity:0, freq:-1, gate:false, accepted:false };
