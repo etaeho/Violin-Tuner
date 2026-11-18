@@ -611,11 +611,12 @@ const PitchDigits = ({ tuner, compact, swapColors, big }) => {
   );
 };
 
-// 실시간 음정 그래프: 최근 10초 동안 연주한 음정을 점으로 (녹음 재생 그래프와 같은 모양, 화면 배치 'history' 블록)
+// 실시간 음정 그래프: 최근 7초 동안 연주한 음정을 점으로 (녹음 재생 그래프와 같은 모양, 화면 배치 'history' 블록)
 //  맞음 초록 · 높음 빨강 · 낮음 파랑, 음이 바뀌면 음이름, 메트로놈이 돌면 박 세로줄
 const LivePitchGraph = ({ tuner, fill }) => {   // fill: 남는 공간을 채움 (화면 배치에서 grow 블록)
-  // 최근 10초 연주를 음역 그래프로: 세로 = 실제 음 높이(반음 줄 + 음이름, 개방현 줄 강조), 점 색 = 맞음 초록 · 높음 빨강 · 낮음 파랑
-  const WIN = 10000;
+  // 최근 7초 연주를 음역 그래프로 (빠른 음도 점이 아니라 선처럼 보이게 시간축을 좁힘): 세로 = 실제 음 높이(반음 줄 + 음이름, 개방현 줄 강조), 점 색 = 맞음 초록 · 높음 빨강 · 낮음 파랑
+  //  왼쪽 큰 음이름 칸은 없앰 → 그래프가 블록 가로 전체를 씀
+  const WIN = 7000;
   const ptsRef = useRef([]);
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -635,29 +636,9 @@ const LivePitchGraph = ({ tuner, fill }) => {   // fill: 남는 공간을 채움
   const grid = METRO_CLICKS.grid.filter(g => g[0] >= w0 && g[0] <= now);
   const recent = pts.filter(q => q[0] > now - 5000);   // 맞음 % = 최근 5초
   const okPct = recent.length ? Math.round(100 * recent.filter(q => Math.abs(q[1]) <= tol).length / recent.length) : null;
-  // 큰 음이름(그래프 왼쪽): 지금 소리 → 없으면 마지막 음을 흐리게 1.5초 남김
-  const live = tuner.isStarted && tuner.pitch > 0 && tuner.currentNote;
-  const lastPt = pts.length ? pts[pts.length - 1] : null;
-  const hold = !live && lastPt && now - lastPt[0] < 1500;
-  const nm = live ? { n: tuner.currentNote.name, s: tuner.currentNote.symbol, o: tuner.currentNote.octave, c: tuner.cents }
-    : hold ? (() => { const m = /^([A-G])(#?)(\d)$/.exec(lastPt[2]) || []; return { n: m[1] || '', s: m[2] || '', o: m[3] || '', c: lastPt[1] }; })() : null;
-  const nmCol = nm ? col(nm.c) : L.dim;
-  const serif = vintage ? 'Georgia,serif' : 'ui-monospace,monospace';
   return (
     <div className={`w-full rounded-2xl p-1.5 ${fill ? 'flex-1 min-h-0 flex flex-col' : 'shrink-0'} ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
       <div className={`relative rounded-xl overflow-hidden flex ${fill ? 'flex-1 min-h-[120px]' : 'h-36'}`} style={{ background: L.face, boxShadow: L.shadow }}>
-        {/* 왼쪽: 큰 음이름 + 센트 */}
-        <div className="w-[92px] shrink-0 flex flex-col items-center justify-center relative z-10" style={{ borderRight: `1px solid ${L.sub}`, opacity: live ? 1 : hold ? 0.45 : 0.3, transition: 'opacity 200ms' }}>
-          <div className="flex items-start leading-none">
-            <span className="font-black leading-none" style={{ fontSize: 58, color: live ? L.head : L.dim, fontFamily: serif }}>{nm ? nm.n : '–'}</span>
-            <span className="flex flex-col ml-0.5 mt-1 leading-none">
-              <span className="text-xl font-black" style={{ color: nmCol, height: 20 }}>{nm && nm.s ? '♯' : ''}</span>
-              <span className="text-lg font-black" style={{ color: L.dim }}>{nm ? nm.o : ''}</span>
-            </span>
-          </div>
-          <span className="mt-1 font-black font-mono text-lg leading-none" style={{ color: nmCol }}>{nm ? `${nm.c > 0 ? '+' : ''}${Math.round(nm.c)}¢` : '0¢'}</span>
-          <span className="mt-1 text-sm font-black leading-none" style={{ color: nmCol, height: 14 }}>{!nm ? '' : Math.abs(nm.c) <= tol ? '✓' : nm.c > 0 ? '▼' : '▲'}</span>
-        </div>
         <div className="relative flex-1 min-w-0 h-full">
         <PitchRows lo={lo} hi={hi} L={L} vintage={vintage}/>
         {grid.map((g, i) => <i key={'g' + i} className="absolute top-0 bottom-0 pointer-events-none" style={{ left: `${xp(g[0])}%`, width: 1, background: g[1] ? L.beat : L.sub }}/>)}
@@ -728,9 +709,9 @@ const BeatRow = ({ metro }) => {
   useEffect(() => { if (firstRef.current) { firstRef.current = false; return; } setShowBig(true); const t = setTimeout(() => setShowBig(false), 900); return () => clearTimeout(t); }, [bpm]);
   const ink = vintage ? k.label : 'var(--ink)';
   // 색 3개 = 소리 3가지 (톡 눌러 바꿈): 기본 소리 A · 다른 소리 B(4) · 소리 없음(0). 강박 없음 (모두 같은 색 · 같은 크기 · 같은 소리)
-  //  진하고 형광 — 검정: 일렉트릭 블루 · 로열 블루 / 흰색: 형광 그린 · 로열 블루 / 클래식: 로열 블루 · 일렉트릭 블루
+  //  진하고 형광 — 검정: 일렉트릭 블루 · 로열 블루 / 흰색: 형광 그린 · 로열 블루 / 클래식: 형광 레드 · 진한 크림슨
   const light = useTheme() === 'light';
-  const TONE = vintage ? { a: '#2962ff', b: '#00b0ff', off: '#4a3c2c' }
+  const TONE = vintage ? { a: '#ff1744', b: '#b0003a', off: '#4a3c2c' }
     : light ? { a: '#00c853', b: '#2962ff', off: '#b0b0b8' }
     : { a: '#00b0ff', b: '#2962ff', off: '#3a3f4b' };
   const idleFilter = light ? 'brightness(.92)' : 'brightness(.78)';   // 쉬는 원도 형광이 살아 있게 살짝만 어둡게
