@@ -858,6 +858,7 @@ const BeatRow = ({ metro }) => {
 // ── 박자 · 템포 · 시작: 한 판에 세 칸 (간단하게, 한국어 글자 없음 — 빠르기말만 작게) ──
 const MetroControls = ({ metro, withRec, scale = 1 }) => {   // scale: 판 전체 크기 (1번 탭 = 0.8)
   const vintage = useVintage(), skin = useSkin();
+  const isLightUI = useTheme() === 'light';
   const recCtx = React.useContext(RecorderContext), recorder = withRec ? recCtx : null;
   const recBeat = !!(recorder && recorder.rec && metro.isPlayingMetro && metro.visualFlash === 'main' && metro.beatSounds[metro.currentBeat] !== 0);
   const { bpm, timeSig, isPlayingMetro, toggleMetronome, changeNumerator, changeDenominator, handlePressStart, handlePressEnd, tapTempo } = metro;
@@ -901,7 +902,8 @@ const MetroControls = ({ metro, withRec, scale = 1 }) => {   // scale: 판 전�
         <button onClick={toggleMetronome} aria-label={isPlayingMetro ? '메트로놈 정지' : '메트로놈 시작'}
           className={`${c ? 'w-14 h-14' : 'w-16 h-16'} rounded-full flex items-center justify-center active:scale-95 transition-all`}
           style={vintage ? (isPlayingMetro ? skin.playOn : skin.play)
-            : { background: isPlayingMetro ? 'rgba(255,204,0,.15)' : '#4afc9d', color: isPlayingMetro ? '#ffcc00' : '#000', border: `2px solid ${isPlayingMetro ? '#ffcc00' : '#4afc9d'}`, boxShadow: isPlayingMetro ? '0 0 16px rgba(255,204,0,.4)' : '0 6px 16px rgba(74,252,157,.3)' }}>
+            : (() => { const a = isLightUI ? '#4afc9d' : '#00b0ff', g = isLightUI ? '74,252,157' : '0,176,255', on = isLightUI ? '#ffcc00' : '#00b0ff', og = isLightUI ? '255,204,0' : '0,176,255';   // 검정 = 박 원 색(일렉트릭 블루)
+              return { background: isPlayingMetro ? `rgba(${og},.15)` : a, color: isPlayingMetro ? on : '#000', border: `2px solid ${isPlayingMetro ? on : a}`, boxShadow: isPlayingMetro ? `0 0 16px rgba(${og},.45)` : `0 6px 16px rgba(${g},.3)` }; })() }>
           {isPlayingMetro ? <Square size={24} fill="currentColor"/> : <Play size={26} fill="currentColor"/>}
         </button>
       </div>
