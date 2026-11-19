@@ -294,3 +294,34 @@ const BrassPlate = ({ children, className = '' }) => (
     {children}
   </div>
 );
+
+// 위 줄 칩 드롭다운 (A4 · 허용 범위): 누르면 칩 바로 아래에 목록, 고르면 닫힘, 바깥 누르면 닫힘
+const ChipDropdown = ({ value, options, onPick, render, renderItem, ariaLabel, className = '' }) => {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null), listRef = useRef(null);
+  const [pos, setPos] = useState({ left: 0, top: 0, width: 0 });
+  const vintage = useVintage(), skin = useSkin(), light = useTheme() === 'light';
+  const openList = () => { const r = btnRef.current.getBoundingClientRect(); setPos({ left: r.left, top: r.bottom + 6, width: r.width }); setOpen(true); haptic(8); };
+  useEffect(() => { if (open && listRef.current) { const el = listRef.current.querySelector('[data-cur="1"]'); if (el) el.scrollIntoView({ block: 'center' }); } }, [open]);
+  const hi = vintage ? '#ff1744' : light ? '#00c853' : '#00b0ff';
+  return (
+    <>
+      <button ref={btnRef} onClick={openList} aria-label={ariaLabel} aria-expanded={open}
+        className={`flex items-center gap-1.5 t-chip px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 active:scale-95 transition-transform shadow-md ${className}`}>
+        {render(value)}<ChevronDown size={12} className="opacity-50 -mr-1"/>
+      </button>
+      {open && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)}>
+          <div ref={listRef} className={`fixed rounded-2xl py-1.5 overflow-y-auto shadow-[0_12px_32px_rgba(0,0,0,.45)] ${vintage ? '' : 't-sheet'}`}
+            style={{ left: pos.left, top: pos.top, minWidth: Math.max(pos.width, 104), maxHeight: 300, ...(vintage ? skin.frame : {}) }} onClick={e => e.stopPropagation()}>
+            {options.map(o => { const on = o === value;
+              return <button key={o} data-cur={on ? '1' : '0'} onClick={() => { onPick(o); setOpen(false); haptic(8); }}
+                className="w-full px-4 py-2.5 text-left font-mono font-black text-[15px] flex items-center justify-between gap-3"
+                style={{ color: on ? hi : vintage ? skin.label : 'var(--ink)', background: on ? (vintage ? 'rgba(0,0,0,.25)' : 'rgba(128,128,128,.12)') : 'transparent' }}>
+                {renderItem ? renderItem(o) : o}{on && <span>✓</span>}
+              </button>; })}
+          </div>
+        </div>, document.body)}
+    </>
+  );
+};

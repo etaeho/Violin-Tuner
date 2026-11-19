@@ -323,11 +323,18 @@ const useTunerLogic = () => {
   };
 
   const cycleTolerance = () => { setTolerance(prev=>prev>=24?4:prev+2); haptic(8); };
+  // 드롭다운에서 고른 값 바로 정하기
+  const pickA4Freq = (next) => {
+    setA4Freq(next); a4FreqRef.current = next;
+    if (playingTone && oscillatorRef.current && audioContextRef.current)
+      oscillatorRef.current.frequency.setValueAtTime(next * Math.pow(2, toneSemiRef.current / 12), audioContextRef.current.currentTime);
+  };
+  const pickTolerance = (v) => setTolerance(v);
 
   return {
     isStarted, pitch, cents, centsExact, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
-    startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance,
+    startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance, pickA4Freq, pickTolerance,
     settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise, autoCal,
     getStream: () => streamRef.current,                 // 녹음(recorder.jsx)이 같은 마이크를 씀
     // 녹음 재생 중엔 스피커 소리를 연습 기록·연주 명령으로 세지 않음
@@ -775,15 +782,15 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   const openHit = active && STR.findIndex(([, sm]) => sm === base);
   if (bare) {
     // 바탕 3가지: 클래식(크림 종이) · 기본(흰색) · 절전형(검정)
-    const B = vintage ? { bg: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)', edge: 'rgba(60,40,20,.55)', tick: 'rgba(59,42,26,.45)', zero: '#3b2a1a',
-        cur: '#1a0f05', note: 'rgba(59,42,26,.55)', sharp: 'rgba(59,42,26,.55)', dot: '#b8860b', ok: '#15803d', idle: 'rgba(59,42,26,.4)',
-        head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strFill: '#3a2410', strFillInk: '#f4d78a', strFillEdge: '#b88a35', strOff: 'rgba(59,42,26,.5)', serif: 'Georgia,serif',
+    const B = vintage ? { bg: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)', edge: 'rgba(60,40,20,.35)', tick: 'rgba(40,26,12,.7)', zero: '#1a0f05',
+        cur: '#000000', note: '#1a0f05', sharp: '#4a3420', dot: '#b8860b', ok: '#15803d', idle: 'rgba(59,42,26,.4)',
+        head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strFill: '#3a2410', strFillInk: '#f4d78a', strFillEdge: '#b88a35', strOff: '#3b2a1a', serif: 'Georgia,serif',
         frame: { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } }
-      : light ? { bg: '#ffffff', edge: '#ffffff', tick: '#c4c4cc', zero: '#3f3f46', cur: '#111111', note: '#9ca3af', sharp: '#c9cbd1', dot: '#d97706', ok: '#059669', idle: '#a1a1aa',
-        head: '#ffffff', line: '#e4e4e7', ink: '#111111', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strFill: '#f59e0b', strFillInk: '#000', strFillEdge: '#d97706', strOff: '#a1a1aa',
+      : light ? { bg: '#ffffff', edge: 'rgba(255,255,255,.6)', tick: '#71717a', zero: '#111111', cur: '#000000', note: '#18181b', sharp: '#52525b', dot: '#d97706', ok: '#059669', idle: '#71717a',
+        head: '#ffffff', line: '#d4d4d8', ink: '#000000', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strFill: '#f59e0b', strFillInk: '#000', strFillEdge: '#d97706', strOff: '#3f3f46',
         frame: { border: '1px solid #e4e4e7', boxShadow: '0 2px 10px rgba(0,0,0,.06)' } }
-      : { bg: '#070707', edge: '#000000', tick: '#3f3f46', zero: '#d4d4d8', cur: '#ffffff', note: '#71717a', sharp: '#3f3f46', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
-        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strFill: '#ffcc00', strFillInk: '#000', strFillEdge: '#ffcc00', strOff: '#52525b',
+      : { bg: '#070707', edge: 'rgba(0,0,0,.6)', tick: '#71717a', zero: '#ffffff', cur: '#ffffff', note: '#ffffff', sharp: '#d4d4d8', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
+        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strFill: '#ffcc00', strFillInk: '#000', strFillEdge: '#ffcc00', strOff: '#d4d4d8',
         frame: { border: '1px solid rgba(255,255,255,.08)' } };
     const st = !active ? 'idle' : inTune ? 'ok' : cents > 0 ? 'hi' : 'lo';
     const SC = { ok: B.ok, hi: '#ef4444', lo: '#3b82f6', idle: B.idle }[st];   // 상태 색 = 맞음/높음/낮음
@@ -825,8 +832,8 @@ const NoteTape = ({ tuner, showMic, bare }) => {
           // 지금 소리 내는 현 = 칸을 꽉 채운 색 + 굵은 현 줄(G가 가장 굵음), 개방현 음이면 아래 '개방'
           return <div key={nm} className="h-[52px] flex flex-col items-center justify-center font-black leading-none"
             style={{ background: on ? B.strFill : B.strBg, color: on ? B.strFillInk : B.strOff, fontFamily: B.serif, boxShadow: on ? `inset 0 0 0 2px ${B.strFillEdge}` : 'none' }}>
-            <span className="flex items-center gap-1.5 text-[22px]">
-              <i className="rounded-full" style={{ width: 16, height: 4 - i * 0.7, background: 'currentColor', opacity: on ? 1 : 0.5 }}/>{nm}<span className="text-[15px]">현</span>
+            <span className="flex items-center gap-2 text-[30px]">
+              <i className="rounded-full" style={{ width: 16, height: 4 - i * 0.7, background: 'currentColor', opacity: on ? 1 : 0.6 }}/>{nm}
             </span>
             <span className="text-[11px] mt-1" style={{ opacity: exact ? 1 : 0, height: 11 }}>개방</span>
           </div>;
@@ -1588,22 +1595,16 @@ const Tuner = ({ tuner, metro, openSettings }) => {
       {/* Top controls */}
       <div className="w-full flex justify-between items-center h-10 shrink-0 max-w-sm">
         <div className="flex gap-2">
-          <button onClick={cycleA4Freq}
-            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md">
-            <span className="text-gray-400">A4=</span>
-            <span className="text-white font-mono text-sm w-7 text-left">{a4Freq}</span>
-          </button>
-          <button onClick={cycleTolerance}
-            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md">
-            <div className="w-2 h-2 rounded-full bg-[#4afc9d] shadow-[0_0_6px_#4afc9d]"/>
-            <span className="text-gray-400">범위</span>
-            <span className="text-white font-mono text-sm w-7 text-left">±{tolerance}</span>
-          </button>
+          {/* A4 · 허용 범위 = 드롭다운 목록 */}
+          <ChipDropdown value={a4Freq} options={[436,437,438,439,440,441,442,443,444,445,446]} onPick={tuner.pickA4Freq} ariaLabel="A4 기준음 고르기"
+            render={v => <><span className="text-gray-400">A4=</span><span className="text-white font-mono text-sm">{v}</span></>} renderItem={v => <span>{v} Hz</span>}/>
+          <ChipDropdown value={tolerance} options={[2,3,4,5,6,8,10,12,15,20,25,30]} onPick={tuner.pickTolerance} ariaLabel="허용 범위 고르기"
+            render={v => <><div className="w-2 h-2 rounded-full bg-[#4afc9d] shadow-[0_0_6px_#4afc9d]"/><span className="text-white font-mono text-sm">±{v}</span></>} renderItem={v => <span>±{v}¢</span>}/>
         </div>
         <RecChip/>
         <div className="flex gap-2">
           <button onClick={() => { openSettings?.('t1'); haptic(8); }}
-            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform shadow-md text-gray-300">
+            className="flex items-center gap-1.5 t-chip px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap active:scale-95 transition-transform shadow-md text-gray-300">
             <SlidersHorizontal size={13} className="text-[#4afc9d]"/> 설정
           </button>
           <button onClick={handleReset}
