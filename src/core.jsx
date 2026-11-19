@@ -233,6 +233,7 @@ const DEFAULT_SETTINGS = {
   clarity: 0.90,     // 주기성 신뢰도 0~1. 잡음은 낮고 악기 소리는 높음
   stableFrames: 3,   // 같은 음이 N프레임 연속이어야 표시
   smoothing: 6,      // 평균낼 프레임 수 (클수록 부드럽고 느림)
+  steadyMs: 180,     // 안정화: 작은 흔들림을 이 시간(ms) 동안 부드럽게 (음 바뀜은 즉시)
   holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
   minFreq: 150,      // 감지 최저 Hz (바이올린 G3 = 196Hz, 낮게 풀린 G현도 잡히게 여유)
   maxFreq: 4200,     // 감지 최고 Hz (E현 최상단 A7 ≈ 3.5kHz 포함)

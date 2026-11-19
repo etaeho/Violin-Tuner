@@ -33,6 +33,7 @@ const useTunerLogic = () => {
   const lastGoodRef    = useRef(0);
   const calibRef       = useRef(null);
   const startingRef    = useRef(null);
+  const smoothRef      = useRef({ on: false, v: 0, t: 0 });   // 안정화(지수 평활) 상태
   const lastSigRef     = useRef(NaN);   // 마이크 감시: 마지막 소리 데이터
   const aliveAtRef     = useRef(0);     //   마지막으로 소리 데이터가 바뀐 시각
   const userStopRef    = useRef(false); //   사용자가 직접 끔 → 자동으로 다시 켜지 않음
@@ -165,7 +166,16 @@ const useTunerLogic = () => {
         if (last && Math.abs(centsBetween(raw, last)) > 50) hist.length = 0;
         hist.push(raw);
         while (hist.length > S.smoothing) hist.shift();
-        const freq = hist.reduce((a, b) => a + b, 0) / hist.length;
+        // 안정화 ① 가운데값(median): 순간적으로 튄 프레임을 버림
+        const sorted = [...hist].sort((a, b) => a - b), mid = sorted.length >> 1;
+        const med = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        // 안정화 ② 지수 평활(steadyMs): 작은 흔들림은 부드럽게, 음이 바뀌면(40¢ 넘게) 바로 따라감
+        const semiRaw = 12 * Math.log2(med / a4FreqRef.current);
+        const sm = smoothRef.current, dt = Math.min(100, now - (sm.t || now));
+        if (!sm.on || Math.abs(semiRaw - sm.v) > 0.4 || !S.steadyMs) { sm.v = semiRaw; sm.on = true; }
+        else sm.v += (semiRaw - sm.v) * (1 - Math.exp(-dt / S.steadyMs));
+        sm.t = now;
+        const freq = a4FreqRef.current * Math.pow(2, sm.v / 12);
         lastGoodRef.current = now;
 
         const currentA4 = a4FreqRef.current;
@@ -206,7 +216,7 @@ const useTunerLogic = () => {
     if (!accepted) {
       if (lastGoodRef.current && now - lastGoodRef.current > S.holdMs) {
         lastGoodRef.current = 0;
-        freqHistoryRef.current = [];
+        freqHistoryRef.current = []; smoothRef.current = { on: false, v: 0, t: 0 };
         setPitch(0); setCents(0); setCentsExact(0); setStringCents(0);
       }
     }
@@ -772,6 +782,10 @@ const NoteTape = ({ tuner, showMic, bare }) => {
     if (bandRef.current) bandRef.current.style.width = (tolRef.current * 2 / 100) * sp + 'px';
   };
   const [s0, z0] = useSpring([semi, zoomT], place, { k: 0.18, snap: 6 });
+  // 벨트 위 세부 음정 줄: ±25¢를 가로 전체로, 0¢ = 정확히 가운데(벨트 바늘과 같은 세로선)
+  const FINE = 25, fineRef = useRef(null);
+  const fineX = (c) => 50 + Math.max(-1, Math.min(1, c / FINE)) * 50;
+  const [f0] = useSpring([active ? tuner.centsExact : 0], ([c]) => { if (fineRef.current) fineRef.current.style.left = fineX(c) + '%'; }, { k: 0.22, snap: 0.05 });
   const sp0 = SP * (1 + ZM * z0);
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
   const ink = vintage ? '#3b2a1a' : '#e5e5e5';
@@ -830,12 +844,12 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         {STR.map(([nm], i) => {
           const on = i === strIdx, exact = on && openHit === i;
           // 지금 소리 내는 현 = 칸을 꽉 채운 색 + 굵은 현 줄(G가 가장 굵음), 개방현 음이면 아래 '개방'
-          return <div key={nm} className="h-[52px] flex flex-col items-center justify-center font-black leading-none"
+          return <div key={nm} className="relative h-[46px] flex items-center justify-center font-black leading-none"
             style={{ background: on ? B.strFill : B.strBg, color: on ? B.strFillInk : B.strOff, fontFamily: B.serif, boxShadow: on ? `inset 0 0 0 2px ${B.strFillEdge}` : 'none' }}>
             <span className="flex items-center gap-2 text-[30px]">
               <i className="rounded-full" style={{ width: 16, height: 4 - i * 0.7, background: 'currentColor', opacity: on ? 1 : 0.6 }}/>{nm}
             </span>
-            <span className="text-[11px] mt-1" style={{ opacity: exact ? 1 : 0, height: 11 }}>개방</span>
+            {exact && <span className="absolute bottom-0.5 left-0 right-0 text-center text-[10px]">개방</span>}
           </div>;
         })}
       </div>
@@ -857,7 +871,18 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         </div>
       </div>
     );
-    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}>{head}{belt}{strings}</div>;
+    // 세부 음정 줄 (머리 칸과 벨트 사이): 좌우 여백 없이 가로 전체 → 0¢가 벨트 가운데 바늘과 정확히 같은 줄
+    const fine = (
+      <div className="relative h-[34px]" style={{ background: B.head, borderBottom: `1px solid ${B.line}` }}>
+        <i className="absolute top-1 bottom-[15px] -translate-x-1/2 rounded-sm" style={{ left: '50%', width: `${(tolerance / FINE) * 100}%`, background: inTune ? 'rgba(74,252,157,.35)' : 'rgba(74,252,157,.15)' }}/>
+        {Array.from({ length: 2 * FINE + 1 }, (_, j) => { const c = j - FINE; if (c % 5 && Math.abs(c) > 10) return null;   // ±10 안은 1¢, 밖은 5¢ 눈금
+          const big = c % 10 === 0, mid = c % 5 === 0;
+          return <i key={j} className="absolute top-1 -translate-x-1/2" style={{ left: `${fineX(c)}%`, width: c === 0 ? 2 : 1, height: c === 0 ? 18 : big ? 12 : mid ? 8 : 4, background: c === 0 ? B.zero : B.tick, opacity: mid ? 1 : 0.6 }}/>; })}
+        {[-20, -10, 10, 20].map(v => <span key={v} className="absolute bottom-0.5 -translate-x-1/2 font-mono font-black text-[10px] leading-none" style={{ left: `${fineX(v)}%`, color: B.tick }}>{v > 0 ? '+' + v : v}</span>)}
+        <i ref={fineRef} className="absolute top-0 bottom-0 -translate-x-1/2 w-[3px] rounded-full z-10" style={{ left: `${fineX(f0)}%`, background: SC, boxShadow: active ? `0 0 6px ${SC}` : 'none', opacity: active ? 1 : 0.4 }}/>
+      </div>
+    );
+    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}>{head}{fine}{belt}{strings}</div>;
   }
   const tape = (
     <div className="relative w-full h-[92px] overflow-hidden rounded-lg"
@@ -1411,6 +1436,9 @@ const SettingsSheet = ({ tuner, metro, onClose, layoutTab = 't1' }) => {
           <SliderRow label="확정 프레임" value={S.stableFrames} display={`${S.stableFrames}프레임 · ${Math.round(S.stableFrames * 16.7)}ms`} min={1} max={10} step={1}
             onChange={v => updateSettings({ stableFrames: v })}
             hint="같은 음이 이만큼 연속돼야 표시. 순간 잡음으로 튀는 걸 막습니다."/>
+          <SliderRow label="안정화" value={S.steadyMs} display={S.steadyMs ? `${S.steadyMs}ms` : '끔'} min={0} max={500} step={10}
+            onChange={v => updateSettings({ steadyMs: v })}
+            hint="클수록 숫자·바늘이 덜 흔들리고 차분하게, 작을수록 즉각 반응합니다. 음이 바뀌면 바로 따라갑니다."/>
           <SliderRow label="평균 프레임" value={S.smoothing} display={`${S.smoothing}`} min={1} max={15} step={1}
             onChange={v => updateSettings({ smoothing: v })}
             hint="클수록 바늘이 부드럽게, 작을수록 빠르게 움직입니다."/>
