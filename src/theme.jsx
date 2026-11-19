@@ -43,9 +43,9 @@ const DrumDigits = ({ text, unit = 'Hz', size = 'md', onDark = false }) => {   /
 //  base = 바탕 테마(theme.css의 data-theme), skin = 클래식(우드)의 계기판 모양(SKINS.radio)
 // ==========================================
 const DESIGNS = [
-  { id: 'dark',  name: '검정',   desc: '어두운 곳 · 기본', base: 'tape' },
-  { id: 'light', name: '흰색',   desc: '밝은 곳 · 야외',   base: 'light' },
-  { id: 'radio', name: '클래식', desc: '원목 · 크림 문자판', base: 'vintage', skin: 'radio' },
+  { id: 'light', name: '기본',   desc: '흰 화면 · 밝은 곳', base: 'light' },
+  { id: 'dark',  name: '절전형', desc: '검정 화면 · 배터리 절약', base: 'tape' },
+  { id: 'radio', name: '클래식', desc: '나무색 · 크림 문자판', base: 'vintage', skin: 'radio' },
 ];
 const designById = (id) => DESIGNS.find(d => d.id === id) || DESIGNS[0];
 

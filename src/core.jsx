@@ -237,7 +237,7 @@ const DEFAULT_SETTINGS = {
   minFreq: 150,      // 감지 최저 Hz (바이올린 G3 = 196Hz, 낮게 풀린 G현도 잡히게 여유)
   maxFreq: 4200,     // 감지 최고 Hz (E현 최상단 A7 ≈ 3.5kHz 포함)
   uiMode: 'tape',    // 바탕 테마(theme.css data-theme) — design에서 자동으로 정해짐
-  design: 'dark',    // 디자인 3가지 → theme.jsx DESIGNS (dark 검정 · light 흰색 · radio 클래식)
+  design: 'dark',    // 디자인 3가지 → theme.jsx DESIGNS (light 기본(흰색) · dark 절전형(검정) · radio 클래식(나무색))
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON).map(b => b.id === 'pitch' ? { ...b, size: 's' } : b),   // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)

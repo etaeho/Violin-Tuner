@@ -739,7 +739,7 @@ const TunerReadout = ({ tuner }) => {
 const TAPE_SP = 60;    // 반음 간격(px) → 한 화면에 음 6개쯤 (가까우면 ×3 확대)
 
 const NoteTape = ({ tuner, showMic, bare }) => {
-  const vintage = useVintage();
+  const vintage = useVintage(), light = useTheme() === 'light';
   const { isStarted, pitch, a4Freq, cents, tolerance } = tuner;
   const active = isStarted && pitch > 0;
   const semiRef = useRef(0);
@@ -774,9 +774,21 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   const strIdx = active ? STR.reduce((acc, [, sm], i) => (base >= sm ? i : acc), -1) : -1;
   const openHit = active && STR.findIndex(([, sm]) => sm === base);
   if (bare) {
-    const okC = '#4afc9d', needleC = inTune ? okC : '#e11d2a';
+    // 바탕 3가지: 클래식(크림 종이) · 기본(흰색) · 절전형(검정)
+    const B = vintage ? { bg: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)', edge: 'rgba(60,40,20,.55)', tick: 'rgba(59,42,26,.45)', zero: '#3b2a1a',
+        cur: '#1a0f05', note: 'rgba(59,42,26,.55)', sharp: 'rgba(59,42,26,.55)', dot: '#b8860b', ok: '#15803d', idle: 'rgba(59,42,26,.4)',
+        head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strOff: 'rgba(59,42,26,.5)', serif: 'Georgia,serif',
+        frame: { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } }
+      : light ? { bg: '#ffffff', edge: '#ffffff', tick: '#c4c4cc', zero: '#3f3f46', cur: '#111111', note: '#9ca3af', sharp: '#c9cbd1', dot: '#d97706', ok: '#059669', idle: '#a1a1aa',
+        head: '#ffffff', line: '#e4e4e7', ink: '#111111', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strOff: '#a1a1aa',
+        frame: { border: '1px solid #e4e4e7', boxShadow: '0 2px 10px rgba(0,0,0,.06)' } }
+      : { bg: '#070707', edge: '#000000', tick: '#3f3f46', zero: '#d4d4d8', cur: '#ffffff', note: '#71717a', sharp: '#3f3f46', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
+        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strOff: '#52525b',
+        frame: { border: '1px solid rgba(255,255,255,.08)' } };
+    const st = !active ? 'idle' : inTune ? 'ok' : cents > 0 ? 'hi' : 'lo';
+    const SC = { ok: B.ok, hi: '#ef4444', lo: '#3b82f6', idle: B.idle }[st];   // 상태 색 = 맞음/높음/낮음
     const belt = (
-      <div className="relative w-full overflow-hidden" style={{ height: 100, ...(vintage ? { background: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)' } : { background: '#070707' }) }}>
+      <div className="relative w-full overflow-hidden" style={{ height: 100, background: B.bg }}>
         {/* 허용 범위 */}
         <div ref={bandRef} className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2"
           style={{ width: `${(tolerance * 2 / 100) * sp0}px`, background: inTune ? 'rgba(74,252,157,.28)' : 'rgba(74,252,157,.12)' }}/>
@@ -788,54 +800,51 @@ const NoteTape = ({ tuner, showMic, bare }) => {
               className="absolute top-0 bottom-0 will-change-transform flex flex-col items-center justify-center"
               style={{ left: '50%', width: sp0, marginLeft: -sp0 / 2, transform: `translateX(${(k - s0) * sp0}px)` }}>
               {Array.from({ length: 10 }, (_, j) => { const c = j * 10 - 50;   // 벨트와 함께 흐르는 10¢ 눈금 (가운데 바늘 아래 = 지금 센트)
-                return <i key={j} className="absolute top-0 w-px" style={{ left: `${50 + c}%`, height: c === 0 ? 16 : c === -50 ? 0 : 8, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
-                  background: c === 0 ? (vintage ? '#3b2a1a' : '#d4d4d8') : vintage ? 'rgba(59,42,26,.45)' : '#3f3f46' }}/>; })}
-              <span className="font-black leading-none" style={{ fontFamily: vintage ? 'Georgia,serif' : undefined, fontSize: isCur ? 43 : 32,
-                color: isCur ? (inTune ? (vintage ? '#15803d' : okC) : (vintage ? '#1a0f05' : '#fff')) : vintage ? 'rgba(59,42,26,.55)' : name[1] === '#' ? '#3f3f46' : '#71717a' }}>
+                return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 16 : c === -50 ? 0 : 8, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
+                  background: c === 0 ? B.zero : B.tick }}/>; })}
+              <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: isCur ? 43 : 32,
+                color: isCur ? (inTune ? B.ok : B.cur) : name[1] === '#' ? B.sharp : B.note }}>
                 {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: 15 }}>{oct}</sub>
               </span>
-              {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: vintage ? '#b8860b' : '#ffcc00' }}/>}
+              {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: B.dot }}/>}
             </div>
           );
         })}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: vintage
-          ? 'linear-gradient(90deg,rgba(60,40,20,.55),transparent 18%,transparent 82%,rgba(60,40,20,.55))'
-          : 'linear-gradient(90deg,#000,transparent 18%,transparent 82%,#000)' }}/>
-        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[3px] z-10" style={{ background: needleC, boxShadow: `0 0 6px ${needleC}`, opacity: active ? 0.55 : 0.35 }}/>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(90deg,${B.edge},transparent 18%,transparent 82%,${B.edge})` }}/>
+        <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[3px] z-10" style={{ background: SC, boxShadow: `0 0 6px ${SC}`, opacity: active ? 0.55 : 0.35 }}/>
         {/* 지금 음 사각 창 (색 = 맞음/높음/낮음) */}
-        {(() => { const lc = !active ? (vintage ? 'rgba(59,42,26,.4)' : '#3f3f46') : inTune ? (vintage ? '#15803d' : okC) : cents > 0 ? '#ef4444' : '#3b82f6';
-          return <div className="absolute z-20 left-1/2 -translate-x-1/2 top-[18px] bottom-1.5 rounded-xl pointer-events-none"
-            style={{ width: 86, border: `3px solid ${lc}`, boxShadow: active ? `0 0 14px ${lc}88, inset 0 0 18px ${lc}33` : 'none' }}/>; })()}
+        <div className="absolute z-20 left-1/2 -translate-x-1/2 top-[18px] bottom-1.5 rounded-xl pointer-events-none"
+          style={{ width: 86, border: `3px solid ${SC}`, boxShadow: active ? `0 0 14px ${SC}88, inset 0 0 18px ${SC}33` : 'none' }}/>
       </div>
     );
     // 4현: 지금 소리를 내는 현 표시 (개방현 음이면 더 강하게)
     const strings = (
-      <div className="grid grid-cols-4 gap-px rounded-b-lg overflow-hidden" style={{ background: vintage ? 'rgba(59,42,26,.25)' : '#1f1f1f' }}>
+      <div className="grid grid-cols-4 gap-px rounded-b-lg overflow-hidden" style={{ background: B.line }}>
         {STR.map(([nm], i) => {
           const on = i === strIdx, exact = on && openHit === i;
-          const c = exact ? (inTune ? okC : '#ffcc00') : '#ffcc00';
           return <div key={nm} className="h-8 flex items-center justify-center gap-1 text-[15px] font-black"
-            style={{ background: on ? (vintage ? '#3a2410' : 'rgba(255,204,0,.14)') : (vintage ? '#e9dfc6' : '#0b0b0b'),
-              color: on ? (vintage ? '#f4d78a' : c) : vintage ? 'rgba(59,42,26,.5)' : '#52525b', fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+            style={{ background: on ? B.strOnBg : B.strBg, color: on ? (exact && inTune && !vintage ? B.ok : B.strOn) : B.strOff, fontFamily: B.serif }}>
             <i className="h-[2px] rounded-full" style={{ width: 14 - i * 2 + 6, background: 'currentColor', opacity: on ? 1 : 0.5 }}/>{nm}현{exact ? ' 개방' : ''}
           </div>;
         })}
       </div>
     );
-    // 벨트 위 색 띠: 줄 전체가 상태 색(맞음 초록 · 높음 빨강 · 낮음 파랑), 검은 큰 글씨로 음 | 센트
+    // 벨트 위 양쪽 큰 칸: 왼쪽 = 지금 음(크게) | 오른쪽 = 센트(크게, 상태 색) + ▲▼ 중 고칠 방향만 켜짐
     const nmA = active && tuner.currentNote ? tuner.currentNote.name : '–', shA = active && tuner.currentNote?.symbol ? '♯' : '', ocA = active && tuner.currentNote ? tuner.currentNote.octave : '';
-    const cAbs = Math.abs(cents), cSg = !active ? '' : cents > 0 ? '+' : cents < 0 ? '−' : '±';
-    const st = !active ? 'idle' : inTune ? 'ok' : cents > 0 ? 'hi' : 'lo';
-    const SC = { ok: vintage ? '#15803d' : okC, hi: '#ef4444', lo: '#3b82f6', idle: vintage ? 'rgba(59,42,26,.4)' : '#52525b' }[st];
-    const serif = vintage ? 'Georgia,serif' : undefined;
+    const cSg = !active ? '' : cents > 0 ? '+' : cents < 0 ? '−' : '±';
     const head = (
-      <div className="flex items-center justify-center gap-5 h-[58px]" style={{ background: st === 'idle' ? (vintage ? '#d6ccb3' : '#18181b') : SC }}>
-        <span className="font-black leading-none" style={{ fontSize: 44, color: st === 'idle' ? SC : '#000', fontFamily: serif }}>{nmA}{shA}<sub style={{ fontSize: 17, opacity: .6 }}>{ocA}</sub></span>
-        <span className="w-[3px] h-9 rounded-full" style={{ background: st === 'idle' ? SC : 'rgba(0,0,0,.35)' }}/>
-        <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 40, color: st === 'idle' ? SC : '#000' }}>{st === 'ok' ? '✓ ' : ''}{cSg}{active ? cAbs : '0'}</span>
+      <div className="grid grid-cols-2 h-[64px]" style={{ background: B.head, borderBottom: `1px solid ${B.line}` }}>
+        <div className="flex items-center justify-center" style={{ borderRight: `1px solid ${B.line}` }}>
+          <span className="font-black leading-none" style={{ fontSize: 54, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 18 }}>{ocA}</sub></span>
+        </div>
+        <div className="flex items-center justify-center gap-1.5">
+          <span className="flex flex-col leading-none text-lg font-black" style={{ color: SC }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
+          <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 46, color: SC }}>{cSg}{active ? Math.abs(cents) : '0'}</span>
+          <span className="font-black text-lg self-end mb-2" style={{ color: SC }}>{st === 'ok' ? '✓' : '¢'}</span>
+        </div>
       </div>
     );
-    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={vintage ? { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } : { border: '1px solid rgba(255,255,255,.08)' }}>{head}{belt}{strings}</div>;
+    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}>{head}{belt}{strings}</div>;
   }
   const tape = (
     <div className="relative w-full h-[92px] overflow-hidden rounded-lg"
