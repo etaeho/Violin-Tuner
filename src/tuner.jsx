@@ -777,13 +777,13 @@ const NoteTape = ({ tuner, showMic, bare }) => {
     // 바탕 3가지: 클래식(크림 종이) · 기본(흰색) · 절전형(검정)
     const B = vintage ? { bg: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)', edge: 'rgba(60,40,20,.55)', tick: 'rgba(59,42,26,.45)', zero: '#3b2a1a',
         cur: '#1a0f05', note: 'rgba(59,42,26,.55)', sharp: 'rgba(59,42,26,.55)', dot: '#b8860b', ok: '#15803d', idle: 'rgba(59,42,26,.4)',
-        head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strOff: 'rgba(59,42,26,.5)', serif: 'Georgia,serif',
+        head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strFill: '#3a2410', strFillInk: '#f4d78a', strFillEdge: '#b88a35', strOff: 'rgba(59,42,26,.5)', serif: 'Georgia,serif',
         frame: { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } }
       : light ? { bg: '#ffffff', edge: '#ffffff', tick: '#c4c4cc', zero: '#3f3f46', cur: '#111111', note: '#9ca3af', sharp: '#c9cbd1', dot: '#d97706', ok: '#059669', idle: '#a1a1aa',
-        head: '#ffffff', line: '#e4e4e7', ink: '#111111', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strOff: '#a1a1aa',
+        head: '#ffffff', line: '#e4e4e7', ink: '#111111', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strFill: '#f59e0b', strFillInk: '#000', strFillEdge: '#d97706', strOff: '#a1a1aa',
         frame: { border: '1px solid #e4e4e7', boxShadow: '0 2px 10px rgba(0,0,0,.06)' } }
       : { bg: '#070707', edge: '#000000', tick: '#3f3f46', zero: '#d4d4d8', cur: '#ffffff', note: '#71717a', sharp: '#3f3f46', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
-        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strOff: '#52525b',
+        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strFill: '#ffcc00', strFillInk: '#000', strFillEdge: '#ffcc00', strOff: '#52525b',
         frame: { border: '1px solid rgba(255,255,255,.08)' } };
     const st = !active ? 'idle' : inTune ? 'ok' : cents > 0 ? 'hi' : 'lo';
     const SC = { ok: B.ok, hi: '#ef4444', lo: '#3b82f6', idle: B.idle }[st];   // 상태 색 = 맞음/높음/낮음
@@ -799,9 +799,9 @@ const NoteTape = ({ tuner, showMic, bare }) => {
             <div key={k} ref={el => { if (el) keyRefs.current[k] = el; else delete keyRefs.current[k]; }}
               className="absolute top-0 bottom-0 will-change-transform flex flex-col items-center justify-center"
               style={{ left: '50%', width: sp0, marginLeft: -sp0 / 2, transform: `translateX(${(k - s0) * sp0}px)` }}>
-              {Array.from({ length: 10 }, (_, j) => { const c = j * 10 - 50;   // 벨트와 함께 흐르는 10¢ 눈금 (가운데 바늘 아래 = 지금 센트)
-                return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 16 : c === -50 ? 0 : 8, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
-                  background: c === 0 ? B.zero : B.tick }}/>; })}
+              {Array.from({ length: 20 }, (_, j) => { const c = j * 5 - 50;   // 벨트와 함께 흐르는 5¢ 눈금 (10¢ 길게, 가운데 바늘 아래 = 지금 센트)
+                return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 18 : c === -50 ? 0 : c % 10 === 0 ? 10 : 5, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
+                  background: c === 0 ? B.zero : B.tick, opacity: c % 10 === 0 ? 1 : 0.7 }}/>; })}
               <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: isCur ? 43 : 32,
                 color: isCur ? (inTune ? B.ok : B.cur) : name[1] === '#' ? B.sharp : B.note }}>
                 {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: 15 }}>{oct}</sub>
@@ -822,16 +822,22 @@ const NoteTape = ({ tuner, showMic, bare }) => {
       <div className="grid grid-cols-4 gap-px rounded-b-lg overflow-hidden" style={{ background: B.line }}>
         {STR.map(([nm], i) => {
           const on = i === strIdx, exact = on && openHit === i;
-          return <div key={nm} className="h-8 flex items-center justify-center gap-1 text-[15px] font-black"
-            style={{ background: on ? B.strOnBg : B.strBg, color: on ? (exact && inTune && !vintage ? B.ok : B.strOn) : B.strOff, fontFamily: B.serif }}>
-            <i className="h-[2px] rounded-full" style={{ width: 14 - i * 2 + 6, background: 'currentColor', opacity: on ? 1 : 0.5 }}/>{nm}현{exact ? ' 개방' : ''}
+          // 지금 소리 내는 현 = 칸을 꽉 채운 색 + 굵은 현 줄(G가 가장 굵음), 개방현 음이면 아래 '개방'
+          return <div key={nm} className="h-[52px] flex flex-col items-center justify-center font-black leading-none"
+            style={{ background: on ? B.strFill : B.strBg, color: on ? B.strFillInk : B.strOff, fontFamily: B.serif, boxShadow: on ? `inset 0 0 0 2px ${B.strFillEdge}` : 'none' }}>
+            <span className="flex items-center gap-1.5 text-[22px]">
+              <i className="rounded-full" style={{ width: 16, height: 4 - i * 0.7, background: 'currentColor', opacity: on ? 1 : 0.5 }}/>{nm}<span className="text-[15px]">현</span>
+            </span>
+            <span className="text-[11px] mt-1" style={{ opacity: exact ? 1 : 0, height: 11 }}>개방</span>
           </div>;
         })}
       </div>
     );
     // 벨트 위 양쪽 큰 칸: 왼쪽 = 지금 음(크게) | 오른쪽 = 센트(크게, 상태 색) + ▲▼ 중 고칠 방향만 켜짐
     const nmA = active && tuner.currentNote ? tuner.currentNote.name : '–', shA = active && tuner.currentNote?.symbol ? '♯' : '', ocA = active && tuner.currentNote ? tuner.currentNote.octave : '';
-    const cSg = !active ? '' : cents > 0 ? '+' : cents < 0 ? '−' : '±';
+    const ce = active ? Math.round(tuner.centsExact * 10) / 10 : 0, ceA = Math.abs(ce);
+    const cSg = !active ? '' : ce > 0 ? '+' : ce < 0 ? '−' : '±';
+    const cInt = Math.floor(ceA), cDec = Math.round((ceA - cInt) * 10) % 10;   // 큰 숫자 = 정수, 작게 = 소수 첫째 자리
     const head = (
       <div className="grid grid-cols-2 h-[64px]" style={{ background: B.head, borderBottom: `1px solid ${B.line}` }}>
         <div className="flex items-center justify-center" style={{ borderRight: `1px solid ${B.line}` }}>
@@ -839,7 +845,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         </div>
         <div className="flex items-center justify-center gap-1.5">
           <span className="flex flex-col leading-none text-lg font-black" style={{ color: SC }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
-          <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 46, color: SC }}>{cSg}{active ? Math.abs(cents) : '0'}</span>
+          <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 46, color: SC }}>{cSg}{cInt}<span style={{ fontSize: 22 }}>.{cDec}</span></span>
           <span className="font-black text-lg self-end mb-2" style={{ color: SC }}>{st === 'ok' ? '✓' : '¢'}</span>
         </div>
       </div>
