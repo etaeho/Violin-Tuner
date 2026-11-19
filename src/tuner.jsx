@@ -823,9 +823,9 @@ const NoteTape = ({ tuner, showMic, bare }) => {
               {Array.from({ length: 20 }, (_, j) => { const c = j * 5 - 50;   // 벨트와 함께 흐르는 5¢ 눈금 (10¢ 길게, 가운데 바늘 아래 = 지금 센트)
                 return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 18 : c === -50 ? 0 : c % 10 === 0 ? 10 : 5, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
                   background: c === 0 ? B.zero : B.tick, opacity: c % 10 === 0 ? 1 : 0.7 }}/>; })}
-              <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: isCur ? 43 : 32,
+              <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: isCur ? 58 : 32,
                 color: isCur ? (inTune ? B.ok : B.cur) : name[1] === '#' ? B.sharp : B.note }}>
-                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: 15 }}>{oct}</sub>
+                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: isCur ? 20 : 15 }}>{oct}</sub>
               </span>
               {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: B.dot }}/>}
             </div>
@@ -844,12 +844,11 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         {STR.map(([nm], i) => {
           const on = i === strIdx, exact = on && openHit === i;
           // 지금 소리 내는 현 = 칸을 꽉 채운 색 + 굵은 현 줄(G가 가장 굵음), 개방현 음이면 아래 '개방'
-          return <div key={nm} className="relative h-[46px] flex items-center justify-center font-black leading-none"
-            style={{ background: on ? B.strFill : B.strBg, color: on ? B.strFillInk : B.strOff, fontFamily: B.serif, boxShadow: on ? `inset 0 0 0 2px ${B.strFillEdge}` : 'none' }}>
-            <span className="flex items-center gap-2 text-[30px]">
-              <i className="rounded-full" style={{ width: 16, height: 4 - i * 0.7, background: 'currentColor', opacity: on ? 1 : 0.6 }}/>{nm}
+          return <div key={nm} className="relative h-[34px] flex items-center justify-center font-black leading-none"
+            style={{ background: on ? B.strFill : B.strBg, color: on ? B.strFillInk : B.strOff, opacity: on ? 1 : 0.45, fontFamily: B.serif, boxShadow: on ? `inset 0 0 0 2px ${B.strFillEdge}` : 'none' }}>
+            <span className="flex items-center gap-1.5 text-[18px]">
+              <i className="rounded-full" style={{ width: 12, height: 3.5 - i * 0.6, background: 'currentColor', opacity: on ? 1 : 0.6 }}/>{nm}
             </span>
-            {exact && <span className="absolute bottom-0.5 left-0 right-0 text-center text-[10px]">개방</span>}
           </div>;
         })}
       </div>
