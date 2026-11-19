@@ -175,7 +175,7 @@ const useMetronomeLogic = () => {
       if (soundType===2)  { freq=2400; vol=0.6; }
       else if (soundType===3) { freq=2200; vol=0.55; }
       else if (soundType===4) { freq=1400; vol=0.65; }    // 박 원에서 톡 눌러 바꾼 '다른 소리' (같은 결, 낮게)
-      else if (soundType===-1){ freq=2400; vol=0.4; dur=0.04; }   // 쪼갠 박: 짧고 작게
+      else if (soundType===-1){ freq=2000; vol=0.42; dur=0.065; }   // 쪼갠 박: 박과 같은 소리, 조금 작게 (날카롭지 않게)
       const osc=ctx.createOscillator(), gain=ctx.createGain();
       osc.setPeriodicWave(softSqRef.current.wave);
       osc.frequency.setValueAtTime(freq*1.3,time);
