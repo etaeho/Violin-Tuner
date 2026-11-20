@@ -537,34 +537,34 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
   const { isStarted, centsExact, tolerance, currentNote, ensureMic } = tuner;
   const vintage = useVintage(), skin = useSkin(), light = useTheme() === 'light';
   const B = pitchPalette(vintage, light), { active: live, inTune: ok, st, SC } = pitchStatus(tuner, B, swapColors);
-  const c = live ? Math.max(-50, Math.min(50, centsExact)) : 0;
+  const RG = FINE_RANGE;   // 눈금 범위 = 가로 벨트 세부 줄과 같은 ±25¢ (같은 센트면 같은 만큼 움직임, 넘으면 끝에 붙음)
+  const c = live ? Math.max(-RG, Math.min(RG, centsExact)) : 0;
   const face = vintage ? '#f3e8cc' : light ? '#ffffff' : '#0a0a0a';
   const tick = B.tick, ink = B.ink, serif = vintage ? 'Georgia,serif' : undefined;
   const W = 200, H = 100, cx = 100, cy = 112, R = 104;
-  const ang = (v) => Math.sign(v) * 62 * Math.pow(Math.min(50, Math.abs(v)) / 50, 0.55);   // 가운데를 넓게
+  const ang = (v) => Math.sign(v) * 64 * Math.pow(Math.min(RG, Math.abs(v)) / RG, 0.85);   // 거의 고른 눈금 (가운데 살짝만 넓게)
   const pt = (deg, r) => [cx + r * Math.sin(deg * Math.PI / 180), cy - r * Math.cos(deg * Math.PI / 180)];
   const arc = (d0, d1, r) => { const [x0, y0] = pt(d0, r), [x1, y1] = pt(d1, r); return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`; };
   const needleRef = useRef(null);
   const [c0] = useSpring([c], ([v]) => { const el = needleRef.current; if (!el) return; const [x, y] = pt(ang(v), R - 3); el.setAttribute('x2', x); el.setAttribute('y2', y); }, { k: 0.22, snap: 0.05 });
   const [nx, ny] = pt(ang(c0), R - 3);
   const ticks = [];
-  for (let v = -50; v <= 50; v++) {
+  for (let v = -RG; v <= RG; v++) {
     const a = Math.abs(v);
-    if (a > 10 && v % 5) continue;                    // ±10 안은 1센트마다, 밖은 5센트마다
-    const bigT = v % 10 === 0 || a === 5 || a === 25, len = v === 0 ? 16 : bigT ? 11 : a <= 10 ? 5 : 7;
+    const bigT = v % 5 === 0, len = v === 0 ? 20 : v % 10 === 0 ? 15 : bigT ? 11 : 6;   // 1센트마다, 5센트 길게, 10센트 더 길게
     const [x0, y0] = pt(ang(v), R), [x1, y1] = pt(ang(v), R - len);
-    ticks.push(<line key={v} x1={x0} y1={y0} x2={x1} y2={y1} stroke={v === 0 ? B.zero : tick} strokeWidth={v === 0 ? 2.2 : bigT ? 1.5 : 0.7} opacity={bigT ? 1 : 0.65}/>);
+    ticks.push(<line key={v} x1={x0} y1={y0} x2={x1} y2={y1} stroke={v === 0 ? B.zero : tick} strokeWidth={v === 0 ? 2.6 : bigT ? 1.8 : 0.8} opacity={bigT ? 1 : 0.6}/>);
   }
   const fs = compact ? 0.62 : big ? 1.35 : 1;
   const ce = live ? Math.round(centsExact * 10) / 10 : 0, ceA = Math.abs(ce), cInt = Math.floor(ceA), cDec = Math.round((ceA - cInt) * 10) % 10;
   return (
     <div className={`w-full rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[70px]' : big ? 'h-[210px]' : 'h-[136px]'}`} style={{ background: face, boxShadow: light ? 'inset 0 1px 4px rgba(0,0,0,.12)' : 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
+      <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[78px]' : big ? 'h-[220px]' : 'h-[156px]'}`} style={{ background: face, boxShadow: light ? 'inset 0 1px 4px rgba(0,0,0,.12)' : 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full">
           <path d={arc(ang(-tolerance), ang(tolerance), R - 7)} fill="none" stroke={ok ? 'rgba(74,252,157,.8)' : 'rgba(74,180,110,.38)'} strokeWidth="11"/>
           {ticks}
-          {[-50, -20, -10, -5, 5, 10, 20, 50].map(v => { const [x, y] = pt(ang(v), R - 21); return <text key={v} x={x} y={y + 3} textAnchor="middle" fontSize={Math.abs(v) <= 10 ? 8.5 : 7.5} fontWeight="800" fill={tick} fontFamily="ui-monospace,monospace">{v > 0 ? `+${v}` : v}</text>; })}
-          <text x={pt(0, R - 23)[0]} y={pt(0, R - 23)[1] + 3} textAnchor="middle" fontSize="10" fontWeight="900" fill={B.zero} fontFamily="ui-monospace,monospace">0</text>
+          {[-20, -10, 10, 20].map(v => { const [x, y] = pt(ang(v), R - 27); return <text key={v} x={x} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="900" fill={tick} fontFamily="ui-monospace,monospace">{v > 0 ? `+${v}` : v}</text>; })}
+          <text x={pt(0, R - 30)[0]} y={pt(0, R - 30)[1] + 4} textAnchor="middle" fontSize="13" fontWeight="900" fill={B.zero} fontFamily="ui-monospace,monospace">0</text>
           <line ref={needleRef} x1={cx} y1={cy} x2={nx} y2={ny} stroke={SC} strokeWidth="2.8" strokeLinecap="round" opacity={live ? 1 : 0.4}
             style={{ filter: live ? `drop-shadow(0 0 3px ${SC})` : 'none' }}/>
           <circle cx={cx} cy={H} r="8" fill={tick}/>
@@ -575,14 +575,14 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
           {isStarted ? 'LIVE' : 'OFF'}
         </button>
         {/* 왼쪽 아래: 지금 음 (크게) */}
-        <span className="absolute left-2.5 bottom-1.5 font-black leading-none" style={{ color: live ? ink : B.idle, fontSize: 48 * fs, fontFamily: serif }}>
+        <span className="absolute left-2.5 bottom-1.5 font-black leading-none" style={{ color: live ? ink : B.idle, fontSize: 56 * fs, fontFamily: serif }}>
           {live ? currentNote.name : '—'}<span style={{ fontSize: 24 * fs, color: SC }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
           <sub style={{ fontSize: 16 * fs, opacity: 0.55 }}>{live ? currentNote.octave : ''}</sub>
         </span>
         {/* 오른쪽 아래: 센트 (소수 첫째 자리) + 고칠 방향 */}
         <span className="absolute right-2.5 bottom-1.5 flex items-end gap-1 leading-none" style={{ color: SC }}>
-          <span className="flex flex-col font-black self-center" style={{ fontSize: 13 * fs }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
-          <span className="font-mono font-black tabular-nums" style={{ fontSize: 32 * fs }}>{!live ? '' : ce > 0 ? '+' : ce < 0 ? '−' : '±'}{cInt}<span style={{ fontSize: 15 * fs }}>.{cDec}</span></span>
+          <span className="flex flex-col font-black self-center" style={{ fontSize: 16 * fs }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
+          <span className="font-mono font-black tabular-nums" style={{ fontSize: 38 * fs }}>{!live ? '' : ce > 0 ? '+' : ce < 0 ? '−' : '±'}{cInt}<span style={{ fontSize: 15 * fs }}>.{cDec}</span></span>
           <span className="font-black" style={{ fontSize: 14 * fs, marginBottom: 3 * fs }}>{st === 'ok' ? '✓' : '¢'}</span>
         </span>
       </div>
