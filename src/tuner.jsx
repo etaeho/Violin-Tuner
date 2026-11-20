@@ -755,6 +755,76 @@ const TunerReadout = ({ tuner }) => {
 // ==========================================
 const TAPE_SP = 60;    // 반음 간격(px) → 한 화면에 음 6개쯤 (가까우면 ×3 확대)
 
+// ── 음정 표시 공용 부품 (가로 벨트 · 음정 표시기 모듈이 같이 씀) ──
+// 바탕 3가지: 클래식(크림 종이) · 기본(흰색) · 절전형(검정)
+const pitchPalette = (vintage, light) => (vintage ? { bg: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)', edge: 'rgba(60,40,20,.35)', tick: 'rgba(40,26,12,.7)', zero: '#1a0f05',
+        cur: '#000000', note: '#1a0f05', sharp: '#4a3420', dot: '#b8860b', ok: '#15803d', idle: 'rgba(59,42,26,.4)',
+        head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strFill: '#3a2410', strFillInk: '#f4d78a', strFillEdge: '#b88a35', strOff: '#3b2a1a', serif: 'Georgia,serif',
+        frame: { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } }
+      : light ? { bg: '#ffffff', edge: 'rgba(255,255,255,.6)', tick: '#71717a', zero: '#111111', cur: '#000000', note: '#18181b', sharp: '#52525b', dot: '#d97706', ok: '#059669', idle: '#71717a',
+        head: '#ffffff', line: '#d4d4d8', ink: '#000000', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strFill: '#f59e0b', strFillInk: '#000', strFillEdge: '#d97706', strOff: '#3f3f46',
+        frame: { border: '1px solid #e4e4e7', boxShadow: '0 2px 10px rgba(0,0,0,.06)' } }
+      : { bg: '#070707', edge: 'rgba(0,0,0,.6)', tick: '#71717a', zero: '#ffffff', cur: '#ffffff', note: '#ffffff', sharp: '#d4d4d8', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
+        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strFill: '#ffcc00', strFillInk: '#000', strFillEdge: '#ffcc00', strOff: '#d4d4d8',
+        frame: { border: '1px solid rgba(255,255,255,.08)' } });
+// 지금 상태: idle(소리 없음) · ok(허용 범위 안) · hi(높음) · lo(낮음) → 상태 색 (swap = 지판: 높음 파랑 · 낮음 빨강)
+const pitchStatus = (tuner, B, swap) => {
+  const active = tuner.isStarted && tuner.pitch > 0, inTune = active && Math.abs(tuner.cents) <= tuner.tolerance;
+  const st = !active ? 'idle' : inTune ? 'ok' : tuner.cents > 0 ? 'hi' : 'lo';
+  const hiC = swap ? '#3b82f6' : '#ef4444', loC = swap ? '#ef4444' : '#3b82f6';
+  return { active, inTune, st, SC: { ok: B.ok, hi: hiC, lo: loC, idle: B.idle }[st] };
+};
+// 양쪽 큰 칸: 왼쪽 = 지금 음(크게) | 오른쪽 = 센트(크게, 상태 색, 소수 첫째 자리) + ▲▼ 중 고칠 방향만 켜짐, 맞으면 ✓
+const PitchHead = ({ tuner, B, SC, st, size = 1 }) => {
+  const active = st !== 'idle', n = tuner.currentNote;
+  const nmA = active && n ? n.name : '–', shA = active && n?.symbol ? '♯' : '', ocA = active && n ? n.octave : '';
+  const ce = active ? Math.round(tuner.centsExact * 10) / 10 : 0, ceA = Math.abs(ce);
+  const cSg = !active ? '' : ce > 0 ? '+' : ce < 0 ? '−' : '±';
+  const cInt = Math.floor(ceA), cDec = Math.round((ceA - cInt) * 10) % 10;
+  return (
+    <div className="grid grid-cols-2" style={{ height: 64 * size, background: B.head, borderBottom: `1px solid ${B.line}` }}>
+      <div className="flex items-center justify-center" style={{ borderRight: `1px solid ${B.line}` }}>
+        <span className="font-black leading-none" style={{ fontSize: 54 * size, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 18 * size }}>{ocA}</sub></span>
+      </div>
+      <div className="flex items-center justify-center gap-1.5">
+        <span className="flex flex-col leading-none font-black" style={{ color: SC, fontSize: 18 * size }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
+        <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 46 * size, color: SC }}>{cSg}{cInt}<span style={{ fontSize: 22 * size }}>.{cDec}</span></span>
+        <span className="font-black self-end" style={{ color: SC, fontSize: 18 * size, marginBottom: 8 * size }}>{st === 'ok' ? '✓' : '¢'}</span>
+      </div>
+    </div>
+  );
+};
+// 세부 음정 줄: ±25¢를 좌우 여백 없이 가로 전체 → 0¢ = 정확히 가운데(벨트 바늘과 같은 세로선). ±10 안은 1¢ 눈금
+const FINE_RANGE = 25;
+const fineX = (c) => 50 + Math.max(-1, Math.min(1, c / FINE_RANGE)) * 50;
+const FineStrip = ({ tuner, B, SC, height = 34, last }) => {
+  const active = tuner.isStarted && tuner.pitch > 0, inTune = active && Math.abs(tuner.cents) <= tuner.tolerance;
+  const ref = useRef(null);
+  const [f0] = useSpring([active ? tuner.centsExact : 0], ([c]) => { if (ref.current) ref.current.style.left = fineX(c) + '%'; }, { k: 0.22, snap: 0.05 });
+  const F = FINE_RANGE;
+  return (
+    <div className="relative" style={{ height, background: B.head, borderBottom: last ? 'none' : `1px solid ${B.line}` }}>
+      <i className="absolute top-1 -translate-x-1/2 rounded-sm" style={{ bottom: 15, left: '50%', width: `${(tuner.tolerance / F) * 100}%`, background: inTune ? 'rgba(74,252,157,.35)' : 'rgba(74,252,157,.15)' }}/>
+      {Array.from({ length: 2 * F + 1 }, (_, j) => { const c = j - F; if (c % 5 && Math.abs(c) > 10) return null;
+        const big = c % 10 === 0, mid = c % 5 === 0;
+        return <i key={j} className="absolute top-1 -translate-x-1/2" style={{ left: `${fineX(c)}%`, width: c === 0 ? 2 : 1, height: c === 0 ? 18 : big ? 12 : mid ? 8 : 4, background: c === 0 ? B.zero : B.tick, opacity: mid ? 1 : 0.6 }}/>; })}
+      {[-20, -10, 10, 20].map(v => <span key={v} className="absolute bottom-0.5 -translate-x-1/2 font-mono font-black text-[10px] leading-none" style={{ left: `${fineX(v)}%`, color: B.tick }}>{v > 0 ? '+' + v : v}</span>)}
+      <i ref={ref} className="absolute top-0 bottom-0 -translate-x-1/2 w-[3px] rounded-full z-10" style={{ left: `${fineX(f0)}%`, background: SC, boxShadow: active ? `0 0 6px ${SC}` : 'none', opacity: active ? 1 : 0.4 }}/>
+    </div>
+  );
+};
+// 음정 표시기 모듈 (벨트형): 큰 음·센트 칸 + 세부 음정 줄 — MainPitchMeter 'panel' (2번 탭 · 1번 탭 'meter' · 녹음 탭 · 지판 · 드론)
+const PitchPanel = ({ tuner, compact, swapColors }) => {
+  const vintage = useVintage(), light = useTheme() === 'light';
+  const B = pitchPalette(vintage, light), { st, SC } = pitchStatus(tuner, B, swapColors);
+  return (
+    <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}>
+      <PitchHead tuner={tuner} B={B} SC={SC} st={st} size={compact ? 0.72 : 1}/>
+      <FineStrip tuner={tuner} B={B} SC={SC} height={compact ? 30 : 34} last/>
+    </div>
+  );
+};
+
 const NoteTape = ({ tuner, showMic, bare }) => {
   const vintage = useVintage(), light = useTheme() === 'light';
   const { isStarted, pitch, a4Freq, cents, tolerance } = tuner;
@@ -782,10 +852,6 @@ const NoteTape = ({ tuner, showMic, bare }) => {
     if (bandRef.current) bandRef.current.style.width = (tolRef.current * 2 / 100) * sp + 'px';
   };
   const [s0, z0] = useSpring([semi, zoomT], place, { k: 0.18, snap: 6 });
-  // 벨트 위 세부 음정 줄: ±25¢를 가로 전체로, 0¢ = 정확히 가운데(벨트 바늘과 같은 세로선)
-  const FINE = 25, fineRef = useRef(null);
-  const fineX = (c) => 50 + Math.max(-1, Math.min(1, c / FINE)) * 50;
-  const [f0] = useSpring([active ? tuner.centsExact : 0], ([c]) => { if (fineRef.current) fineRef.current.style.left = fineX(c) + '%'; }, { k: 0.22, snap: 0.05 });
   const sp0 = SP * (1 + ZM * z0);
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
   const ink = vintage ? '#3b2a1a' : '#e5e5e5';
@@ -795,17 +861,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
   const strIdx = active ? STR.reduce((acc, [, sm], i) => (base >= sm ? i : acc), -1) : -1;
   const openHit = active && STR.findIndex(([, sm]) => sm === base);
   if (bare) {
-    // 바탕 3가지: 클래식(크림 종이) · 기본(흰색) · 절전형(검정)
-    const B = vintage ? { bg: 'linear-gradient(180deg,#d8d0bb,#f6f1e4 25%,#f6f1e4 70%,#c9c0a8)', edge: 'rgba(60,40,20,.35)', tick: 'rgba(40,26,12,.7)', zero: '#1a0f05',
-        cur: '#000000', note: '#1a0f05', sharp: '#4a3420', dot: '#b8860b', ok: '#15803d', idle: 'rgba(59,42,26,.4)',
-        head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strFill: '#3a2410', strFillInk: '#f4d78a', strFillEdge: '#b88a35', strOff: '#3b2a1a', serif: 'Georgia,serif',
-        frame: { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } }
-      : light ? { bg: '#ffffff', edge: 'rgba(255,255,255,.6)', tick: '#71717a', zero: '#111111', cur: '#000000', note: '#18181b', sharp: '#52525b', dot: '#d97706', ok: '#059669', idle: '#71717a',
-        head: '#ffffff', line: '#d4d4d8', ink: '#000000', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strFill: '#f59e0b', strFillInk: '#000', strFillEdge: '#d97706', strOff: '#3f3f46',
-        frame: { border: '1px solid #e4e4e7', boxShadow: '0 2px 10px rgba(0,0,0,.06)' } }
-      : { bg: '#070707', edge: 'rgba(0,0,0,.6)', tick: '#71717a', zero: '#ffffff', cur: '#ffffff', note: '#ffffff', sharp: '#d4d4d8', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
-        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strFill: '#ffcc00', strFillInk: '#000', strFillEdge: '#ffcc00', strOff: '#d4d4d8',
-        frame: { border: '1px solid rgba(255,255,255,.08)' } };
+    const B = pitchPalette(vintage, light);
     const st = !active ? 'idle' : inTune ? 'ok' : cents > 0 ? 'hi' : 'lo';
     const SC = { ok: B.ok, hi: '#ef4444', lo: '#3b82f6', idle: B.idle }[st];   // 상태 색 = 맞음/높음/낮음
     const belt = (
@@ -853,35 +909,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         })}
       </div>
     );
-    // 벨트 위 양쪽 큰 칸: 왼쪽 = 지금 음(크게) | 오른쪽 = 센트(크게, 상태 색) + ▲▼ 중 고칠 방향만 켜짐
-    const nmA = active && tuner.currentNote ? tuner.currentNote.name : '–', shA = active && tuner.currentNote?.symbol ? '♯' : '', ocA = active && tuner.currentNote ? tuner.currentNote.octave : '';
-    const ce = active ? Math.round(tuner.centsExact * 10) / 10 : 0, ceA = Math.abs(ce);
-    const cSg = !active ? '' : ce > 0 ? '+' : ce < 0 ? '−' : '±';
-    const cInt = Math.floor(ceA), cDec = Math.round((ceA - cInt) * 10) % 10;   // 큰 숫자 = 정수, 작게 = 소수 첫째 자리
-    const head = (
-      <div className="grid grid-cols-2 h-[64px]" style={{ background: B.head, borderBottom: `1px solid ${B.line}` }}>
-        <div className="flex items-center justify-center" style={{ borderRight: `1px solid ${B.line}` }}>
-          <span className="font-black leading-none" style={{ fontSize: 54, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 18 }}>{ocA}</sub></span>
-        </div>
-        <div className="flex items-center justify-center gap-1.5">
-          <span className="flex flex-col leading-none text-lg font-black" style={{ color: SC }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
-          <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 46, color: SC }}>{cSg}{cInt}<span style={{ fontSize: 22 }}>.{cDec}</span></span>
-          <span className="font-black text-lg self-end mb-2" style={{ color: SC }}>{st === 'ok' ? '✓' : '¢'}</span>
-        </div>
-      </div>
-    );
-    // 세부 음정 줄 (머리 칸과 벨트 사이): 좌우 여백 없이 가로 전체 → 0¢가 벨트 가운데 바늘과 정확히 같은 줄
-    const fine = (
-      <div className="relative h-[34px]" style={{ background: B.head, borderBottom: `1px solid ${B.line}` }}>
-        <i className="absolute top-1 bottom-[15px] -translate-x-1/2 rounded-sm" style={{ left: '50%', width: `${(tolerance / FINE) * 100}%`, background: inTune ? 'rgba(74,252,157,.35)' : 'rgba(74,252,157,.15)' }}/>
-        {Array.from({ length: 2 * FINE + 1 }, (_, j) => { const c = j - FINE; if (c % 5 && Math.abs(c) > 10) return null;   // ±10 안은 1¢, 밖은 5¢ 눈금
-          const big = c % 10 === 0, mid = c % 5 === 0;
-          return <i key={j} className="absolute top-1 -translate-x-1/2" style={{ left: `${fineX(c)}%`, width: c === 0 ? 2 : 1, height: c === 0 ? 18 : big ? 12 : mid ? 8 : 4, background: c === 0 ? B.zero : B.tick, opacity: mid ? 1 : 0.6 }}/>; })}
-        {[-20, -10, 10, 20].map(v => <span key={v} className="absolute bottom-0.5 -translate-x-1/2 font-mono font-black text-[10px] leading-none" style={{ left: `${fineX(v)}%`, color: B.tick }}>{v > 0 ? '+' + v : v}</span>)}
-        <i ref={fineRef} className="absolute top-0 bottom-0 -translate-x-1/2 w-[3px] rounded-full z-10" style={{ left: `${fineX(f0)}%`, background: SC, boxShadow: active ? `0 0 6px ${SC}` : 'none', opacity: active ? 1 : 0.4 }}/>
-      </div>
-    );
-    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}>{head}{fine}{belt}{strings}</div>;
+    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}><PitchHead tuner={tuner} B={B} SC={SC} st={st}/><FineStrip tuner={tuner} B={B} SC={SC}/>{belt}{strings}</div>;
   }
   const tape = (
     <div className="relative w-full h-[92px] overflow-hidden rounded-lg"

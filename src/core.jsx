@@ -217,6 +217,7 @@ const PART_PLATE_STYLES = [
 ];
 // 메인 음정 표시기: 1번 탭 외 탭(메트로놈·지판·드론)과 1번 탭 'meter' 블록에 붙는 음정 표시 모양
 const PART_METER_STYLES = [
+  { id: 'panel',  name: '벨트형 (큰 음·센트 + 세부 줄)' },
   { id: 'needle', name: '바늘 게이지' },
   { id: 'fine',   name: '정밀 게이지' },
   { id: 'digits', name: '큰 숫자' },
@@ -224,7 +225,7 @@ const PART_METER_STYLES = [
 const normParts = (p) => ({
   num: PART_NUM_STYLES.some(x => x.id === p?.num) ? p.num : 'auto',
   plate: PART_PLATE_STYLES.some(x => x.id === p?.plate) ? p.plate : 'auto',
-  meter: PART_METER_STYLES.some(x => x.id === p?.meter) ? p.meter : 'needle',
+  meter: PART_METER_STYLES.some(x => x.id === p?.meter) ? p.meter : 'panel',
 });
 const MIN_FREQ_CAP = 170;   // 최저 주파수는 이보다 높게 못 올림 (G3 196Hz가 잘리면 G현이 안 잡힘)
 
@@ -242,7 +243,7 @@ const DEFAULT_SETTINGS = {
   tunerLayout: 'vtapeTempo', // (예전) 튜너 화면 구성 — 이제 layout1로 옮겨짐. LAYOUT_PRESETS id
   layout1: makeLayout('t1', LAYOUT_PRESETS[0].on),   // 1번 탭 블록 배치 (LAYOUT_BLOCKS.t1)
   layout2: makeLayout('t2', DEFAULT_LAYOUT2_ON).map(b => b.id === 'pitch' ? { ...b, size: 's' } : b),   // 2번 탭 블록 배치 (LAYOUT_BLOCKS.t2)
-  parts: { num: 'auto', plate: 'auto', meter: 'needle' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
+  parts: { num: 'auto', plate: 'auto', meter: 'panel' },             // 부품별 꾸미기: 숫자 모양 · 판 모양
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
   recDelay: 3,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10), 기본 3초
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
@@ -317,6 +318,7 @@ const loadSettings = () => {
     l2src = fromPanel(l2src, false);
     v.layout2 = normLayout('t2', l2src || makeLayout('t2', DEFAULT_LAYOUT2_ON));
     v.parts = normParts(stored.parts);
+    if (!stored.meterRev) { v.parts = { ...v.parts, meter: 'panel' }; v.meterRev = 1; }   // 음정 표시기를 한 번 벨트형으로
     if (rev < 4) {
       // 4: 낮게 풀린 G현도 잡히게 최저 주파수 180 → 150, 1번 탭에 정밀 게이지 추가
       if (v.minFreq === 180) v.minFreq = 150;

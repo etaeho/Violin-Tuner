@@ -666,6 +666,7 @@ const LivePitchGraph = ({ tuner, fill }) => {   // fill: 남는 공간을 채움
 // 메인 음정 표시기: 설정(세부 꾸미기 → 음정 표시기)에서 고른 모양으로 — 메트로놈·지판·드론 탭, 1번 탭 'meter' 블록 공용
 const MainPitchMeter = ({ tuner, compact, swapColors, big }) => {
   const { meter } = useParts();
+  if (meter === 'panel') return <PitchPanel tuner={tuner} compact={compact} swapColors={swapColors}/>;   // 벨트형 (가로 벨트 위 칸과 같은 모양)
   if (meter === 'fine') return big ? <div className="w-full flex justify-center" style={{ zoom: 1.25 }}><FineGauge tuner={tuner} swapColors={swapColors}/></div> : <FineGauge tuner={tuner} swapColors={swapColors}/>;
   if (meter === 'digits') return <PitchDigits tuner={tuner} compact={compact} swapColors={swapColors} big={big}/>;
   return <PitchStrip tuner={tuner} compact={compact} swapColors={swapColors} big={big}/>;
