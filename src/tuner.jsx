@@ -782,13 +782,13 @@ const PitchHead = ({ tuner, B, SC, st, size = 1 }) => {
   const cSg = !active ? '' : ce > 0 ? '+' : ce < 0 ? '−' : '±';
   const cInt = Math.floor(ceA), cDec = Math.round((ceA - cInt) * 10) % 10;
   return (
-    <div className="grid grid-cols-2" style={{ height: 64 * size, background: B.head, borderBottom: `1px solid ${B.line}` }}>
+    <div className="grid grid-cols-2" style={{ height: 74 * size, background: B.head, borderBottom: `1px solid ${B.line}` }}>
       <div className="flex items-center justify-center" style={{ borderRight: `1px solid ${B.line}` }}>
-        <span className="font-black leading-none" style={{ fontSize: 54 * size, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 18 * size }}>{ocA}</sub></span>
+        <span className="font-black leading-none" style={{ fontSize: 76 * size, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC, fontSize: 44 * size }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 24 * size }}>{ocA}</sub></span>
       </div>
-      <div className="flex items-center justify-center gap-1.5">
+      <div className="flex items-center justify-center gap-1 pr-1">
         <span className="flex flex-col leading-none font-black" style={{ color: SC, fontSize: 18 * size }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
-        <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 46 * size, color: SC }}>{cSg}{cInt}<span style={{ fontSize: 22 * size }}>.{cDec}</span></span>
+        <span className="font-mono font-black leading-none tabular-nums" style={{ fontSize: 42 * size, color: SC }}>{cSg}{cInt}<span style={{ fontSize: 22 * size }}>.{cDec}</span></span>
         <span className="font-black self-end" style={{ color: SC, fontSize: 18 * size, marginBottom: 8 * size }}>{st === 'ok' ? '✓' : '¢'}</span>
       </div>
     </div>
