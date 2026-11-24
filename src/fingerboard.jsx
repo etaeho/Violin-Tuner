@@ -98,7 +98,51 @@ const Fingerboard = ({ tuner, metro, log }) => {
   const downbeat = flashCol && metro.currentBeat === 0;
 
   const strings = [...VIOLIN_STRINGS];      // G D A E (왼쪽 → 오른쪽)
+  const land = useLandscape();               // 가로 화면이면 지판을 눕힘
   const target = scale.active && !scale.done ? scale.seq[scale.idx] : null;
+
+  // 지판 한 칸 (세로 지판 = horiz false: 위→아래로 포지션 / 가로 지판 = horiz true: 왼쪽→오른쪽으로 포지션)
+  const renderCell = (s, pos, horiz) => {
+    const semi = s.semitone + pos, label = fbLabel(semi), pc = fbPc(semi);
+    const spelled = fbSpell(pc, keyId);
+    const isDet = detSemi === semi;
+    const isPlay = tuner.playingTone === label;
+    const isTarget = target === semi;
+    const stt = per[label];
+    const mean = stt && stt.n >= 3 ? stt.sum / stt.n : null;
+    const name = fbPretty(spelled || FB_CHROMATIC[pc][0]);
+    let style = { background: 'var(--chip-bg)', borderColor: 'var(--chip-border)', color: 'var(--ink)' };
+    let extra = '';
+    if (isPlay) { style = { background: '#8b5a2b', borderColor: '#e9c46a', color: '#fff', boxShadow: '0 0 16px rgba(233,196,106,.5)' }; extra = 'scale-125 z-30'; }
+    else if (isDet) { const c = detOk ? '#4afc9d' : tuner.cents > 0 ? FB_HIGH : FB_LOW; style = { background: c, borderColor: c, color: detOk ? '#000' : '#fff', boxShadow: `0 0 16px ${c}` }; extra = 'scale-125 z-20'; }
+    else if (isTarget) { style = { background: 'transparent', borderColor: 'var(--accent)', color: 'var(--accent)' }; extra = 'scale-110 animate-pulse'; }
+    else if (mean !== null) {
+      const k = Math.min(1, Math.abs(mean) / 25), rgb = mean > 0 ? '59,130,246' : '239,68,68';
+      style = { background: `rgba(${rgb},${0.18 + k * 0.6})`, borderColor: `rgb(${rgb})`, color: 'var(--ink)' };
+    }
+    const line = pos === 12 || pos === 24 ? (horiz ? 'border-l-2' : 'border-t-2') + ' border-[#4afc9d]/40' : pos === 5 || pos === 7 || pos === 17 || pos === 19 ? (horiz ? 'border-l' : 'border-t') + ' border-gray-700/60' : '';
+    return (
+      <div key={pos} className={`flex items-center justify-center relative min-h-0 min-w-0 ${line}`} style={{ flex: `${1.3 - pos * 0.025} 1 0` }}>
+        {spelled || isDet || isPlay || isTarget ? (
+          <button onClick={() => tuner.toggleTone(label, semi)}
+            className={`${horiz ? 'min-w-[20px]' : 'min-w-[24px]'} px-1 border font-black leading-none transition-all duration-100 ${pos === 0 ? 'rounded-md text-[10px] py-[2px]' : 'rounded-full text-[9px] py-[1px]'} ${extra}`}
+            style={{ ...style, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+            {name}{mean !== null && !isDet && !isPlay && <span className="text-[8px] ml-0.5">{mean > 0 ? '▼' : '▲'}</span>}
+          </button>
+        ) : null}
+        {/* 지금 연주 중인 음: 화살표 = 고칠 방향 (높으면 ▼ 내리기, 낮으면 ▲ 올리기) + 센트 */}
+        {isDet && (
+          <span className={`absolute z-30 ${horiz ? 'left-1/2 -translate-x-1/2 -top-3' : 'left-1/2 ml-5'} px-1 rounded text-[10px] font-black font-mono whitespace-nowrap pointer-events-none`}
+            style={{ background: 'rgba(0,0,0,.8)', color: detOk ? '#4afc9d' : tuner.cents > 0 ? '#60a5fa' : '#ff6b6b' }}>
+            {detOk ? '✓' : tuner.cents > 0 ? '▼' : '▲'}{tuner.cents > 0 ? '+' : ''}{tuner.cents}
+          </span>
+        )}
+        {spelled || isDet || isPlay || isTarget ? null : (
+          <button onClick={() => tuner.toggleTone(label, semi)} className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--chip-border)' }} aria-label={label}/>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="w-full h-full flex flex-col tab-enter gap-2.5">
@@ -164,7 +208,27 @@ const Fingerboard = ({ tuner, metro, log }) => {
         </div>
       )}
 
-      {/* 지판 */}
+      {/* 지판 — 가로 화면: 지판을 눕힘 (위 E현 → 아래 G현, 왼쪽 = 개방현 → 오른쪽 = 높은 포지션) */}
+      {land ? (
+      <div className="w-full flex-1 min-h-0 rounded-2xl t-board relative px-1.5 py-1.5 flex transition-shadow duration-75"
+        style={{ boxShadow: flashCol ? `inset 0 0 0 ${downbeat ? 3 : 2}px ${flashCol}, 0 0 ${(downbeat ? 24 : 14) * pal.glow + 4}px ${flashCol}` : 'none' }}>
+        <div className="flex flex-col mr-1 shrink-0">
+          {[...strings].reverse().map(s => <div key={s.name} className="flex-1 flex items-center">
+            <span className="t-chip rounded px-1.5 py-0.5 text-[10px] font-black" style={{ color: vintage ? '#f6dd94' : document.documentElement.dataset.theme === 'light' ? '#b45309' : '#ffcc00' }}>{s.note}</span>
+          </div>)}
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col relative">
+          {/* 줄 (G가 가장 굵게, 아래) */}
+          {[...strings].reverse().map((s, i) => { const w = 4 - (3 - i) * 0.8; return <div key={s.name} className="absolute left-0 right-0 rounded-full"
+            style={{ top: `${12.5 + i * 25}%`, height: w, marginTop: -w / 2, background: vintage ? 'rgba(201,161,74,.55)' : 'rgba(128,128,140,.45)' }}/>; })}
+          {[...strings].reverse().map(s => (
+            <div key={s.name} className="flex-1 flex flex-row relative z-10 min-h-0">
+              {Array.from({ length: FB_POSITIONS }, (_, pos) => renderCell(s, pos, true))}
+            </div>
+          ))}
+        </div>
+      </div>
+      ) : (
       <div className="w-full flex-1 min-h-0 rounded-2xl t-board relative px-1.5 py-1.5 flex flex-col transition-shadow duration-75"
         style={{ boxShadow: flashCol ? `inset 0 0 0 ${downbeat ? 3 : 2}px ${flashCol}, 0 0 ${(downbeat ? 24 : 14) * pal.glow + 4}px ${flashCol}` : 'none' }}>
         <div className="flex mb-1 shrink-0">
@@ -178,51 +242,12 @@ const Fingerboard = ({ tuner, metro, log }) => {
             style={{ left: `${12.5 + i * 25}%`, width: 4 - i * 0.8, marginLeft: -(4 - i * 0.8) / 2, background: vintage ? 'rgba(201,161,74,.55)' : 'rgba(128,128,140,.45)' }}/>)}
           {strings.map(s => (
             <div key={s.name} className="flex-1 flex flex-col relative z-10">
-              {Array.from({ length: FB_POSITIONS }, (_, pos) => {
-                const semi = s.semitone + pos, label = fbLabel(semi), pc = fbPc(semi);
-                const spelled = fbSpell(pc, keyId);
-                const isDet = detSemi === semi;
-                const isPlay = tuner.playingTone === label;
-                const isTarget = target === semi;
-                const stt = per[label];
-                const mean = stt && stt.n >= 3 ? stt.sum / stt.n : null;
-                const name = fbPretty(spelled || FB_CHROMATIC[pc][0]);
-                let style = { background: 'var(--chip-bg)', borderColor: 'var(--chip-border)', color: 'var(--ink)' };
-                let extra = '';
-                if (isPlay) { style = { background: '#8b5a2b', borderColor: '#e9c46a', color: '#fff', boxShadow: '0 0 16px rgba(233,196,106,.5)' }; extra = 'scale-125 z-30'; }
-                else if (isDet) { const c = detOk ? '#4afc9d' : tuner.cents > 0 ? FB_HIGH : FB_LOW; style = { background: c, borderColor: c, color: detOk ? '#000' : '#fff', boxShadow: `0 0 16px ${c}` }; extra = 'scale-125 z-20'; }
-                else if (isTarget) { style = { background: 'transparent', borderColor: 'var(--accent)', color: 'var(--accent)' }; extra = 'scale-110 animate-pulse'; }
-                else if (mean !== null) {
-                  const k = Math.min(1, Math.abs(mean) / 25), rgb = mean > 0 ? '59,130,246' : '239,68,68';
-                  style = { background: `rgba(${rgb},${0.18 + k * 0.6})`, borderColor: `rgb(${rgb})`, color: 'var(--ink)' };
-                }
-                const line = pos === 12 || pos === 24 ? 'border-t-2 border-[#4afc9d]/40' : pos === 5 || pos === 7 || pos === 17 || pos === 19 ? 'border-t border-gray-700/60' : '';
-                return (
-                  <div key={pos} className={`flex items-center justify-center relative min-h-0 ${line}`} style={{ flex: `${1.3 - pos * 0.025} 1 0` }}>
-                    {spelled || isDet || isPlay || isTarget ? (
-                      <button onClick={() => tuner.toggleTone(label, semi)}
-                        className={`min-w-[24px] px-1 border font-black leading-none transition-all duration-100 ${pos === 0 ? 'rounded-md text-[10px] py-[2px]' : 'rounded-full text-[9px] py-[1px]'} ${extra}`}
-                        style={{ ...style, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-                        {name}{mean !== null && !isDet && !isPlay && <span className="text-[8px] ml-0.5">{mean > 0 ? '▼' : '▲'}</span>}
-                      </button>
-                    ) : null}
-                    {/* 지금 연주 중인 음: 화살표 = 고칠 방향 (높으면 ▼ 내리기, 낮으면 ▲ 올리기) + 센트 */}
-                    {isDet && (
-                      <span className="absolute z-30 left-1/2 ml-5 px-1 rounded text-[10px] font-black font-mono whitespace-nowrap pointer-events-none"
-                        style={{ background: 'rgba(0,0,0,.8)', color: detOk ? '#4afc9d' : tuner.cents > 0 ? '#60a5fa' : '#ff6b6b' }}>
-                        {detOk ? '✓' : tuner.cents > 0 ? '▼' : '▲'}{tuner.cents > 0 ? '+' : ''}{tuner.cents}
-                      </span>
-                    )}
-                    {spelled || isDet || isPlay || isTarget ? null : (
-                      <button onClick={() => tuner.toggleTone(label, semi)} className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--chip-border)' }} aria-label={label}/>
-                    )}
-                  </div>
-                );
-              })}
+              {Array.from({ length: FB_POSITIONS }, (_, pos) => renderCell(s, pos, false))}
             </div>
           ))}
         </div>
       </div>
+      )}
       {heat && (
         <div className="flex items-center justify-center gap-2 shrink-0 text-[10px] font-bold text-gray-500">
           <span><b style={{ color: FB_HIGH }}>▼파랑</b> 높음 · <b style={{ color: FB_LOW }}>▲빨강</b> 낮음 · 최근 30일</span>

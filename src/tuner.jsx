@@ -828,7 +828,7 @@ const PitchPanel = ({ tuner, compact, swapColors }) => {
   );
 };
 
-const NoteTape = ({ tuner, showMic, bare }) => {
+const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 화면 (높이를 줄임)
   const vintage = useVintage(), light = useTheme() === 'light';
   const { isStarted, pitch, a4Freq, cents, tolerance } = tuner;
   const active = isStarted && pitch > 0;
@@ -868,7 +868,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
     const st = !active ? 'idle' : inTune ? 'ok' : cents > 0 ? 'hi' : 'lo';
     const SC = { ok: B.ok, hi: '#ef4444', lo: '#3b82f6', idle: B.idle }[st];   // 상태 색 = 맞음/높음/낮음
     const belt = (
-      <div className="relative w-full overflow-hidden" style={{ height: 100, background: B.bg }}>
+      <div className="relative w-full overflow-hidden" style={{ height: compact ? 74 : 100, background: B.bg }}>
         {/* 허용 범위 */}
         <div ref={bandRef} className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2"
           style={{ width: `${(tolerance * 2 / 100) * sp0}px`, background: inTune ? 'rgba(74,252,157,.28)' : 'rgba(74,252,157,.12)' }}/>
@@ -882,7 +882,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
               {Array.from({ length: 20 }, (_, j) => { const c = j * 5 - 50;   // 벨트와 함께 흐르는 5¢ 눈금 (10¢ 길게, 가운데 바늘 아래 = 지금 센트)
                 return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 18 : c === -50 ? 0 : c % 10 === 0 ? 10 : 5, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
                   background: c === 0 ? B.zero : B.tick, opacity: c % 10 === 0 ? 1 : 0.7 }}/>; })}
-              <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: isCur ? 58 : 32,
+              <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: compact ? (isCur ? 44 : 26) : isCur ? 58 : 32,
                 color: isCur ? SC : name[1] === '#' ? B.sharp : B.note }}>
                 {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: isCur ? 20 : 15 }}>{oct}</sub>
               </span>
@@ -894,7 +894,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[3px] z-10" style={{ background: SC, boxShadow: `0 0 6px ${SC}`, opacity: active ? 0.55 : 0.35 }}/>
         {/* 지금 음 사각 창 (색 = 맞음/높음/낮음) */}
         <div className="absolute z-20 left-1/2 -translate-x-1/2 top-[18px] bottom-1.5 rounded-xl pointer-events-none"
-          style={{ width: 86, border: `3px solid ${SC}`, boxShadow: active ? `0 0 14px ${SC}88, inset 0 0 18px ${SC}33` : 'none' }}/>
+          style={{ width: compact ? 72 : 86, border: `3px solid ${SC}`, boxShadow: active ? `0 0 14px ${SC}88, inset 0 0 18px ${SC}33` : 'none' }}/>
       </div>
     );
     // 4현: 지금 소리를 내는 현 표시 (개방현 음이면 더 강하게)
@@ -903,8 +903,8 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         {STR.map(([nm], i) => {
           const on = i === strIdx, exact = on && openHit === i;
           // 지금 소리 내는 현 = 칸을 꽉 채운 색 + 굵은 현 줄(G가 가장 굵음), 개방현 음이면 아래 '개방'
-          return <div key={nm} className="relative h-[34px] flex items-center justify-center font-black leading-none"
-            style={{ background: on ? B.strFill : B.strBg, color: on ? B.strFillInk : B.strOff, opacity: on ? 1 : 0.45, fontFamily: B.serif, boxShadow: on ? `inset 0 0 0 2px ${B.strFillEdge}` : 'none' }}>
+          return <div key={nm} className="relative flex items-center justify-center font-black leading-none"
+            style={{ height: compact ? 26 : 34, background: on ? B.strFill : B.strBg, color: on ? B.strFillInk : B.strOff, opacity: on ? 1 : 0.45, fontFamily: B.serif, boxShadow: on ? `inset 0 0 0 2px ${B.strFillEdge}` : 'none' }}>
             <span className="flex items-center gap-1.5 text-[18px]">
               <i className="rounded-full" style={{ width: 12, height: 3.5 - i * 0.6, background: 'currentColor', opacity: on ? 1 : 0.6 }}/>{nm}
             </span>
@@ -912,7 +912,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
         })}
       </div>
     );
-    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}><PitchHead tuner={tuner} B={B} SC={SC} st={st}/><FineStrip tuner={tuner} B={B} SC={SC}/>{belt}{strings}</div>;
+    return <div className="w-full shrink-0 rounded-lg overflow-hidden" style={B.frame}><PitchHead tuner={tuner} B={B} SC={SC} st={st} size={compact ? 0.72 : 1}/><FineStrip tuner={tuner} B={B} SC={SC} height={compact ? 28 : 34}/>{belt}{strings}</div>;
   }
   const tape = (
     <div className="relative w-full h-[92px] overflow-hidden rounded-lg"
@@ -1391,6 +1391,17 @@ const SettingsSheet = ({ tuner, metro, onClose, layoutTab = 't1' }) => {
 
         <Section title="① 디자인">
           <DesignPicker value={S.design} onChange={d => updateSettings({ design: d.id, uiMode: d.base })}/>
+          {/* 화면 회전: 세로 고정(기본) · 자동 회전 · 가로 고정 — 안드로이드 VTNative.setOrientation */}
+          <div className="flex items-center gap-2 mt-3">
+            <span className="text-xs font-black shrink-0" style={{ color: 'var(--ink2)' }}>화면 회전</span>
+            <div className="flex-1 grid grid-cols-3 gap-1.5">
+              {[['portrait', '세로 고정'], ['auto', '자동 회전'], ['landscape', '가로 고정']].map(([id, nm]) => (
+                <button key={id} onClick={() => { updateSettings({ rotate: id }); haptic(8); }}
+                  className="t-chip rounded-xl py-2 text-xs font-black"
+                  style={S.rotate === id ? { color: 'var(--accent)', borderColor: 'var(--accent)' } : { color: 'var(--ink)' }}>{nm}</button>
+              ))}
+            </div>
+          </div>
           <Fold label={`세부 꾸미기${partsCustom(S.parts) ? ' · 사용 중' : ''} (숫자 · 판 · 음정 표시기)`} open={open.parts} onToggle={() => setOpen(o => ({ ...o, parts: !o.parts }))}>
             <PartsEditor parts={S.parts} onChange={p => updateSettings({ parts: { ...S.parts, ...p } })}/>
           </Fold>
@@ -1649,6 +1660,27 @@ const Tuner = ({ tuner, metro, openSettings }) => {
   } = tuner;
   const blocks = visibleBlocks('t1', tuner.settings.layout1);
   const has = (id) => blocks.some(b => b.id === id);
+  const land = useLandscape();   // 가로 화면: 같은 배치를 두 칸으로 (왼쪽 = 음정 계열 · 오른쪽 = 템포·녹음 계열)
+  const grpOf = (id) => (LAYOUT_BLOCKS.t1.find(x => x.id === id) || {}).group;
+  const renderBlock = (b) => (
+    <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size} weight={land ? 1 : (T1_GROW_WEIGHT[b.id] || 1)}>
+      {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
+      {b.id === 'meter' && <MainPitchMeter tuner={tuner} compact={land}/>}
+      {b.id === 'history' && <LivePitchGraph tuner={tuner} fill={b.grow}/>}
+      {b.id === 'rec' && <RecModule size={b.size}/>}
+      {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter')} bare={has('history')} compact={land}/>}
+      {b.id === 'light' && <BeatRow metro={metro}/>}
+      {b.id === 'ctrl' && <MetroControls metro={metro} scale={land ? 0.66 : 0.8}/>}
+      {b.id === 'mini' && <MiniMetronome metro={metro}/>}
+    </LayoutBlock>
+  );
+  const column = (list, flex) => (
+    <div className="min-w-0 min-h-0 flex flex-col items-center gap-2" style={{ flex }}>
+      {!list.some(b => b.grow) && <div className="flex-1"/>}
+      {list.map(renderBlock)}
+      {!list.some(b => b.grow) && <div className="flex-1"/>}
+    </div>
+  );
 
   return (
     <div className="w-full h-full flex flex-col items-center relative justify-between tab-enter">
@@ -1684,24 +1716,20 @@ const Tuner = ({ tuner, metro, openSettings }) => {
           background: f.fire ? `${c}${f.down ? '22' : '12'}` : 'transparent', transition: f.fire ? 'all 30ms' : 'all 280ms ease-out' }}/>;
       })()}
 
-      {/* 화면 배치 (설정 → 화면 배치): 켜진 블록을 순서대로 */}
+      {/* 화면 배치 (설정 → 화면 배치): 켜진 블록을 순서대로 — 가로 화면은 같은 순서로 두 칸 */}
+      {land ? (
+        <div className="w-full flex-1 min-h-0 flex gap-3 pt-1">
+          {column(blocks.filter(b => grpOf(b.id) === '음정'), '3 1 0')}
+          {column(blocks.filter(b => grpOf(b.id) !== '음정'), '2 1 0')}
+        </div>
+      ) : (
       <div className="w-full flex-1 min-h-0 flex flex-col items-center gap-2 pt-1">
         {/* 남는 공간을 채우는 블록이 없으면 위아래 여백을 같게 → 블록들이 화면 가운데에 모임 */}
         {!blocks.some(b => b.grow) && <div className="flex-1"/>}
-        {blocks.map(b => (
-          <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size} weight={T1_GROW_WEIGHT[b.id] || 1}>   {/* 박 원 7 : 음정 그래프 9 (박 원을 1/8 줄인 만큼 그래프에) */}
-            {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
-            {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
-            {b.id === 'history' && <LivePitchGraph tuner={tuner} fill={b.grow}/>}
-            {b.id === 'rec' && <RecModule size={b.size}/>}
-            {b.id === 'tape' && <NoteTape tuner={tuner} showMic={!has('meter')} bare={has('history')}/>}
-            {b.id === 'light' && <BeatRow metro={metro}/>}
-            {b.id === 'ctrl' && <MetroControls metro={metro} scale={0.8}/>}
-            {b.id === 'mini' && <MiniMetronome metro={metro}/>}
-          </LayoutBlock>
-        ))}
+        {blocks.map(renderBlock)}
         {!blocks.some(b => b.grow) && <div className="flex-1"/>}
       </div>
+      )}
 
 
       {/* Error modal */}

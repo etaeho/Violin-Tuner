@@ -83,6 +83,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class SaveBridge {
+        // 화면 회전 (설정 ①): portrait = 세로 고정 · auto = 자동 회전(폰 설정의 회전 잠금 따름) · landscape = 가로 고정(좌우 뒤집기는 센서)
+        @JavascriptInterface
+        fun setOrientation(mode: String) {
+            runOnUiThread {
+                requestedOrientation = when (mode) {
+                    "auto" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+                    "landscape" -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                }
+            }
+        }
+
         @JavascriptInterface
         fun saveFile(name: String, text: String) {
             runOnUiThread { pendingSaveText = text; createDoc.launch(name) }

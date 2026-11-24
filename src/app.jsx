@@ -17,6 +17,7 @@ const App = () => {
   tuner.practiceSinkRef.current = log.note;
   const [activeTab, setActiveTab] = useState('tuner');
   const theme = tuner.settings.uiMode;
+  const land = useLandscape();   // 가로 화면: 탭 줄을 왼쪽 세로로, 내용은 화면 폭 전체
   practiceCtxRef.current = {
     tab: activeTab, metroPlaying: metro.isPlayingMetro, bpm: metro.bpm, tolerance: tuner.tolerance,
     droneActive: drone.playing, droneClasses: new Set(droneChordNotes(drone.cfg).map(n => n.replace(/\d+$/, ''))),
@@ -45,6 +46,9 @@ const App = () => {
       showToast(`🎻 ${tuner.settings.cmdPattern.join(' → ')}  ·  메트로놈 ${starting ? '시작' : '정지'}`);
     };
   });
+
+  // 화면 회전 설정 → 안드로이드 앱에 알림 (웹에서는 무시)
+  useEffect(() => { try { window.VTNative?.setOrientation?.(tuner.settings.rotate || 'portrait'); } catch (_) {} }, [tuner.settings.rotate]);
 
   // 테마(화면 모드)를 <html data-theme>에 반영 → 모든 탭의 t-* 색이 함께 바뀜
   useEffect(() => { applyTheme(theme); }, [theme]);
@@ -94,8 +98,12 @@ const App = () => {
     >
       {/* Content area */}
       <div
-        className="flex-1 w-full max-w-md flex flex-col px-4 overflow-hidden"
-        style={{
+        className={`flex-1 w-full ${land ? '' : 'max-w-md'} flex flex-col px-4 overflow-hidden`}
+        style={land ? {
+          paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+          paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))',
+          paddingLeft: 'calc(4.75rem + env(safe-area-inset-left, 0px))',
+        } : {
           paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))',
           paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
         }}
@@ -139,8 +147,10 @@ const App = () => {
 
       {/* Bottom Navigation */}
       <nav
-        className="absolute bottom-0 w-full max-w-md t-nav backdrop-blur-md pt-2 px-2 flex justify-around z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]"
-        style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
+        className={land
+          ? 'absolute left-0 top-0 bottom-0 w-16 t-nav backdrop-blur-md py-2 flex flex-col justify-center items-center gap-1 z-50 shadow-[10px_0_40px_rgba(0,0,0,0.6)]'
+          : 'absolute bottom-0 w-full max-w-md t-nav backdrop-blur-md pt-2 px-2 flex justify-around z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]'}
+        style={land ? { paddingLeft: 'env(safe-area-inset-left, 0px)', boxSizing: 'content-box' } : { paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
       >
         {TAB_NAV.map(({ id, label, color: tabColor, Icon }) => {
           const active = activeTab === id;

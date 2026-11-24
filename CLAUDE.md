@@ -44,6 +44,7 @@
   - **설정창은 app.jsx에 하나** (`settingsTab` 't1'|'t2'): 튜너·메트로놈 탭 위 '설정' 버튼 → `openSettings(탭)`. 화면 배치 편집은 연 탭이 먼저 보임
   - 지판: `FB_POSITIONS`=30(최상단, E현 A7까지, 위로 갈수록 칸이 좁아짐), 위에 `PitchStrip compact swapColors`, 연주 음 옆에 센트 + 화살표(고칠 방향: 높으면 ▼ 파랑, 낮으면 ▲ 빨강 — `FB_HIGH`/`FB_LOW`, 히트맵도 같은 규칙). 감지 최고 4200Hz
   - **마이크 감시**(tuner.jsx watchdog, 1.5초마다): 전화·다른 앱이 마이크를 가져가 트랙이 끝나거나(ended) 오디오가 멈추거나 소리 데이터가 2.5초 그대로면 마이크를 다시 연다. 사용자가 직접 끈 경우(`userStopRef`)·권한 거부는 제외. 안드로이드 onResume → `window.__vtResume()`
+  - **가로 모드**: 설정 ① '화면 회전' `settings.rotate` = portrait(기본, 세로 고정) · auto(자동 회전) · landscape(가로 고정) → app.jsx가 `VTNative.setOrientation`(MainActivity requestedOrientation) 호출. 화면이 돌아도 앱이 다시 켜지지 않음(AndroidManifest configChanges). `useLandscape()`(core.jsx, 가로가 더 길고 높이 600 미만) → app.jsx 아래 탭 줄을 **왼쪽 세로 막대**로 · 내용 폭 전체 / 1번 탭은 **같은 layout1 순서로 두 칸**(왼쪽 3 = 'group 음정' 블록, 오른쪽 2 = 템포·녹음 블록, 벨트 `compact` · 조작판 0.66배, 그래프·박 원 비율 가중치는 끔) / 지판은 **눕힘**(위 E현 → 아래 G현, 왼쪽 개방현 → 오른쪽 높은 포지션, `renderCell(s, pos, horiz)` 공용). 다른 탭은 아직 가로 전용 배치 없음
   - 앱 시작 때 3초 자동 소음 측정 `autoCalibrate`(설정 `autoCalib`), 결과는 하위 30% 레벨 + 10dB, −70~−35dB
 - `vendor/` — React/ReactDOM/Lucide/Babel 고정 버전. Tailwind만 CDN.
 - `manifest.json`, `sw.js`, `icons/` — PWA 리소스

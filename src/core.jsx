@@ -7,6 +7,13 @@
    모든 React hooks 및 Lucide 아이콘을 전역에서 가져옴
 ===================================================== */
 const { useState, useEffect, useRef, useCallback } = React;
+// 가로 화면인지 (폰을 눕혔을 때: 가로가 더 길고 높이가 낮음)
+const isLandscapeNow = () => window.innerWidth > window.innerHeight && window.innerHeight < 600;
+const useLandscape = () => {
+  const [l, setL] = useState(isLandscapeNow);
+  useEffect(() => { const f = () => setL(isLandscapeNow()); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f); }, []);
+  return l;
+};
 const {
   Play, Square, Settings, Volume2, VolumeX, AlertCircle,
   Music, Activity, Minus, Plus, ChevronUp, ChevronDown, RotateCcw,
@@ -234,6 +241,7 @@ const DEFAULT_SETTINGS = {
   clarity: 0.90,     // 주기성 신뢰도 0~1. 잡음은 낮고 악기 소리는 높음
   stableFrames: 3,   // 같은 음이 N프레임 연속이어야 표시
   smoothing: 6,      // 평균낼 프레임 수 (클수록 부드럽고 느림)
+  rotate: 'portrait', // 화면 회전: portrait 세로 고정 · auto 자동 회전 · landscape 가로 고정 (가로면 1번 탭 두 칸 · 지판 눕힘)
   steadyMs: 180,     // 안정화: 작은 흔들림을 이 시간(ms) 동안 부드럽게 (음 바뀜은 즉시)
   holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
   minFreq: 150,      // 감지 최저 Hz (바이올린 G3 = 196Hz, 낮게 풀린 G현도 잡히게 여유)
@@ -320,6 +328,7 @@ const loadSettings = () => {
     v.parts = normParts(stored.parts);
     if (stored.meterRev === 1 && v.parts.meter === 'panel') v.parts = { ...v.parts, meter: 'needle' };   // 한 번 벨트형으로 바꿨던 것 되돌림 (음정 표시기 모양은 그대로 두기로)
     v.meterRev = 2;
+    if (!['portrait', 'auto', 'landscape'].includes(v.rotate)) v.rotate = 'portrait';
     if (rev < 4) {
       // 4: 낮게 풀린 G현도 잡히게 최저 주파수 180 → 150, 1번 탭에 정밀 게이지 추가
       if (v.minFreq === 180) v.minFreq = 150;
