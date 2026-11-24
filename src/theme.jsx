@@ -163,11 +163,11 @@ const BLOCK_ZOOM = { s: 0.85, m: 1, l: 1.2 };
 const BLOCK_GROW = { s: 1, m: 2, l: 3 };
 // 설정 미리보기에서 고른 블록을 테두리로 표시
 const LayoutHighlightContext = React.createContext(null);
-const LayoutBlock = ({ id, grow, noZoom, size = 'm', children }) => {
+const LayoutBlock = ({ id, grow, noZoom, size = 'm', weight = 1, children }) => {   // weight: 남는 공간 나눌 때 비율 배수
   const hl = React.useContext(LayoutHighlightContext) === id;
   const mark = hl ? { outline: '3px solid var(--accent)', outlineOffset: 2, borderRadius: 14 } : {};
   return grow
-    ? <div className="w-full min-h-0 flex flex-col items-center" style={{ flex: `${BLOCK_GROW[size]} 1 0`, maxHeight: size === 's' ? '45%' : undefined, ...mark }}>{children}</div>
+    ? <div className="w-full min-h-0 flex flex-col items-center" style={{ flex: `${BLOCK_GROW[size] * weight} 1 0`, maxHeight: size === 's' ? '45%' : undefined, ...mark }}>{children}</div>
     : <div className="w-full shrink-0 flex flex-col items-center" style={{ zoom: noZoom ? 1 : BLOCK_ZOOM[size], ...mark }}>{children}</div>;
 };
 // 켜진 블록만 순서대로 [{id, size, grow}]

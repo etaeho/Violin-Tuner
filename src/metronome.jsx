@@ -729,12 +729,15 @@ const BeatRow = ({ metro }) => {
   // 칸 크기에 맞춰 줄 수를 골라 원을 크게 (최대 크기의 2/3)
   const W = box.w * 0.9 - 28, H = box.h - 24;   // 오른쪽 1/10 = 빠르기 끌기 칸
   let best = { size: 0, cols: n };
-  for (let cols = 1; cols <= n; cols++) {
+  // 6박까지는 줄 수 고정: 1~3박 = 한 줄, 4박 = 2개씩 두 줄, 5~6박 = 3개씩 두 줄 (위아래로 크게)
+  const fixedCols = n <= 3 ? n : n === 4 ? 2 : n <= 6 ? 3 : 0;
+  if (fixedCols) { const rows = Math.ceil(n / fixedCols); best = { cols: fixedCols, size: Math.min((W - (fixedCols - 1) * gap * 1.5) / fixedCols, (H - (rows - 1) * gap * 1.5) / rows, 170) }; }
+  else for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
     const size = Math.min((W - (cols - 1) * gap * 1.5) / cols, (H - (rows - 1) * gap * 1.5) / rows, 170);
     if (size > best.size + 0.5) best = { size, cols };
   }
-  const S = Math.max(24, Math.floor(best.size * 2 / 3));
+  const S = Math.max(24, Math.floor(best.size * (fixedCols ? 0.86 : 2 / 3)));   // 6박까지는 크게
   // ── 꾹 누르기 → 음표 메뉴 ──
   const circleRefs = useRef([]);
   const lp = useRef({ timer: null, open: false, x0: 0, y0: 0, hover: null });

@@ -782,9 +782,9 @@ const PitchHead = ({ tuner, B, SC, st, size = 1 }) => {
   const cSg = !active ? '' : ce > 0 ? '+' : ce < 0 ? '−' : '±';
   const cInt = Math.floor(ceA), cDec = Math.round((ceA - cInt) * 10) % 10;
   return (
-    <div className="grid grid-cols-2" style={{ height: 74 * size, background: B.head, borderBottom: `1px solid ${B.line}` }}>
+    <div className="grid grid-cols-2" style={{ height: 82 * size, background: B.head, borderBottom: `1px solid ${B.line}` }}>
       <div className="flex items-center justify-center" style={{ borderRight: `1px solid ${B.line}` }}>
-        <span className="font-black leading-none" style={{ fontSize: 76 * size, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC, fontSize: 44 * size }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 24 * size }}>{ocA}</sub></span>
+        <span className="font-black" style={{ fontSize: 72 * size, lineHeight: 1.1, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC, fontSize: 44 * size }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 24 * size }}>{ocA}</sub></span>
       </div>
       <div className="flex items-center justify-center gap-1 pr-1">
         <span className="flex flex-col leading-none font-black" style={{ color: SC, fontSize: 18 * size }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
@@ -1636,6 +1636,8 @@ const BigNote = ({ tuner, showCents }) => {
   );
 };
 
+// 1번 탭 남는 공간 나누기: 박 원은 1/8 줄이고 그만큼 음정 그래프에 (반반 → 7 : 9)
+const T1_GROW_WEIGHT = { light: 0.875, history: 1.125 };
 const Tuner = ({ tuner, metro, openSettings }) => {
   const {
     isStarted, pitch, cents, stringCents, a4Freq, tolerance,
@@ -1684,7 +1686,7 @@ const Tuner = ({ tuner, metro, openSettings }) => {
         {/* 남는 공간을 채우는 블록이 없으면 위아래 여백을 같게 → 블록들이 화면 가운데에 모임 */}
         {!blocks.some(b => b.grow) && <div className="flex-1"/>}
         {blocks.map(b => (
-          <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size}>
+          <LayoutBlock key={b.id} id={b.id} grow={b.grow} noZoom={b.noZoom} size={b.size} weight={T1_GROW_WEIGHT[b.id] || 1}>   {/* 박 원 7 : 음정 그래프 9 (박 원을 1/8 줄인 만큼 그래프에) */}
             {b.id === 'vtapes' && <StringVTapes tuner={tuner}/>}
             {b.id === 'meter' && <MainPitchMeter tuner={tuner}/>}
             {b.id === 'history' && <LivePitchGraph tuner={tuner} fill={b.grow}/>}

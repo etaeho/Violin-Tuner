@@ -174,7 +174,7 @@ const LAYOUT_BLOCKS = {
 const LAYOUT_GROUPS = { '음정': '#4afc9d', '템포': '#ffcc00', '녹음': '#ef4444' };
 // 1번 탭 빠른 배치 (예전 '튜너 화면 구성' 5가지)
 const LAYOUT_PRESETS = [
-  { id: 'practice',   name: '연습 한 화면 (조작판 · 박 원 · 그래프 · 벨트)', on: ['ctrl', 'light', 'history', 'tape'] },
+  { id: 'practice',   name: '연습 한 화면 (조작판 · 박 원 · 벨트 · 그래프)', on: ['ctrl', 'light', 'tape', 'history'] },
   { id: 'vtapeTempo', name: '세로 테이프 + 템포', on: ['vtapes', 'meter', 'mini'] },
   { id: 'tapeTempo',  name: '가로 테이프 + 템포', on: ['history', 'tape', 'mini'] },
   { id: 'tape',       name: '가로 테이프', on: ['history', 'tape'] },
@@ -247,7 +247,7 @@ const DEFAULT_SETTINGS = {
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
   recDelay: 3,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10), 기본 3초
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 16,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 17,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -265,7 +265,7 @@ const APP_RESET_REV = 2;   // 2: 첫 화면 순서 = 조작판 · 박 원 · 음
     try { onboarded = !!JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').onboarded; } catch (_) {}
     const drop = Object.keys(localStorage).filter(k => k === SETTINGS_KEY || /^vt\.(metro\.|a4Freq$|tolerance$|fb\.key$|drone)/.test(k));
     drop.forEach(k => localStorage.removeItem(k));
-    if (onboarded) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onboarded: true, layoutRev: 16 }));
+    if (onboarded) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onboarded: true, layoutRev: 17 }));
     localStorage.setItem('vt.resetRev', String(APP_RESET_REV));
   } catch (_) {}
 })();
@@ -342,7 +342,12 @@ const loadSettings = () => {
       if (keepRec) { const i = l.findIndex(b => b.id === 'rec'); l.splice(i, 1); l.splice(2, 0, keepRec); }
       v.layout2 = normLayout('t2', l);
     }
-    v.layoutRev = 16;
+    if (rev < 17) {
+      // 17: 기본 배치 = 조작판 · 박 원 · 가로 벨트(가운데) · 음정 그래프(맨 아래) → 그래프가 벨트 위에 있으면 둘 자리를 바꿈
+      const l = v.layout1, hi = l.findIndex(b => b.id === 'history' && b.on), ti = l.findIndex(b => b.id === 'tape' && b.on);
+      if (hi >= 0 && ti >= 0 && hi < ti) { const h = l[hi]; l[hi] = l[ti]; l[ti] = h; v.layout1 = [...l]; }
+    }
+    v.layoutRev = 17;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }
