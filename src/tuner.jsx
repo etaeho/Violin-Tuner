@@ -761,12 +761,12 @@ const pitchPalette = (vintage, light) => (vintage ? { bg: 'linear-gradient(180de
         cur: '#000000', note: '#1a0f05', sharp: '#4a3420', dot: '#b8860b', ok: '#15803d', idle: 'rgba(59,42,26,.4)',
         head: '#e9dfc6', line: 'rgba(59,42,26,.25)', ink: '#1a0f05', strBg: '#e9dfc6', strOnBg: '#3a2410', strOn: '#f4d78a', strFill: '#3a2410', strFillInk: '#f4d78a', strFillEdge: '#b88a35', strOff: '#3b2a1a', serif: 'Georgia,serif',
         frame: { border: '3px solid #6b4a12', boxShadow: 'inset 0 3px 8px rgba(0,0,0,.5)' } }
-      : light ? { bg: '#ffffff', edge: 'rgba(255,255,255,.6)', tick: '#71717a', zero: '#111111', cur: '#000000', note: '#18181b', sharp: '#52525b', dot: '#d97706', ok: '#059669', idle: '#71717a',
-        head: '#ffffff', line: '#d4d4d8', ink: '#000000', strBg: '#f4f4f5', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strFill: '#f59e0b', strFillInk: '#000', strFillEdge: '#d97706', strOff: '#3f3f46',
-        frame: { border: '1px solid #e4e4e7', boxShadow: '0 2px 10px rgba(0,0,0,.06)' } }
-      : { bg: '#070707', edge: 'rgba(0,0,0,.6)', tick: '#71717a', zero: '#ffffff', cur: '#ffffff', note: '#ffffff', sharp: '#d4d4d8', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
-        head: '#0b0b0b', line: '#1f1f1f', ink: '#ffffff', strBg: '#0b0b0b', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strFill: '#ffcc00', strFillInk: '#000', strFillEdge: '#ffcc00', strOff: '#d4d4d8',
-        frame: { border: '1px solid rgba(255,255,255,.08)' } });
+      : light ? { bg: '#fbfbfa', edge: 'rgba(251,251,250,.6)', tick: '#71717a', zero: '#111111', cur: '#000000', note: '#18181b', sharp: '#52525b', dot: '#d97706', ok: '#059669', idle: '#71717a',
+        head: '#fbfbfa', line: '#d4d4d8', ink: '#000000', strBg: '#efefee', strOnBg: 'rgba(217,119,6,.14)', strOn: '#b45309', strFill: '#f59e0b', strFillInk: '#000', strFillEdge: '#d97706', strOff: '#3f3f46',
+        frame: { border: '1px solid #d3d0c6', boxShadow: '0 4px 14px rgba(60,50,20,.12)' } }
+      : { bg: '#17191e', edge: 'rgba(23,25,30,.6)', tick: '#71717a', zero: '#ffffff', cur: '#ffffff', note: '#ffffff', sharp: '#d4d4d8', dot: '#ffcc00', ok: '#4afc9d', idle: '#52525b',
+        head: '#1d2026', line: '#2e3138', ink: '#ffffff', strBg: '#1d2026', strOnBg: 'rgba(255,204,0,.14)', strOn: '#ffcc00', strFill: '#ffcc00', strFillInk: '#000', strFillEdge: '#ffcc00', strOff: '#d4d4d8',
+        frame: { border: '1px solid rgba(255,255,255,.10)', boxShadow: '0 4px 16px rgba(0,0,0,.5)' } });
 // 지금 상태: idle(소리 없음) · ok(허용 범위 안) · hi(높음) · lo(낮음) → 상태 색 (swap = 지판: 높음 파랑 · 낮음 빨강)
 const pitchStatus = (tuner, B, swap) => {
   const active = tuner.isStarted && tuner.pitch > 0, inTune = active && Math.abs(tuner.cents) <= tuner.tolerance;
@@ -784,7 +784,7 @@ const PitchHead = ({ tuner, B, SC, st, size = 1 }) => {
   return (
     <div className="grid grid-cols-2" style={{ height: 82 * size, background: B.head, borderBottom: `1px solid ${B.line}` }}>
       <div className="flex items-center justify-center" style={{ borderRight: `1px solid ${B.line}` }}>
-        <span className="font-black" style={{ fontSize: 72 * size, lineHeight: 1.1, color: active ? B.ink : B.idle, fontFamily: B.serif }}>{nmA}<span style={{ color: SC, fontSize: 44 * size }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 24 * size }}>{ocA}</sub></span>
+        <span className="font-black" style={{ fontSize: 72 * size, lineHeight: 1.1, color: SC, fontFamily: B.serif }}>{nmA}<span style={{ fontSize: 44 * size }}>{shA}</span><sub className="opacity-50" style={{ fontSize: 24 * size }}>{ocA}</sub></span>
       </div>
       <div className="flex items-center justify-center gap-1 pr-1">
         <span className="flex flex-col leading-none font-black" style={{ color: SC, fontSize: 18 * size }}><span style={{ opacity: st === 'lo' ? 1 : .18 }}>▲</span><span style={{ opacity: st === 'hi' ? 1 : .18 }}>▼</span></span>
@@ -799,8 +799,9 @@ const FINE_RANGE = 25;
 const fineX = (c) => 50 + Math.max(-1, Math.min(1, c / FINE_RANGE)) * 50;
 const FineStrip = ({ tuner, B, SC, height = 34, last }) => {
   const active = tuner.isStarted && tuner.pitch > 0, inTune = active && Math.abs(tuner.cents) <= tuner.tolerance;
-  const ref = useRef(null);
-  const [f0] = useSpring([active ? tuner.centsExact : 0], ([c]) => { if (ref.current) ref.current.style.left = fineX(c) + '%'; }, { k: 0.22, snap: 0.05 });
+  const ref = useRef(null), fillRef = useRef(null);
+  const fillCss = (c) => { const x = fineX(c); return { left: Math.min(50, x) + '%', width: Math.abs(x - 50) + '%' }; };
+  const [f0] = useSpring([active ? tuner.centsExact : 0], ([c]) => { if (ref.current) ref.current.style.left = fineX(c) + '%'; if (fillRef.current) Object.assign(fillRef.current.style, fillCss(c)); }, { k: 0.22, snap: 0.05 });
   const F = FINE_RANGE;
   return (
     <div className="relative" style={{ height, background: B.head, borderBottom: last ? 'none' : `1px solid ${B.line}` }}>
@@ -809,6 +810,8 @@ const FineStrip = ({ tuner, B, SC, height = 34, last }) => {
         const big = c % 10 === 0, mid = c % 5 === 0;
         return <i key={j} className="absolute top-1 -translate-x-1/2" style={{ left: `${fineX(c)}%`, width: c === 0 ? 2 : 1, height: c === 0 ? 18 : big ? 12 : mid ? 8 : 4, background: c === 0 ? B.zero : B.tick, opacity: mid ? 1 : 0.6 }}/>; })}
       {[-20, -10, 10, 20].map(v => <span key={v} className="absolute bottom-0.5 -translate-x-1/2 font-mono font-black text-[10px] leading-none" style={{ left: `${fineX(v)}%`, color: B.tick }}>{v > 0 ? '+' + v : v}</span>)}
+      {/* 0 ~ 바늘 사이 채움: 0보다 왼쪽 = 낮음, 오른쪽 = 높음 (상태 색) */}
+      <i ref={fillRef} className="absolute" style={{ top: height - 21, height: 6, ...fillCss(f0), background: SC, opacity: active ? 0.85 : 0, borderRadius: 3 }}/>
       <i ref={ref} className="absolute top-0 bottom-0 -translate-x-1/2 w-[3px] rounded-full z-10" style={{ left: `${fineX(f0)}%`, background: SC, boxShadow: active ? `0 0 6px ${SC}` : 'none', opacity: active ? 1 : 0.4 }}/>
     </div>
   );
@@ -880,7 +883,7 @@ const NoteTape = ({ tuner, showMic, bare }) => {
                 return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 18 : c === -50 ? 0 : c % 10 === 0 ? 10 : 5, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
                   background: c === 0 ? B.zero : B.tick, opacity: c % 10 === 0 ? 1 : 0.7 }}/>; })}
               <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: isCur ? 58 : 32,
-                color: isCur ? (inTune ? B.ok : B.cur) : name[1] === '#' ? B.sharp : B.note }}>
+                color: isCur ? SC : name[1] === '#' ? B.sharp : B.note }}>
                 {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: isCur ? 20 : 15 }}>{oct}</sub>
               </span>
               {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: B.dot }}/>}

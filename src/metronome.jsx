@@ -539,7 +539,7 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
   const B = pitchPalette(vintage, light), { active: live, inTune: ok, st, SC } = pitchStatus(tuner, B, swapColors);
   const RG = FINE_RANGE;   // 눈금 범위 = 가로 벨트 세부 줄과 같은 ±25¢ (같은 센트면 같은 만큼 움직임, 넘으면 끝에 붙음)
   const c = live ? Math.max(-RG, Math.min(RG, centsExact)) : 0;
-  const face = vintage ? '#f3e8cc' : light ? '#ffffff' : '#0a0a0a';
+  const face = vintage ? '#f3e8cc' : light ? '#fbfbfa' : '#1d2026';   // 절전형: 검정 바탕보다 살짝 밝게 구분
   const tick = B.tick, ink = B.ink, serif = vintage ? 'Georgia,serif' : undefined;
   const W = 200, H = 100, cx = 100, cy = 112, R = 104;
   const ang = (v) => Math.sign(v) * 64 * Math.pow(Math.min(RG, Math.abs(v)) / RG, 0.85);   // 거의 고른 눈금 (가운데 살짝만 넓게)
@@ -575,8 +575,8 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
           {isStarted ? 'LIVE' : 'OFF'}
         </button>
         {/* 왼쪽 아래: 지금 음 (크게) */}
-        <span className="absolute left-2.5 bottom-1.5 font-black leading-none" style={{ color: live ? ink : B.idle, fontSize: 56 * fs, fontFamily: serif }}>
-          {live ? currentNote.name : '—'}<span style={{ fontSize: 24 * fs, color: SC }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
+        <span className="absolute left-2.5 bottom-1.5 font-black leading-none" style={{ color: SC, fontSize: 56 * fs, fontFamily: serif }}>
+          {live ? currentNote.name : '—'}<span style={{ fontSize: 24 * fs }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
           <sub style={{ fontSize: 16 * fs, opacity: 0.55 }}>{live ? currentNote.octave : ''}</sub>
         </span>
         {/* 오른쪽 아래: 센트 (소수 첫째 자리) + 고칠 방향 */}
@@ -605,8 +605,8 @@ const PitchDigits = ({ tuner, compact, swapColors, big }) => {
         style={{ color: isStarted ? (vintage ? skin.live : '#4afc9d') : '#ef4444' }}>
         <span className={`w-1.5 h-1.5 rounded-full ${isStarted ? 'animate-pulse' : ''}`} style={{ background: 'currentColor' }}/>{isStarted ? 'LIVE' : 'OFF'}
       </button>
-      <span className="font-black leading-none" style={{ color: live ? ink : cc, fontSize: nf, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
-        {live ? currentNote.name : '—'}<span style={{ fontSize: nf / 2, color: cc }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
+      <span className="font-black leading-none" style={{ color: cc, fontSize: nf, fontFamily: vintage ? 'Georgia,serif' : undefined }}>
+        {live ? currentNote.name : '—'}<span style={{ fontSize: nf / 2 }}>{live ? currentNote.symbol.replace('#', '♯') : ''}</span>
         <span style={{ fontSize: nf / 3, opacity: 0.6 }}>{live ? currentNote.octave : ''}</span>
       </span>
       <span className="ml-auto flex items-center gap-1.5 leading-none" style={{ color: cc }}>
