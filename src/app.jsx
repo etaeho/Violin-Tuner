@@ -108,13 +108,14 @@ const App = () => {
           paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro} openSettings={setSettingsTab} active={activeTab==='tuner'}/></div>
+        {/* 배터리: 지금 보는 탭만 그림 (보이지 않는 탭은 아예 그리지 않아 음정이 바뀔 때마다 다시 계산하지 않음) */}
+        {activeTab==='tuner'       && <div className="flex flex-col w-full flex-1 min-h-0"><Tuner       tuner={tuner} metro={metro} openSettings={setSettingsTab} active/></div>}
         {/* 메트로놈(2번) 탭 숨김 — 그리지도 않음(배터리). 다시 켤 땐 주석 풀기
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner} openSettings={setSettingsTab}/></div> */}
-        <div className={activeTab==='fingerboard' ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
+        {activeTab==='fingerboard' && <div className="flex flex-col w-full flex-1 min-h-0"><Fingerboard tuner={tuner} metro={metro} log={log}/></div>}
         {/* 드론 탭은 일단 숨김 (drone.jsx 그대로) → 4번째 탭 = 녹음 */}
-        <div className={activeTab==='record'      ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><RecordTab   recorder={recorder} tuner={tuner} metro={metro}/></div>
-        <div className={activeTab==='log'         ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><PracticeLog log={log} recorder={recorder}/></div>
+        {activeTab==='record'      && <div className="flex flex-col w-full flex-1 min-h-0"><RecordTab   recorder={recorder} tuner={tuner} metro={metro}/></div>}
+        {activeTab==='log'         && <div className="flex flex-col w-full flex-1 min-h-0"><PracticeLog log={log} recorder={recorder}/></div>}
       </div>
 
       {/* 연주 명령 알림 */}

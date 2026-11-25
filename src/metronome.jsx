@@ -221,10 +221,17 @@ const useMetronomeLogic = () => {
     scheduler();
   };
 
+  // 배터리: 메트로놈이 멈추고 녹음도 이 소리 엔진을 안 쓰면 잠재움 (다시 시작하면 initMetroAudioContext가 깨움)
+  const ctxHoldRef = useRef(false);
+  const maybeSleep = () => setTimeout(() => {
+    const c = metroAudioCtxRef.current;
+    if (c && c.state === 'running' && !isPlayingRef.current && !ctxHoldRef.current) c.suspend().catch(() => {});
+  }, 400);
   const stopMetronome = () => {
     isPlayingRef.current=false; setIsPlayingMetro(false);
     window.clearTimeout(timerIDRef.current); setCurrentBeat(-1);
     haptic(10);
+    maybeSleep();
   };
 
   const toggleMetronome = () => { isPlayingRef.current?stopMetronome():startMetronome(); };
@@ -269,7 +276,7 @@ const useMetronomeLogic = () => {
     bpm, setBpm, isPlayingMetro, currentBeat, currentSub, timeSig, beatSounds, beatSubdivisions, visualFlash,
     toggleMetronome, changeNumerator, changeDenominator, setTimeSigPreset, toggleBeatSubdivision, setBeatSubdivision, toggleBeatSound, cycleBeatTone,
     handleBpmChange, handlePressStart, handlePressEnd, tapTempo, resetMetronome,
-    getMetroCtx: () => { initMetroAudioContext(); return metroAudioCtxRef.current; },   // 녹음 믹스용
+    getMetroCtx: () => { ctxHoldRef.current = true; initMetroAudioContext(); return metroAudioCtxRef.current; },   // 녹음이 쓰는 동안은 잠재우지 않음   // 녹음 믹스용
     // 딸깍 한 번 (메트로놈 재생과 별개, 지금은 안 씀 — 예전 녹음 카운트인용). when = AudioContext 시각
     playClick: (when, strong) => {
       initMetroAudioContext();
@@ -278,7 +285,7 @@ const useMetronomeLogic = () => {
       g.gain.setValueAtTime(strong ? 1 : 0.7, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
       osc.connect(g); g.connect(masterRef.current || ctx.destination); osc.start(t); osc.stop(t + 0.05);
     },
-    setRecordTap: (node) => { recordTapRef.current = node; },
+    setRecordTap: (node) => { recordTapRef.current = node; if (!node) { ctxHoldRef.current = false; maybeSleep(); } },   // 녹음 끝(null) → 잠재우기
   };
 };
 
@@ -632,7 +639,14 @@ const LivePitchGraph = ({ tuner, fill }) => {   // fill: 남는 공간을 채움
   useEffect(() => {
     const f = (label, cents, now) => { const a = ptsRef.current; if (!a.length || now - a[a.length - 1][0] >= 30) a.push([now, cents, label]); };
     tuner.noteListeners.add(f);
-    const iv = setInterval(() => { const a = ptsRef.current, cut = performance.now() - WIN; while (a.length && a[0][0] < cut) a.shift(); setTick(t => t + 1); }, 100);
+    let wasEmpty = false;
+    const iv = setInterval(() => {
+      const a = ptsRef.current, now = performance.now(), cut = now - WIN; while (a.length && a[0][0] < cut) a.shift();
+      // 배터리: 그릴 점도 박 줄도 없으면 다시 그리지 않음 (비었을 때 한 번만 지우고 쉼)
+      const empty = !a.length && !METRO_CLICKS.grid.some(g => g[0] >= cut);
+      if (empty && wasEmpty) return;
+      wasEmpty = empty; setTick(t => t + 1);
+    }, 100);
     return () => { tuner.noteListeners.delete(f); clearInterval(iv); };
   }, []);
   const vintage = useVintage(), skin = useSkin(), light = useTheme() === 'light';

@@ -34,6 +34,8 @@ const useTunerLogic = () => {
   const calibRef       = useRef(null);
   const startingRef    = useRef(null);
   const smoothRef      = useRef({ on: false, v: 0, t: 0 });   // 안정화(지수 평활) 상태
+  const uiRef          = useRef({ at: 0, note: null, str: null });
+  const silentSkipRef  = useRef(0);   // 조용할 때 분석 건너뛰기 (배터리)   // 화면 갱신 간격 줄이기(배터리)
   const lastSigRef     = useRef(NaN);   // 마이크 감시: 마지막 소리 데이터
   const aliveAtRef     = useRef(0);     //   마지막으로 소리 데이터가 바뀐 시각
   const userStopRef    = useRef(false); //   사용자가 직접 끔 → 자동으로 다시 켜지 않음
@@ -140,6 +142,11 @@ const useTunerLogic = () => {
       animationRef.current = requestAnimationFrame(update);
       return;
     }
+    // 배터리: 조용할 때(소리 문이 닫혀 있고 표시 중인 음도 없을 때)는 3프레임에 한 번만 분석 (초당 약 20번 — 소리 시작은 충분히 잡힘)
+    if (!gateOpenRef.current && !lastGoodRef.current && !calibRef.current) {
+      silentSkipRef.current = (silentSkipRef.current + 1) % 3;
+      if (silentSkipRef.current) { animationRef.current = requestAnimationFrame(update); return; }
+    }
     analyserRef.current.getFloatTimeDomainData(bufferRef.current);
     { const b = bufferRef.current, sig = b[0] + b[701] * 3 + b[1499] * 7;   // 마이크가 살아 있으면 잡음 때문에 매번 값이 바뀜
       if (sig !== lastSigRef.current) { lastSigRef.current = sig; aliveAtRef.current = now; } }
@@ -195,16 +202,20 @@ const useTunerLogic = () => {
         const noteIndex = (noteNum % 12 + 12) % 12;
         const octave = Math.floor(noteNum / 12) - 1;
         const fullNote = NOTE_NAMES[noteIndex];
-        setPitch(freq.toFixed(1));
-        setCents(chromaticCentsOff);
-        setCentsExact(centsBetween(freq, chromaticTargetFreq));
-        setStringCents(strCentsOff);
-        setClosestString(closestStr);
-        setCurrentNote({
-          name: fullNote.replace('#', ''),
-          symbol: fullNote.includes('#') ? '#' : '',
-          octave
-        });
+        // 배터리: 화면 갱신(리렌더)은 1초에 약 25번만 — 음이 바뀌면 바로. 바늘·벨트는 스프링이 그 사이를 부드럽게 이어 줌
+        const ui = uiRef.current, noteKey = fullNote + octave;
+        if (noteKey !== ui.note || now - ui.at >= 40) {
+          ui.at = now;
+          setPitch(freq.toFixed(1));
+          setCents(chromaticCentsOff);
+          setCentsExact(Math.round(centsBetween(freq, chromaticTargetFreq) * 10) / 10);
+          setStringCents(strCentsOff);
+          if (closestStr !== ui.str) { ui.str = closestStr; setClosestString(closestStr); }
+          if (noteKey !== ui.note) {
+            ui.note = noteKey;
+            setCurrentNote({ name: fullNote.replace('#', ''), symbol: fullNote.includes('#') ? '#' : '', octave });
+          }
+        }
         if (now > toneGuardRef.current) {
           trackerRef.current.feed(fullNote + octave, now, S);              // 연주 명령 감지
           practiceSinkRef.current?.(fullNote + octave, chromaticCentsOff, now); // 연습 시간 기록
@@ -219,7 +230,7 @@ const useTunerLogic = () => {
       if (lastGoodRef.current && now - lastGoodRef.current > S.holdMs) {
         lastGoodRef.current = 0;
         freqHistoryRef.current = []; smoothRef.current = { on: false, v: 0, t: 0 };
-        setPitch(0); setCents(0); setCentsExact(0); setStringCents(0);
+        setPitch(0); setCents(0); setCentsExact(0); setStringCents(0); uiRef.current.note = null;
       }
     }
     trackerRef.current.tick(now);
@@ -864,21 +875,29 @@ const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 �
   // ── 벨트(bare): 원통에 감긴 벨트가 굴러감 ──
   //  음이 바뀌면 사이 음들이 차례로 지나가며 도착(0.38초, 순간 이동 없음) · 가운데로 다가오는 만큼 글자가 점점 커지고 상태 색 ·
   //  양쪽은 좁아지며 뒤로 넘어감(원통 곡면) · 빨리 돌 땐 아주 약한 잔상
-  const beltRef = useRef(null), textRefs = useRef({}), rollInfo = useRef({});
+  const beltRef = useRef(null), textRefs = useRef({}), rollInfo = useRef({}), rollHidden = useRef({});
   const roll = (pos, vel) => {
     if (!bare) return;
     const I = rollInfo.current, W = beltRef.current?.clientWidth || 360, R = W * 0.62;
     const big = I.compact ? 44 : 58, small = I.compact ? 26 : 32, blur = Math.min(1.8, Math.abs(vel) * 0.1);
+    const hidden = rollHidden.current;
     Object.entries(keyRefs.current).forEach(([k, el]) => {
       if (!el) return;
-      const dx = (Number(k) - pos) * SP, th = Math.max(-1.45, Math.min(1.45, dx / R)), sc = Math.cos(th);
-      el.style.transform = `translateX(${Math.sin(th) * R}px) scaleX(${Math.max(0.05, sc).toFixed(3)})`;
+      const dx = (Number(k) - pos) * SP;
+      // 배터리: 화면 밖(원통 뒤로 넘어간) 칸은 한 번 숨기고 더 건드리지 않음
+      if (Math.abs(dx) > R * 1.5) { if (!hidden[k]) { el.style.opacity = '0'; hidden[k] = 1; } return; }
+      hidden[k] = 0;
+      const th = Math.max(-1.45, Math.min(1.45, dx / R)), sc = Math.cos(th);
+      el.style.transform = `translateX(${(Math.sin(th) * R).toFixed(1)}px) scaleX(${Math.max(0.05, sc).toFixed(3)})`;
       el.style.opacity = Math.max(0, sc * 1.15 - 0.1).toFixed(3);
       const t = textRefs.current[k]; if (!t) return;
       const prox = Math.max(0, 1 - Math.abs(dx) / SP);
-      t.style.fontSize = (small + (big - small) * prox).toFixed(1) + 'px';
-      t.style.color = I.active && prox > 0.5 ? I.SC : (t.dataset.sharp ? I.sharp : I.note);
-      t.style.filter = blur > 0.4 ? `blur(${blur.toFixed(2)}px)` : 'none';
+      // 글자 크기는 transform(scale)으로 키움 — 글꼴 크기를 바꾸면 매 프레임 레이아웃을 다시 계산해서 무거움
+      t.style.transform = `scale(${((small + (big - small) * prox) / small).toFixed(3)})`;
+      const col = I.active && prox > 0.5 ? I.SC : (t.dataset.sharp ? I.sharp : I.note);
+      if (t.dataset.col !== col) { t.style.color = col; t.dataset.col = col; }
+      const f = blur > 0.4 ? `blur(${blur.toFixed(1)}px)` : 'none';
+      if (t.dataset.f !== f) { t.style.filter = f; t.dataset.f = f; }
     });
   };
   const r0 = useRollSpring(semi, roll, 380);
@@ -911,7 +930,8 @@ const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 �
                 return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 18 : c === -50 ? 0 : c % 10 === 0 ? 10 : 5, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
                   background: c === 0 ? B.zero : B.tick, opacity: c % 10 === 0 ? 1 : 0.7 }}/>; })}
               <span ref={el => { if (el) textRefs.current[k] = el; else delete textRefs.current[k]; }} data-sharp={name[1] === '#' ? '1' : undefined}
-                className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: compact ? 26 : 32, color: name[1] === '#' ? B.sharp : B.note }}>
+                data-col={name[1] === '#' ? B.sharp : B.note}
+                className="inline-block font-black leading-none" style={{ fontFamily: B.serif, fontSize: compact ? 26 : 32, color: name[1] === '#' ? B.sharp : B.note }}>
                 {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: '0.42em' }}>{oct}</sub>
               </span>
               {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: B.dot }}/>}

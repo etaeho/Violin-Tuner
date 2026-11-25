@@ -365,44 +365,51 @@ const loadSettings = () => {
 // 부드러운 움직임: 목표값들을 매 프레임 조금씩 따라감 (지수 감쇠 스프링).
 // onFrame(values)에서 DOM을 직접 바꿈 → React 리렌더 없이 60fps. snap 이상 차이 나면 바로 이동
 const useSpring = (targets, onFrame, { k = 0.2, snap = Infinity } = {}) => {
+  // 배터리: 목표에 도착해 멈추면 프레임 루프를 쉬고, 컴포넌트가 다시 그려질 때(목표가 바뀌었을 수 있음) 다시 돎
   const st = useRef(null);
-  if (!st.current) st.current = { v: [...targets], t: targets };
+  if (!st.current) st.current = { v: [...targets], t: targets, raf: 0, alive: true };
   st.current.t = targets;
   const cb = useRef(onFrame); cb.current = onFrame;
-  useEffect(() => {
-    const s = st.current; let raf;
+  const kick = () => {
+    const s = st.current; if (s.raf || !s.alive) return;
     const tick = () => {
-      s.v = s.v.map((v, i) => { const d = s.t[i] - v; return Math.abs(d) > snap || Math.abs(d) < 1e-4 ? s.t[i] : v + d * k; });
+      let moving = false;
+      s.v = s.v.map((v, i) => { const d = s.t[i] - v; if (Math.abs(d) > snap || Math.abs(d) < 1e-4) return s.t[i]; moving = true; return v + d * k; });
       cb.current(s.v);
-      raf = requestAnimationFrame(tick);
+      s.raf = moving ? requestAnimationFrame(tick) : 0;
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    s.raf = requestAnimationFrame(tick);
+  };
+  useEffect(() => { kick(); });   // 그릴 때마다 한 번 깨움 (멈춰 있으면 한 프레임만 돌고 다시 쉼)
+  useEffect(() => () => { const s = st.current; s.alive = false; cancelAnimationFrame(s.raf); }, []);
   return st.current.v;     // 렌더 시점의 현재 값 (처음 그릴 때 위치용)
 };
 
 // 굴러가는 벨트용 스프링: 시간 기준(감쇠 진동 없음, 임계 감쇠) — durMs 안에 거의 도착, 출발은 묵직 · 도착은 부드럽게.
-//  onFrame(위치, 속도[단위/초]) 를 매 프레임 호출 (리렌더 없음)
+//  onFrame(위치, 속도[단위/초]) 를 매 프레임 호출 (리렌더 없음). 멈추면 쉬고 다시 그릴 때 깨어남(배터리)
 const useRollSpring = (target, onFrame, durMs = 380) => {
   const st = useRef(null);
-  if (!st.current) st.current = { pos: target, vel: 0, t: target, last: 0 };
+  if (!st.current) st.current = { pos: target, vel: 0, t: target, last: 0, raf: 0, alive: true };
   st.current.t = target;
   const cb = useRef(onFrame); cb.current = onFrame;
   const dr = useRef(durMs); dr.current = durMs;
-  useEffect(() => {
-    const s = st.current; let raf;
+  const kick = () => {
+    const s = st.current; if (s.raf || !s.alive) return;
+    s.last = 0;
     const tick = (now) => {
       const h = s.last ? Math.min(0.05, (now - s.last) / 1000) : 0.016; s.last = now;
       const w = 2 * Math.PI / (dr.current / 1000) * 0.55;
       s.vel += (w * w * (s.t - s.pos) - 2 * w * s.vel) * h; s.pos += s.vel * h;
       if (Math.abs(s.t - s.pos) > 40 || !isFinite(s.pos)) { s.pos = s.t; s.vel = 0; }
+      const settled = Math.abs(s.t - s.pos) < 1e-3 && Math.abs(s.vel) < 1e-2;
+      if (settled) { s.pos = s.t; s.vel = 0; }
       cb.current(s.pos, s.vel);
-      raf = requestAnimationFrame(tick);
+      s.raf = settled ? 0 : requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    s.raf = requestAnimationFrame(tick);
+  };
+  useEffect(() => { kick(); });
+  useEffect(() => () => { const s = st.current; s.alive = false; cancelAnimationFrame(s.raf); }, []);
   return st.current.pos;
 };
 
