@@ -89,6 +89,7 @@ const useRecorder = (tuner, metro, notify) => {
     .find(m => window.MediaRecorder?.isTypeSupported?.(m)) || '';
 
   const cleanupMix = () => {
+    tuner.setRecBusy(false);
     metroRef.current.setRecordTap(null);
     const m = mixRef.current;
     if (m) {
@@ -173,6 +174,7 @@ const useRecorder = (tuner, metro, notify) => {
       refresh();
     };
     mr.start(1000);
+    tuner.setRecBusy(true);   // 녹음 중엔 마이크 감시가 마이크를 다시 열지 않게
     mrRef.current = mr;
     setRec({ start: Date.now(), withClicks });
     haptic([20, 40, 20]);

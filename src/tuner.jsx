@@ -37,7 +37,8 @@ const useTunerLogic = () => {
   const lastSigRef     = useRef(NaN);   // 마이크 감시: 마지막 소리 데이터
   const aliveAtRef     = useRef(0);     //   마지막으로 소리 데이터가 바뀐 시각
   const userStopRef    = useRef(false); //   사용자가 직접 끔 → 자동으로 다시 켜지 않음
-  const permDeniedRef  = useRef(false); //   권한 거부 → 자동 재시도 안 함
+  const permDeniedRef  = useRef(false);
+  const recBusyRef     = useRef(false); //   녹음 중 → 마이크를 다시 열지 않음 (녹음이 끊김) //   권한 거부 → 자동 재시도 안 함
   const trackerRef     = useRef(null);
   const practiceSinkRef = useRef(null);
   const [noteListeners] = useState(() => new Set());   // 확정된 음을 받아볼 곳 (지판 스케일 연습)  // 연습 기록(practice.jsx) — app.jsx에서 연결
@@ -72,8 +73,9 @@ const useTunerLogic = () => {
       if (!st) { ensureMic(); return; }
       const tr = st.getAudioTracks()[0];
       if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
-      const dead = !tr || tr.readyState === 'ended' || (ctx && ctx.state === 'closed')
-        || (aliveAtRef.current && performance.now() - aliveAtRef.current > 2500);
+      const ended = !tr || tr.readyState === 'ended' || (ctx && ctx.state === 'closed');
+      // 녹음 중에는 '소리 데이터 멈춤'만으로 마이크를 다시 열지 않음 — 다시 열면 녹음 마이크까지 흔들려 소리가 끊김
+      const dead = ended || (!recBusyRef.current && aliveAtRef.current && performance.now() - aliveAtRef.current > 2500);
       if (dead) { stopTuner(); ensureMic(); }
     }, 1500);
     window.__vtResume = () => { if (settingsRef.current.onboarded && !userStopRef.current) { permDeniedRef.current = false; ensureMic(); } };   // 안드로이드 onResume
@@ -348,6 +350,7 @@ const useTunerLogic = () => {
     settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise, autoCal,
     getStream: () => streamRef.current,                 // 녹음(recorder.jsx)이 같은 마이크를 씀
     // 녹음 재생 중엔 스피커 소리를 연습 기록·연주 명령으로 세지 않음
+    setRecBusy: (on) => { recBusyRef.current = !!on; },
     setListenGuard: (on) => { if (on) toneGuardRef.current = Infinity; else if (toneGuardRef.current === Infinity && !oscillatorRef.current) toneGuardRef.current = performance.now() + 600; },
     noteTracker: trackerRef.current, practiceSinkRef, noteListeners
   };

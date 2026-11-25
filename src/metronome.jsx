@@ -188,10 +188,13 @@ const useMetronomeLogic = () => {
       osc.setPeriodicWave(softSqRef.current.wave);
       osc.frequency.setValueAtTime(freq*1.3,time);
       osc.frequency.exponentialRampToValueAtTime(freq,time+0.012);
+      // 음량: 처음 25ms는 그대로(꽉 찬 소리) → 끝까지 빠르게 줄어듦. 평평하게 끝까지 울리면 녹음 때 에코 제거가
+      //  박마다 바이올린 소리까지 지워서 끊겼음 → 소리 에너지를 줄여 그 구간을 짧게
+      const hold=Math.min(0.025,dur*0.4);
       gain.gain.setValueAtTime(0,time);
       gain.gain.linearRampToValueAtTime(vol,time+0.001);
-      gain.gain.setValueAtTime(vol,time+dur-0.002);
-      gain.gain.linearRampToValueAtTime(0,time+dur);
+      gain.gain.setValueAtTime(vol,time+hold);
+      gain.gain.exponentialRampToValueAtTime(0.001,time+dur);
       osc.connect(gain); gain.connect(masterRef.current || ctx.destination);
       if (recordTapRef.current) gain.connect(recordTapRef.current);   // 녹음에 메트로놈 소리 넣기
       osc.start(time); osc.stop(time+dur+0.02);
