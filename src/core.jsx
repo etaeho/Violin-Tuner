@@ -382,6 +382,30 @@ const useSpring = (targets, onFrame, { k = 0.2, snap = Infinity } = {}) => {
   return st.current.v;     // 렌더 시점의 현재 값 (처음 그릴 때 위치용)
 };
 
+// 굴러가는 벨트용 스프링: 시간 기준(감쇠 진동 없음, 임계 감쇠) — durMs 안에 거의 도착, 출발은 묵직 · 도착은 부드럽게.
+//  onFrame(위치, 속도[단위/초]) 를 매 프레임 호출 (리렌더 없음)
+const useRollSpring = (target, onFrame, durMs = 380) => {
+  const st = useRef(null);
+  if (!st.current) st.current = { pos: target, vel: 0, t: target, last: 0 };
+  st.current.t = target;
+  const cb = useRef(onFrame); cb.current = onFrame;
+  const dr = useRef(durMs); dr.current = durMs;
+  useEffect(() => {
+    const s = st.current; let raf;
+    const tick = (now) => {
+      const h = s.last ? Math.min(0.05, (now - s.last) / 1000) : 0.016; s.last = now;
+      const w = 2 * Math.PI / (dr.current / 1000) * 0.55;
+      s.vel += (w * w * (s.t - s.pos) - 2 * w * s.vel) * h; s.pos += s.vel * h;
+      if (Math.abs(s.t - s.pos) > 40 || !isFinite(s.pos)) { s.pos = s.t; s.vel = 0; }
+      cb.current(s.pos, s.vel);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return st.current.pos;
+};
+
 // 저장 잠금: 백업을 가져올 때 새로고침 직전에 메모리의 옛 값이 덮어쓰지 않게
 const VT_STORAGE = { locked: false };
 const vtSave = (k, v) => { if (VT_STORAGE.locked) return; try { localStorage.setItem(k, v); } catch (_) {} };

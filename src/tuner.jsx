@@ -481,7 +481,8 @@ const VTape = ({ center, active, perfect, tolerance, vintage, cents = 99 }) => {
   // center = A4 기준 반음 위치. 스프링으로 부드럽게 따라가고, 목표 ±15센트 안이면 자동 확대
   const base = Math.round(center);
   const keys = [];
-  for (let k = base - (bare ? 12 : 8); k <= base + (bare ? 12 : 8); k++) keys.push(k);
+  if (bare) for (let k = -20; k <= 40; k++) keys.push(k);   // 벨트: 바이올린 음역 전체를 늘 깔아 둠 (굴러가며 사이 음이 지나가게)
+  else for (let k = base - 8; k <= base + 8; k++) keys.push(k);
   const needle = !active ? (vintage ? 'rgba(201,161,74,.45)' : '#3f3f46') : perfect ? '#4afc9d' : '#ef4444';
   const zoomT = active && Math.abs(cents) <= 15 ? 1 : 0;
   const rootRef = useRef(null), bandRef = useRef(null), keyRefs = useRef({});
@@ -849,6 +850,7 @@ const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 �
   // 벨트(bare): 칸을 좁혀 음을 더 많이 보이게, 확대는 조금만
   const SP = bare ? 70 : TAPE_SP, ZM = bare ? 0 : 2.5;   // 벨트: 확대 없이 칸 70px (한 화면 5음 정도, 지금 음을 크게)
   const place = ([sv, z]) => {
+    if (bare) return;   // 벨트는 아래 굴러가는 스프링이 그림
     const sp = SP * (1 + ZM * z);
     Object.entries(keyRefs.current).forEach(([k, el]) => {
       if (!el) return;
@@ -859,6 +861,27 @@ const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 �
   };
   const [s0, z0] = useSpring([semi, zoomT], place, { k: 0.18, snap: 6 });
   const sp0 = SP * (1 + ZM * z0);
+  // ── 벨트(bare): 원통에 감긴 벨트가 굴러감 ──
+  //  음이 바뀌면 사이 음들이 차례로 지나가며 도착(0.38초, 순간 이동 없음) · 가운데로 다가오는 만큼 글자가 점점 커지고 상태 색 ·
+  //  양쪽은 좁아지며 뒤로 넘어감(원통 곡면) · 빨리 돌 땐 아주 약한 잔상
+  const beltRef = useRef(null), textRefs = useRef({}), rollInfo = useRef({});
+  const roll = (pos, vel) => {
+    if (!bare) return;
+    const I = rollInfo.current, W = beltRef.current?.clientWidth || 360, R = W * 0.62;
+    const big = I.compact ? 44 : 58, small = I.compact ? 26 : 32, blur = Math.min(1.8, Math.abs(vel) * 0.1);
+    Object.entries(keyRefs.current).forEach(([k, el]) => {
+      if (!el) return;
+      const dx = (Number(k) - pos) * SP, th = Math.max(-1.45, Math.min(1.45, dx / R)), sc = Math.cos(th);
+      el.style.transform = `translateX(${Math.sin(th) * R}px) scaleX(${Math.max(0.05, sc).toFixed(3)})`;
+      el.style.opacity = Math.max(0, sc * 1.15 - 0.1).toFixed(3);
+      const t = textRefs.current[k]; if (!t) return;
+      const prox = Math.max(0, 1 - Math.abs(dx) / SP);
+      t.style.fontSize = (small + (big - small) * prox).toFixed(1) + 'px';
+      t.style.color = I.active && prox > 0.5 ? I.SC : (t.dataset.sharp ? I.sharp : I.note);
+      t.style.filter = blur > 0.4 ? `blur(${blur.toFixed(2)}px)` : 'none';
+    });
+  };
+  const r0 = useRollSpring(semi, roll, 380);
   const hz = (pitch > 0 ? Number(pitch) : 0).toFixed(1).padStart(6, '0');
   const ink = vintage ? '#3b2a1a' : '#e5e5e5';
 
@@ -870,30 +893,36 @@ const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 �
     const B = pitchPalette(vintage, light);
     const st = !active ? 'idle' : inTune ? 'ok' : cents > 0 ? 'hi' : 'lo';
     const SC = { ok: B.ok, hi: '#ef4444', lo: '#3b82f6', idle: B.idle }[st];   // 상태 색 = 맞음/높음/낮음
+    rollInfo.current = { active, SC, note: B.note, sharp: B.sharp, compact };
+    const R0 = 360 * 0.62;   // 처음 그릴 때만 쓰는 대략값 (다음 프레임부터 실제 폭으로)
     const belt = (
-      <div className="relative w-full overflow-hidden" style={{ height: compact ? 74 : 100, background: B.bg }}>
+      <div ref={beltRef} className="relative w-full overflow-hidden" style={{ height: compact ? 74 : 100, background: B.bg }}>
         {/* 허용 범위 */}
         <div ref={bandRef} className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2"
-          style={{ width: `${(tolerance * 2 / 100) * sp0}px`, background: inTune ? 'rgba(74,252,157,.28)' : 'rgba(74,252,157,.12)' }}/>
+          style={{ width: `${(tolerance * 2 / 100) * SP}px`, background: inTune ? 'rgba(74,252,157,.28)' : 'rgba(74,252,157,.12)' }}/>
         {keys.map(k => {
           const idx = ((k + 9) % 12 + 12) % 12, name = NOTE_NAMES[idx], oct = Math.floor((k + 57) / 12);
           const isCur = active && k === base, open = STR.some(([, sm]) => sm === k);
           return (
             <div key={k} ref={el => { if (el) keyRefs.current[k] = el; else delete keyRefs.current[k]; }}
               className="absolute top-0 bottom-0 will-change-transform flex flex-col items-center justify-center"
-              style={{ left: '50%', width: sp0, marginLeft: -sp0 / 2, transform: `translateX(${(k - s0) * sp0}px)` }}>
+              style={{ left: '50%', width: SP, marginLeft: -SP / 2, transform: `translateX(${Math.sin(Math.max(-1.45, Math.min(1.45, (k - r0) * SP / R0))) * R0}px)` }}>
               {Array.from({ length: 20 }, (_, j) => { const c = j * 5 - 50;   // 벨트와 함께 흐르는 5¢ 눈금 (10¢ 길게, 가운데 바늘 아래 = 지금 센트)
                 return <i key={j} className="absolute top-0" style={{ left: `${50 + c}%`, height: c === 0 ? 18 : c === -50 ? 0 : c % 10 === 0 ? 10 : 5, width: c === 0 ? 2 : 1, marginLeft: c === 0 ? -1 : 0,
                   background: c === 0 ? B.zero : B.tick, opacity: c % 10 === 0 ? 1 : 0.7 }}/>; })}
-              <span className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: compact ? (isCur ? 44 : 26) : isCur ? 58 : 32,
-                color: isCur ? SC : name[1] === '#' ? B.sharp : B.note }}>
-                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: isCur ? 20 : 15 }}>{oct}</sub>
+              <span ref={el => { if (el) textRefs.current[k] = el; else delete textRefs.current[k]; }} data-sharp={name[1] === '#' ? '1' : undefined}
+                className="font-black leading-none" style={{ fontFamily: B.serif, fontSize: compact ? 26 : 32, color: name[1] === '#' ? B.sharp : B.note }}>
+                {name[0]}{name[1] === '#' ? '♯' : ''}<sub className="opacity-60 align-baseline" style={{ fontSize: '0.42em' }}>{oct}</sub>
               </span>
               {open && <i className="absolute bottom-1.5 w-2 h-2 rounded-full" style={{ background: B.dot }}/>}
             </div>
           );
         })}
-        <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(90deg,${B.edge},transparent 18%,transparent 82%,${B.edge})` }}/>
+        {/* 원통 그림자: 양쪽 끝은 뒤로 넘어가며 어둡게, 위아래는 둥근 면 */}
+        <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(90deg,${B.bg} 0%,transparent 26%,transparent 74%,${B.bg} 100%)` }}/>
+        <div className="absolute inset-0 pointer-events-none" style={{ background: light ? 'linear-gradient(180deg,rgba(0,0,0,.07),transparent 24%,rgba(255,255,255,.5) 46%,transparent 62%,rgba(0,0,0,.08))'
+          : vintage ? 'linear-gradient(180deg,rgba(60,40,20,.22),transparent 24%,rgba(255,255,255,.18) 46%,transparent 62%,rgba(60,40,20,.25))'
+          : 'linear-gradient(180deg,rgba(0,0,0,.5),transparent 24%,rgba(255,255,255,.05) 46%,transparent 62%,rgba(0,0,0,.55))' }}/>
         <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-[3px] z-10" style={{ background: SC, boxShadow: `0 0 6px ${SC}`, opacity: active ? 0.55 : 0.35 }}/>
         {/* 지금 음 사각 창 (색 = 맞음/높음/낮음) */}
         <div className="absolute z-20 left-1/2 -translate-x-1/2 top-[18px] bottom-1.5 rounded-xl pointer-events-none"
@@ -1655,7 +1684,7 @@ const BigNote = ({ tuner, showCents }) => {
 
 // 1번 탭 남는 공간 나누기: 박 원은 1/8 줄이고 그만큼 음정 그래프에 (반반 → 7 : 9)
 const T1_GROW_WEIGHT = { light: 0.875, history: 1.125 };
-const Tuner = ({ tuner, metro, openSettings }) => {
+const Tuner = ({ tuner, metro, openSettings, active = true }) => {   // active: 지금 보이는 탭인지 (가로 화면 왼쪽 막대 버튼용)
   const {
     isStarted, pitch, cents, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
@@ -1687,7 +1716,20 @@ const Tuner = ({ tuner, metro, openSettings }) => {
 
   return (
     <div className="w-full h-full flex flex-col items-center relative justify-between tab-enter">
-      {/* Top controls */}
+      {/* Top controls — 가로 화면에선 위 줄을 없애고 왼쪽 탭 막대 아래쪽에 세로로 (화면 높이 아끼기) */}
+      {land ? (active && ReactDOM.createPortal(
+        <div className="fixed left-0 z-[55] w-16 flex flex-col items-center gap-1.5" style={{ bottom: 'max(10px, env(safe-area-inset-bottom, 0px))', paddingLeft: 'env(safe-area-inset-left, 0px)', boxSizing: 'content-box' }}>
+          <span className="w-8 h-px mb-0.5" style={{ background: 'var(--chip-border)' }}/>
+          <ChipDropdown side value={a4Freq} options={[436,437,438,439,440,441,442,443,444,445,446]} onPick={tuner.pickA4Freq} ariaLabel="A4 기준음 고르기"
+            render={v => <><span className="text-gray-400 leading-none">A4</span><span className="text-white font-mono text-[13px] leading-tight">{v}</span></>} renderItem={v => <span>{v} Hz</span>}/>
+          <ChipDropdown side value={tolerance} options={[2,3,4,5,6,8,10,12,15,20,25,30]} onPick={tuner.pickTolerance} ariaLabel="허용 범위 고르기"
+            render={v => <><span className="w-1.5 h-1.5 rounded-full bg-[#4afc9d] shadow-[0_0_6px_#4afc9d]"/><span className="text-white font-mono text-[13px] leading-tight">±{v}</span></>} renderItem={v => <span>±{v}¢</span>}/>
+          <RecChip/>
+          <div className="flex gap-1">
+            <button onClick={() => { openSettings?.('t1'); haptic(8); }} aria-label="설정" className="t-chip p-1.5 rounded-full text-gray-300"><SlidersHorizontal size={13} className="text-[#4afc9d]"/></button>
+            <button onClick={handleReset} aria-label="처음 값으로" className="t-chip p-1.5 rounded-full text-gray-400"><RotateCcw size={13}/></button>
+          </div>
+        </div>, document.body)) : (
       <div className="w-full flex justify-between items-center h-10 shrink-0 max-w-sm">
         <div className="flex gap-2">
           {/* A4 · 허용 범위 = 드롭다운 목록 */}
@@ -1708,6 +1750,7 @@ const Tuner = ({ tuner, metro, openSettings }) => {
           </button>
         </div>
       </div>
+      )}
 
       {/* 미니 메트로놈이 있고 메트로놈이 돌면: 박마다 튜너 화면 전체 테두리가 박 색으로 번쩍 (첫 박은 더 강하게) */}
       {has('mini') && metro && (() => {

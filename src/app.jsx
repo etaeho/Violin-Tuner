@@ -108,7 +108,7 @@ const App = () => {
           paddingBottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))',
         }}
       >
-        <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro} openSettings={setSettingsTab}/></div>
+        <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro} openSettings={setSettingsTab} active={activeTab==='tuner'}/></div>
         <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner} openSettings={setSettingsTab}/></div>
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
         {/* 드론 탭은 일단 숨김 (drone.jsx 그대로) → 4번째 탭 = 녹음 */}
@@ -148,7 +148,7 @@ const App = () => {
       {/* Bottom Navigation */}
       <nav
         className={land
-          ? 'absolute left-0 top-0 bottom-0 w-16 t-nav backdrop-blur-md py-2 flex flex-col justify-center items-center gap-1 z-50 shadow-[10px_0_40px_rgba(0,0,0,0.6)]'
+          ? 'absolute left-0 top-0 bottom-0 w-16 t-nav backdrop-blur-md py-2 flex flex-col justify-start items-center gap-0 z-50 shadow-[10px_0_40px_rgba(0,0,0,0.6)]'
           : 'absolute bottom-0 w-full max-w-md t-nav backdrop-blur-md pt-2 px-2 flex justify-around z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.8)]'}
         style={land ? { paddingLeft: 'env(safe-area-inset-left, 0px)', boxSizing: 'content-box' } : { paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
       >
@@ -162,7 +162,7 @@ const App = () => {
               key={id}
               onClick={() => switchTab(id)}
               aria-label={label}
-              className="flex flex-col items-center gap-0.5 py-2 px-3 rounded-2xl transition-all duration-200 active:scale-90"
+              className={`flex flex-col items-center gap-0.5 ${land ? 'py-1 px-2' : 'py-2 px-3'} rounded-2xl transition-all duration-200 active:scale-90`}
               style={{ color: active ? color : '#4b5563' }}
             >
               {/* Active indicator dot (녹음 탭은 녹음 중이면 빨간 점이 깜빡임 — 다른 탭에서도 보이게) */}

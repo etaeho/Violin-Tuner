@@ -296,19 +296,22 @@ const BrassPlate = ({ children, className = '' }) => (
 );
 
 // 위 줄 칩 드롭다운 (A4 · 허용 범위): 누르면 칩 바로 아래에 목록, 고르면 닫힘, 바깥 누르면 닫힘
-const ChipDropdown = ({ value, options, onPick, render, renderItem, ariaLabel, className = '' }) => {
+const ChipDropdown = ({ value, options, onPick, render, renderItem, ariaLabel, className = '', side }) => {   // side: 목록을 버튼 오른쪽에 (가로 화면 왼쪽 막대)
   const [open, setOpen] = useState(false);
   const btnRef = useRef(null), listRef = useRef(null);
   const [pos, setPos] = useState({ left: 0, top: 0, width: 0 });
   const vintage = useVintage(), skin = useSkin(), light = useTheme() === 'light';
-  const openList = () => { const r = btnRef.current.getBoundingClientRect(); setPos({ left: r.left, top: r.bottom + 6, width: r.width }); setOpen(true); haptic(8); };
+  const openList = () => { const r = btnRef.current.getBoundingClientRect();
+    const top = side ? Math.max(8, Math.min(r.top, window.innerHeight - 308)) : r.bottom + 6;
+    setPos({ left: side ? r.right + 8 : r.left, top, width: r.width }); setOpen(true); haptic(8); };
   useEffect(() => { if (open && listRef.current) { const el = listRef.current.querySelector('[data-cur="1"]'); if (el) el.scrollIntoView({ block: 'center' }); } }, [open]);
   const hi = vintage ? '#ff1744' : light ? '#00c853' : '#00b0ff';
   return (
     <>
       <button ref={btnRef} onClick={openList} aria-label={ariaLabel} aria-expanded={open}
-        className={`flex items-center gap-1.5 t-chip px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 active:scale-95 transition-transform shadow-md ${className}`}>
-        {render(value)}<ChevronDown size={12} className="opacity-50 -mr-1"/>
+        className={side ? `flex flex-col items-center t-chip px-1 py-1 rounded-xl text-[10px] font-bold w-[52px] shrink-0 active:scale-95 ${className}`
+          : `flex items-center gap-1.5 t-chip px-2.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 active:scale-95 transition-transform shadow-md ${className}`}>
+        {render(value)}{!side && <ChevronDown size={12} className="opacity-50 -mr-1"/>}
       </button>
       {open && ReactDOM.createPortal(
         <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)}>
