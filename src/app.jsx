@@ -41,7 +41,7 @@ const App = () => {
     tuner.noteTracker.state.onCommand = () => {
       const starting = !metro.isPlayingMetro;
       metro.toggleMetronome();
-      if (starting) setActiveTab('metronome');
+      // if (starting) setActiveTab('metronome');   // 메트로놈 탭 숨김 → 지금 탭 그대로 (다시 켜면 이 줄도 살리기)
       haptic([30, 40, 30]);
       showToast(`🎻 ${tuner.settings.cmdPattern.join(' → ')}  ·  메트로놈 ${starting ? '시작' : '정지'}`);
     };
@@ -77,7 +77,7 @@ const App = () => {
 
   const TAB_NAV = [
     { id:'tuner',       label:'Tuner',  color:'#4afc9d', Icon:Activity },
-    { id:'metronome',   label:'Metro',  color:'#ffcc00', Icon:Music    },
+    // { id:'metronome',   label:'Metro',  color:'#ffcc00', Icon:Music    },   // 메트로놈(2번) 탭 숨김 — 다시 켤 땐 이 줄과 아래 <Metronome> 줄 주석 풀기 (metronome.jsx 그대로)
     { id:'fingerboard', label:'Finger', color:'#0ea5e9', Icon:LayoutGrid },
     { id:'record',      label:'녹음',    color:'#ef4444', Icon:Mic },
     { id:'log',         label:'기록',    color:'#fb923c', Icon:BarChart3 },
@@ -109,7 +109,8 @@ const App = () => {
         }}
       >
         <div className={activeTab==='tuner'       ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Tuner       tuner={tuner} metro={metro} openSettings={setSettingsTab} active={activeTab==='tuner'}/></div>
-        <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner} openSettings={setSettingsTab}/></div>
+        {/* 메트로놈(2번) 탭 숨김 — 그리지도 않음(배터리). 다시 켤 땐 주석 풀기
+        <div className={activeTab==='metronome'   ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Metronome   metro={metro} tuner={tuner} openSettings={setSettingsTab}/></div> */}
         <div className={activeTab==='fingerboard' ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><Fingerboard tuner={tuner} metro={metro} log={log}/></div>
         {/* 드론 탭은 일단 숨김 (drone.jsx 그대로) → 4번째 탭 = 녹음 */}
         <div className={activeTab==='record'      ? 'flex flex-col w-full flex-1 min-h-0' : 'hidden'}><RecordTab   recorder={recorder} tuner={tuner} metro={metro}/></div>

@@ -1283,7 +1283,7 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex gap-1 p-1 rounded-full t-chip">
-        {[['t1', '튜너 탭'], ['t2', '메트로놈 탭']].map(([id, name]) => (
+        {[['t1', '튜너 탭'] /* , ['t2', '메트로놈 탭'] — 메트로놈 탭 숨김 중 */].map(([id, name]) => (
           <button key={id} onClick={() => { setTab(id); setSel(null); haptic(6); }} className="flex-1 py-1.5 rounded-full text-xs font-black transition-all"
             style={tab === id ? { background: 'var(--accent)', color: '#000' } : { color: 'var(--ink2)' }}>{name}</button>
         ))}
