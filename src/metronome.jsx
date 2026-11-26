@@ -555,9 +555,20 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
   const ang = (v) => Math.sign(v) * 64 * Math.pow(Math.min(RG, Math.abs(v)) / RG, 0.85);   // 거의 고른 눈금 (가운데 살짝만 넓게)
   const pt = (deg, r) => [cx + r * Math.sin(deg * Math.PI / 180), cy - r * Math.cos(deg * Math.PI / 180)];
   const arc = (d0, d1, r) => { const [x0, y0] = pt(d0, r), [x1, y1] = pt(d1, r); return `M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`; };
-  const needleRef = useRef(null);
-  const [c0] = useSpring([c], ([v]) => { const el = needleRef.current; if (!el) return; const [x, y] = pt(ang(v), R - 3); el.setAttribute('x2', x); el.setAttribute('y2', y); }, { k: 0.22, snap: 0.05 });
-  const [nx, ny] = pt(ang(c0), R - 3);
+  // 바늘 = 굵은 바늘(끝으로 갈수록 가늘게) + 뒤쪽 균형추 + 빛나는 끝, 그리고 0~바늘 부채꼴 채움(세부 음정 줄 막대와 같은 규칙)
+  const needlePts = (v) => { const a = ang(v), [tx, ty] = pt(a, R - 4), [lx, ly] = pt(a - 90, 4.5), [rx, ry] = pt(a + 90, 4.5), [bx, by] = pt(a + 180, 14);
+    const off = (x, y) => [cx + (x - cx), cy + (y - cy)];
+    return { poly: `${tx},${ty} ${lx},${ly} ${bx},${by} ${rx},${ry}`, tip: [tx, ty] }; };
+  const sectorD = (v) => { const a = ang(v); if (Math.abs(a) < 0.05) return ''; const [x0, y0] = pt(0, R - 1), [x1, y1] = pt(a, R - 1);
+    return `M ${cx} ${cy} L ${x0} ${y0} A ${R - 1} ${R - 1} 0 0 ${a > 0 ? 1 : 0} ${x1} ${y1} Z`; };
+  const needleRef = useRef(null), tipRef = useRef(null), fanRef = useRef(null);
+  const [c0] = useSpring([c], ([v]) => {
+    const n = needlePts(v);
+    needleRef.current?.setAttribute('points', n.poly);
+    if (tipRef.current) { tipRef.current.setAttribute('cx', n.tip[0]); tipRef.current.setAttribute('cy', n.tip[1]); }
+    fanRef.current?.setAttribute('d', sectorD(v));
+  }, { k: 0.22, snap: 0.05 });
+  const n0 = needlePts(c0);
   const ticks = [];
   for (let v = -RG; v <= RG; v++) {
     const a = Math.abs(v);
@@ -571,13 +582,14 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
     <div className={`w-full rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
       <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[78px]' : big ? 'h-[220px]' : 'h-[156px]'}`} style={{ background: face, boxShadow: light ? 'inset 0 1px 4px rgba(0,0,0,.12)' : 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full">
+          <path ref={fanRef} d={sectorD(c0)} fill={SC} opacity={live ? 0.2 : 0}/>
           <path d={arc(ang(-tolerance), ang(tolerance), R - 7)} fill="none" stroke={ok ? 'rgba(74,252,157,.8)' : 'rgba(74,180,110,.38)'} strokeWidth="11"/>
           {ticks}
           {[-20, -10, 10, 20].map(v => { const [x, y] = pt(ang(v), R - 27); return <text key={v} x={x} y={y + 4} textAnchor="middle" fontSize="12" fontWeight="900" fill={tick} fontFamily="ui-monospace,monospace">{v > 0 ? `+${v}` : v}</text>; })}
           <text x={pt(0, R - 30)[0]} y={pt(0, R - 30)[1] + 4} textAnchor="middle" fontSize="13" fontWeight="900" fill={B.zero} fontFamily="ui-monospace,monospace">0</text>
-          <line ref={needleRef} x1={cx} y1={cy} x2={nx} y2={ny} stroke={SC} strokeWidth="2.8" strokeLinecap="round" opacity={live ? 1 : 0.4}
-            style={{ filter: live ? `drop-shadow(0 0 3px ${SC})` : 'none' }}/>
-          <circle cx={cx} cy={H} r="8" fill={tick}/>
+          <polygon ref={needleRef} points={n0.poly} fill={SC} opacity={live ? 1 : 0.4} style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.35))' }}/>
+          <circle ref={tipRef} cx={n0.tip[0]} cy={n0.tip[1]} r="3.2" fill="#fff" opacity={live ? 0.9 : 0} style={{ filter: `drop-shadow(0 0 4px ${SC})` }}/>
+          <circle cx={cx} cy={H} r="9" fill={tick}/>
         </svg>
         <button onClick={isStarted ? undefined : ensureMic} className="absolute left-2.5 top-2 flex items-center gap-1 text-[9px] font-black tracking-widest"
           style={{ color: isStarted ? (vintage ? '#15803d' : light ? '#059669' : '#4afc9d') : '#ef4444' }}>
