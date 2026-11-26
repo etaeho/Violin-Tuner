@@ -580,8 +580,9 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
   const ce = live ? Math.round(centsExact * 10) / 10 : 0, ceA = Math.abs(ce), cInt = Math.floor(ceA), cDec = Math.round((ceA - cInt) * 10) % 10;
   return (
     <div className={`w-full rounded-2xl p-1.5 shrink-0 ${vintage ? '' : 't-inset'}`} style={vintage ? skin.frame : undefined}>
-      <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[78px]' : big ? 'h-[220px]' : 'h-[156px]'}`} style={{ background: face, boxShadow: light ? 'inset 0 1px 4px rgba(0,0,0,.12)' : 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax meet" className="absolute inset-0 w-full h-full">
+      <div className={`relative w-full rounded-xl overflow-hidden ${compact ? 'h-[88px]' : big ? 'h-[230px]' : 'h-[170px]'}`} style={{ background: face, boxShadow: light ? 'inset 0 1px 4px rgba(0,0,0,.12)' : 'inset 0 2px 8px rgba(0,0,0,.5)' }}>
+        {/* 부채꼴은 위쪽, 음이름 · 센트는 아래 한 줄 — 서로 겹치지 않게 */}
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMax meet" className="absolute inset-x-0 top-0 w-full" style={{ height: `calc(100% - ${Math.round(42 * fs)}px)` }}>
           <path ref={fanRef} d={sectorD(c0)} fill={SC} opacity={live ? 0.2 : 0}/>
           <path d={arc(ang(-tolerance), ang(tolerance), R - 7)} fill="none" stroke={ok ? 'rgba(74,252,157,.8)' : 'rgba(74,180,110,.38)'} strokeWidth="11"/>
           {ticks}
