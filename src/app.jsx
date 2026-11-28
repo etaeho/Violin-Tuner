@@ -36,16 +36,7 @@ const App = () => {
   // 설정창: 튜너·메트로놈 탭 어디서든 같은 설정 (화면 배치는 연 탭이 먼저 보임)
   const [settingsTab, setSettingsTab] = useState(null);   // null | 't1' | 't2'
 
-  // 연주 명령(commands.jsx) → 메트로놈 켜기/끄기. 켤 때는 메트로놈 탭으로 이동
-  useEffect(() => {
-    tuner.noteTracker.state.onCommand = () => {
-      const starting = !metro.isPlayingMetro;
-      metro.toggleMetronome();
-      // if (starting) setActiveTab('metronome');   // 메트로놈 탭 숨김 → 지금 탭 그대로 (다시 켜면 이 줄도 살리기)
-      haptic([30, 40, 30]);
-      showToast(`🎻 ${tuner.settings.cmdPattern.join(' → ')}  ·  메트로놈 ${starting ? '시작' : '정지'}`);
-    };
-  });
+  // 연주 명령(음 패턴 → 메트로놈 켜기/끄기)은 폐기 (commands.jsx 남아 있으나 연결 안 함)
 
   // 화면 회전 설정 → 안드로이드 앱에 알림 (웹에서는 무시)
   useEffect(() => { try { window.VTNative?.setOrientation?.(tuner.settings.rotate || 'portrait'); } catch (_) {} }, [tuner.settings.rotate]);

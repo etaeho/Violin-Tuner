@@ -257,7 +257,7 @@ const DEFAULT_SETTINGS = {
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
   layoutRev: 17,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
-  cmdEnabled: true,  // 연주 명령(음 패턴 → 메트로놈) 사용 → commands.jsx
+  cmdEnabled: false, // 연주 명령(음 패턴 → 메트로놈) — 기능 폐기, 쓰지 않음
   cmdPattern: ['G3', 'E5', 'G3'],
   cmdWindowMs: 3000, // 패턴을 이 시간 안에 연주해야 인정
 };

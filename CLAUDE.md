@@ -6,7 +6,7 @@
 - `index.html` — 껍데기(head, 로딩화면, 스크립트 로드 순서). 앱 코드는 없음.
 - `src/` — 앱 코드 (React 18 + Babel standalone, 빌드 없이 브라우저에서 JSX 변환). **로드 순서 중요** (core → commands → theme → tuner → metronome → fingerboard → drone → practice → onboarding → recorder → app):
   1. `core.jsx` — 공통 상수(음이름·현·조표), 설정(DEFAULT_SETTINGS, localStorage), 피치 검출(detectPitch)
-  1-1. `commands.jsx` — 연주 명령: 음 패턴(기본 G3→E5→G3) 감지 → 메트로놈 켜기/끄기 (app.jsx에서 onCommand 연결)
+  1-1. `commands.jsx` — (폐기) 연주 명령: 음 패턴 → 메트로놈. **기능 폐기** — 튜너가 feed 안 하고 app.jsx onCommand 연결 없음, 설정의 '연주 명령' 칸도 없앰. 파일·noteTracker 객체만 남음
   2. `theme.jsx` — **디자인 3종** `DESIGNS`(이름: 기본 light(흰색) · 절전형 dark(검정) · 클래식 radio(나무색) — 피아노·가죽·바이올린·악보는 폐기, 저장값은 클래식으로). 설정값 `settings.design`, 각 디자인의 `base`(tape|light|vintage)가 `settings.uiMode`·`data-theme`이 됨. 우드 계열은 `SKINS[skin]` 토큰(숫자창·버튼·표시등·다이얼 모양)을 `SkinContext`/`useSkin()`으로 받음 → `SkinNumber`(1번 탭 Hz), `SkinBeatDial`·`SkinMiniMetronome`(metronome.jsx). 고르는 화면 = `DesignPicker`(설정 ①, 온보딩 3단계 공용). 라디오만 `hzDial`로 `RadioDial`(Hz 눈금 창 + 빨간 바늘)·`RadioBeatDial` 사용. 그 외 ThemeContext/useVintage, 공용 UI(DrumDigits · Screw · BrassPlate)
   3. `tuner.jsx` — 튜너 탭: useTunerLogic, StringBars(막대), StringVTapes/VTape(현별 세로 테이프), BigNote(큰 음이름), NoteTape(가로 테이프), TunerReadout, SettingsSheet(LayoutEditor·PartsEditor), Tuner. 블록 배치는 `settings.layout1`
   4. `metronome.jsx` — 메트로놈 탭(블록 배치 `settings.layout2`, `PitchStrip`: 음정 바늘 게이지) + `MiniMetronome`(튜너 탭 'mini' 블록: 박 원을 가로 가득 크게 + 아래 한 줄 작게 TAP·−·BPM(끌기)·+·시작, 빠르기 숫자 버튼 없음, 같은 metro 상태 공유). 클릭 시각을 `METRO_CLICKS`(core.jsx)에 기록 → 튜너가 그 순간 분석을 건너뜀
@@ -21,7 +21,7 @@
   **컴포넌트에서 배경/테두리 색을 직접 쓰지 말고 `t-panel`, `t-chip`, `t-inset`, `t-board`, `t-card`, `t-sheet`, `t-nav`, `t-app` 클래스 사용.**
   모양 자체가 다른 부분만 `useVintage()`로 분기. 새 우드 디자인 = `SKINS` 항목 + `DESIGNS` 한 줄 + core.jsx `DESIGN_BASE` 한 줄. 새 바탕 테마 = theme.css 변수 블록 + loadSettings 허용 목록.
   **설정창은 '저장'을 눌러야 저장**: 열 때 `tuner.beginSettingsEdit()`(초안 — 화면엔 바로 보이지만 localStorage엔 안 씀), 맨 아래 고정 줄 = 기본값 · 취소 · **저장**(오른쪽, `commitSettings`), ✕·바깥·취소 = `cancelSettings`(원래 값으로), 바꾼 게 있으면 ✕/바깥에서 '바꾼 설정을 저장할까요?' 물음. 설정창 슬라이더는 `DragSlider`(톡 눌러선 안 바뀌고 끌어야 바뀜, 누른 자리로 튀지 않고 지금 값에서 끈 만큼). 기본값: 확정 프레임 8 · 안정화 450ms (`steadyRev`로 기존 사용자도 한 번 바꿈)
-  설정 시트는 ① 디자인(+세부 꾸미기) ② 화면 배치 ③ 소리 감지 ④ 연주 명령 ⑤ 백업·정보 — 자주 안 쓰는 값은 `Fold`(펼치기) 안에 둔다.
+  설정 시트는 ① 디자인(+세부 꾸미기) ② 화면 배치 ③ 소리 감지 ④ 백업·정보 (연주 명령은 폐기) — 자주 안 쓰는 값은 `Fold`(펼치기) 안에 둔다.
   - **세부 꾸미기** `settings.parts {num, plate}` (core.jsx `PART_NUM_STYLES`/`PART_PLATE_STYLES`) → `PartsContext`/`useParts()`. 숫자 = `PartNumber`(flip·radio·drum·led), 판 = `BrassPlate`. 적용: TunerReadout, 미니 메트로놈 BPM, 2번 탭 다이얼 가운데(`DialCenter`)
   - **화면 배치** `settings.layout1`(1번 탭) / `layout2`(2번 탭) = `[{id, on, size}]` 순서대로. **크기는 고정**(`blockSize`: 블록의 `size` 또는 기본 'm', 화면 배치에선 순서·보이기만 바꿈). 블록 목록은 core.jsx `LAYOUT_BLOCKS` (grow = 남는 공간 채움, 크기 = 비율 / 나머지는 크기 = zoom 배율, lock = 숨기기 불가). 렌더: `visibleBlocks` + `LayoutBlock`(theme.jsx). 편집: `LayoutEditor`(tuner.jsx) = 실제 화면 축소 미리보기(`LayoutPreview`) + **화면 순서**(보이는 블록만, `BlockThumb` 그림 · 끌기 · 크기 · ✕) + **블록 추가**(숨긴 블록을 `group`별 그림 타일, 누르면 추가). 고른 블록은 `LayoutHighlightContext`로 테두리. 블록마다 `short`(짧은 이름)·`group`(**'음정' 초록 · '템포' 노랑 · '녹음' 빨강** = `LAYOUT_GROUPS`, 줄 왼쪽 색 띠·아이콘)·`sizes`(고를 수 있는 크기, 녹음은 한 줄/두 줄)·`noZoom`. 새 블록 = LAYOUT_BLOCKS 한 줄(name·short·group) + `BlockThumb` 그림 한 줄 + Tuner/Metronome의 `b.id === ...` 한 줄
   - **녹음 모듈** `RecModule`(recorder.jsx) = 화면 배치 'rec' 블록(1·2번 탭): 한 줄(버튼·시간) / 두 줄(+ 마지막 녹음 듣기). 지판 탭 위 줄엔 `RecChip`. 녹음기는 `RecorderContext`(app.jsx)로 공유

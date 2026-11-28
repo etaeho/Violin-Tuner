@@ -226,7 +226,7 @@ const useTunerLogic = () => {
           }
         }
         if (now > toneGuardRef.current) {
-          trackerRef.current.feed(fullNote + octave, now, S);              // 연주 명령 감지
+          // trackerRef.current.feed(fullNote + octave, now, S);           // 연주 명령 감지 — 기능 폐기
           practiceSinkRef.current?.(fullNote + octave, chromaticCentsOff, now); // 연습 시간 기록
           noteListeners.forEach(f => f(fullNote + octave, chromaticCentsOff, now)); // 지판 스케일 연습 등
         }
@@ -242,7 +242,7 @@ const useTunerLogic = () => {
         setPitch(0); setCents(0); setCentsExact(0); setStringCents(0); uiRef.current.note = null;
       }
     }
-    trackerRef.current.tick(now);
+    // trackerRef.current.tick(now);   // 연주 명령 — 기능 폐기
     levelRef.current = { db, clarity, freq: raw, gate: gateOpenRef.current, accepted };
     animationRef.current = requestAnimationFrame(update);
   }, []);
@@ -1417,14 +1417,13 @@ const SettingsSheet = ({ tuner, metro, onClose: closeSheet, layoutTab = 't1' }) 
   const onClose = () => { if (tuner.settingsDirty()) { setAskClose(true); haptic(10); } else discard(); };
   const [lv, setLv] = useState(levelRef.current);
   const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
-  const [cmd, setCmd] = useState({ recording: null, events: [] });   // 연주 명령 상태 표시용
   const [recMsg, setRecMsg] = useState(null);
   const [open, setOpen] = useState({});   // 접힌 묶음 펼침 상태
 
   // 패턴 녹음 완료 → 저장
   useEffect(() => {
-    noteTracker.state.onRecorded = (p) => {
-      if (p) { updateSettings({ cmdPattern: p, cmdEnabled: true }); setRecMsg(`패턴 저장됨 (${p.length}음)`); haptic(30); }
+    noteTracker.state.onRecorded = (p) => {   // (연주 명령 폐기 — 화면에서 녹음할 방법이 없어 실제로는 안 불림)
+      if (p) { updateSettings({ cmdPattern: p }); setRecMsg(`패턴 저장됨 (${p.length}음)`); haptic(30); }
       else { setRecMsg(`음이 ${CMD_PATTERN_MIN}개 이상 필요합니다. 다시 녹음해주세요.`); haptic(80); }
     };
     return () => { noteTracker.state.onRecorded = null; noteTracker.cancelRecording(); };
@@ -1435,12 +1434,6 @@ const SettingsSheet = ({ tuner, metro, onClose: closeSheet, layoutTab = 't1' }) 
     const tick = (t) => {
       if (t - last > 50) {
         setLv({ ...levelRef.current });
-        const st = noteTracker.state;
-        const rec = st.recording;
-        setCmd({
-          recording: rec ? { notes: [...rec.notes], left: rec.start === null ? null : Math.max(0, rec.windowMs - (performance.now() - rec.start)) } : null,
-          events: st.events.slice(-6).map(e => e.note),
-        });
         last = t;
       }
       raf = requestAnimationFrame(tick);
@@ -1577,79 +1570,9 @@ const SettingsSheet = ({ tuner, metro, onClose: closeSheet, layoutTab = 't1' }) 
           </Fold>
         </Section>
 
-        <Section title="④ 연주 명령">
-          <div className="flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-gray-300">음 패턴으로 메트로놈 켜기/끄기</span>
-              <span className="text-[10px] text-gray-600">켜지면 메트로놈 탭으로 이동</span>
-            </div>
-            <button onClick={() => { updateSettings({ cmdEnabled: !S.cmdEnabled }); haptic(8); }}
-              className={`w-12 h-7 rounded-full p-1 transition-colors ${S.cmdEnabled ? 'bg-[#4afc9d]' : 'bg-gray-700'}`}>
-              <div className={`w-5 h-5 rounded-full bg-white transition-transform ${S.cmdEnabled ? 'translate-x-5' : ''}`}/>
-            </button>
-          </div>
+        {/* ④ 연주 명령(음 패턴 → 메트로놈)은 폐기 — commands.jsx는 남아 있으나 쓰지 않음 */}
 
-          <div className="flex flex-col items-center gap-2 py-1">
-            <div className="flex items-center justify-center gap-1.5 flex-wrap min-h-[38px]">
-              {(() => {
-                const rec = cmd.recording;
-                const notes = rec ? rec.notes : S.cmdPattern;
-                if (rec && !notes.length) return <span className="text-xs font-bold text-[#ffcc00] animate-pulse">첫 음을 연주하면 녹음이 시작됩니다</span>;
-                return notes.map((n, i) => (
-                  <React.Fragment key={i}>
-                    {i > 0 && <span className="text-gray-600 text-xs">→</span>}
-                    <span className={`min-w-[44px] text-center px-2 py-1.5 rounded-xl font-mono font-black text-sm border-2 ${
-                      rec ? 'border-[#ffcc00] text-[#ffcc00] bg-[#ffcc00]/10'
-                      : S.cmdEnabled ? 'border-[#4afc9d]/60 text-[#4afc9d] bg-[#4afc9d]/10' : 'border-gray-700 text-gray-500'}`}>
-                      {n}
-                    </span>
-                  </React.Fragment>
-                ));
-              })()}
-            </div>
-            {cmd.recording && cmd.recording.left !== null && (
-              <div className="w-full flex flex-col gap-1">
-                <div className="h-1.5 w-full bg-[#141414] rounded-full overflow-hidden">
-                  <div className="h-full bg-[#ffcc00]" style={{ width: `${(cmd.recording.left / S.cmdWindowMs) * 100}%` }}/>
-                </div>
-                <span className="text-[11px] font-bold text-[#ffcc00] text-center">녹음 중… {(cmd.recording.left / 1000).toFixed(1)}초 남음 · {cmd.recording.notes.length}/{CMD_PATTERN_MAX}음</span>
-              </div>
-            )}
-            {!cmd.recording && recMsg && <span className="text-[11px] font-bold text-[#4afc9d]">{recMsg}</span>}
-          </div>
-
-          <Fold label="패턴 바꾸기 · 제한 시간" open={open.cmd || !!cmd.recording} onToggle={() => setOpen(o => ({ ...o, cmd: !o.cmd }))}>
-          <div className="flex gap-2">
-            {cmd.recording ? (
-              <button onClick={() => { noteTracker.cancelRecording(); haptic(8); }}
-                className="flex-1 py-2.5 rounded-full t-chip text-gray-300 text-xs font-bold">녹음 취소</button>
-            ) : (
-              <button onClick={async () => { if (await ensureMic()) { setRecMsg(null); noteTracker.startRecording(S.cmdWindowMs); haptic(15); } }}
-                className="flex-1 py-2.5 rounded-full bg-[#ffcc00]/10 border border-[#ffcc00]/40 text-[#ffcc00] text-xs font-bold">● 패턴 녹음</button>
-            )}
-            <button onClick={() => { updateSettings({ cmdPattern: DEFAULT_CMD_PATTERN }); haptic(8); }}
-              className="flex-1 py-2.5 rounded-full t-chip text-gray-300 text-xs font-bold">기본 (G3→E5→G3)</button>
-          </div>
-
-          <SliderRow label="제한 시간" value={S.cmdWindowMs} display={`${(S.cmdWindowMs / 1000).toFixed(1)}초`} min={1500} max={5000} step={500}
-            onChange={v => updateSettings({ cmdWindowMs: v })}
-            hint={`녹음: 첫 음부터 이 시간 동안 연주한 음(${CMD_PATTERN_MIN}~${CMD_PATTERN_MAX}개)이 패턴이 됩니다. 실행할 때도 이 시간 안에 연주해야 합니다. 각 음은 0.15초 이상 유지. 같은 패턴을 다시 연주하면 정지.`}/>
-
-          {isStarted && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-gray-500 font-bold">최근 인식:</span>
-              {cmd.events.length ? cmd.events.map((n, i) => (
-                <span key={i} className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-gray-800 text-gray-300">{n}</span>
-              )) : <span className="text-[10px] text-gray-700">—</span>}
-            </div>
-          )}
-          <span className="text-[10px] text-gray-600 leading-snug">
-            튜닝할 때 자주 켜는 인접 현(G→D, A→E)은 피하고, G→E→G처럼 현을 건너뛰는 패턴을 추천합니다.
-          </span>
-          </Fold>
-        </Section>
-
-        <Section title="⑤ 백업 · 정보">
+        <Section title="④ 백업 · 정보">
           <Fold label="백업 내보내기 · 가져오기, 앱 정보" open={open.misc} onToggle={() => setOpen(o => ({ ...o, misc: !o.misc }))}>
             <BackupSection/>
             <p className="text-xs text-gray-500 leading-relaxed">Violin Tuner — 모든 기록은 이 폰 안에만 저장됩니다.</p>
