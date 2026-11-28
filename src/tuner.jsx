@@ -48,12 +48,18 @@ const useTunerLogic = () => {
   const toneSemiRef    = useRef(0);      // 재생 중인 기준음 높이 (A4 바꿀 때 따라가게)
   if (!trackerRef.current) trackerRef.current = createNoteTracker();
 
+  // 설정창이 열려 있는 동안은 '초안': 화면엔 바로 보이지만 저장은 '저장' 버튼을 눌러야 (닫으면 원래대로)
+  const draftRef = useRef(null);   // null | 열 때의 설정(되돌리기용)
   const updateSettings = (patch) => {
     const next = { ...settingsRef.current, ...patch };
     settingsRef.current = next;
-    saveSettings(next);
+    if (!draftRef.current) saveSettings(next);
     setSettingsState(next);
   };
+  const beginSettingsEdit = () => { draftRef.current = settingsRef.current; };
+  const commitSettings = () => { draftRef.current = null; saveSettings(settingsRef.current); };
+  const cancelSettings = () => { const s0 = draftRef.current; draftRef.current = null; if (s0) { settingsRef.current = s0; setSettingsState(s0); } };
+  const settingsDirty = () => !!draftRef.current && JSON.stringify(draftRef.current) !== JSON.stringify(settingsRef.current);
   const resetSettings = () => { const c = settingsRef.current; updateSettings({ ...DEFAULT_SETTINGS, design: c.design, uiMode: c.uiMode, onboarded: c.onboarded, tunerLayout: c.tunerLayout, layoutRev: c.layoutRev, layout1: c.layout1, layout2: c.layout2, parts: c.parts }); };
 
   useEffect(() => {
@@ -361,7 +367,7 @@ const useTunerLogic = () => {
     isStarted, pitch, cents, centsExact, stringCents, a4Freq, tolerance,
     currentNote, closestString, error, playingTone,
     startTuner, stopTuner, toggleTone, handleReset, cycleA4Freq, cycleTolerance, pickA4Freq, pickTolerance,
-    settings, updateSettings, resetSettings, levelRef, ensureMic, calibrateNoise, autoCal,
+    settings, updateSettings, beginSettingsEdit, commitSettings, cancelSettings, settingsDirty, resetSettings, levelRef, ensureMic, calibrateNoise, autoCal,
     getStream: () => streamRef.current,                 // 녹음(recorder.jsx)이 같은 마이크를 씀
     // 녹음 재생 중엔 스피커 소리를 연습 기록·연주 명령으로 세지 않음
     setRecBusy: (on) => { recBusyRef.current = !!on; },
@@ -1054,14 +1060,30 @@ const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 �
 // ==========================================
 // 감도 설정 시트
 // ==========================================
+// 슬라이더: 막대를 톡 눌러서는 안 바뀌고, 끌어야(좌우로 움직여야) 바뀜 — 누른 자리로 튀지 않고 지금 값에서 끈 만큼만
+const DragSlider = ({ value, min, max, step, onChange }) => {
+  const ref = useRef(null), st = useRef(null);
+  const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  const snap = (v) => Math.max(min, Math.min(max, Math.round((v - min) / step) * step + min));
+  return (
+    <div ref={ref} className="relative h-8 w-full touch-none select-none cursor-grab"
+      onPointerDown={e => { st.current = { x: e.clientX, v: value, moved: false }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {} }}
+      onPointerMove={e => { const s = st.current; if (!s) return; const dx = e.clientX - s.x; if (!s.moved && Math.abs(dx) < 6) return; s.moved = true;
+        const w = ref.current.clientWidth || 1, nv = snap(s.v + (dx / w) * (max - min)); if (nv !== value) { onChange(Number(nv.toFixed(4))); haptic(4); } }}
+      onPointerUp={() => { st.current = null; }} onPointerCancel={() => { st.current = null; }}>
+      <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full" style={{ background: 'var(--chip-border)' }}/>
+      <div className="absolute left-0 top-1/2 -translate-y-1/2 h-1.5 rounded-full" style={{ width: pct + '%', background: 'var(--accent)' }}/>
+      <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full shadow-md" style={{ left: pct + '%', background: 'var(--accent)', border: '3px solid var(--sheet-bg, #111)' }}/>
+    </div>
+  );
+};
 const SliderRow = ({ label, value, display, min, max, step, onChange, hint }) => (
   <div className="flex flex-col gap-1.5">
     <div className="flex justify-between items-baseline">
       <span className="text-xs font-bold text-gray-300">{label}</span>
       <span className="text-sm font-mono font-black text-white">{display ?? value}</span>
     </div>
-    <input type="range" min={min} max={max} step={step} value={value}
-      onChange={e => onChange(Number(e.target.value))} className="w-full"/>
+    <DragSlider value={value} min={min} max={max} step={step} onChange={onChange}/>
     {hint && <span className="text-[10px] text-gray-600 leading-snug">{hint}</span>}
   </div>
 );
@@ -1385,8 +1407,14 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
   );
 };
 
-const SettingsSheet = ({ tuner, metro, onClose, layoutTab = 't1' }) => {
+const SettingsSheet = ({ tuner, metro, onClose: closeSheet, layoutTab = 't1' }) => {
   const { settings: S, updateSettings, resetSettings, levelRef, isStarted, ensureMic, calibrateNoise, noteTracker } = tuner;
+  // 열 때 초안 시작 → '저장'을 눌러야 저장, 그냥 닫으면(✕ · 바깥 · 취소) 원래 값으로
+  useState(() => { tuner.beginSettingsEdit(); return 0; });
+  const [askClose, setAskClose] = useState(false);
+  const save = () => { tuner.commitSettings(); haptic(20); closeSheet(); };
+  const discard = () => { tuner.cancelSettings(); closeSheet(); };
+  const onClose = () => { if (tuner.settingsDirty()) { setAskClose(true); haptic(10); } else discard(); };
   const [lv, setLv] = useState(levelRef.current);
   const [calib, setCalib] = useState(null);   // null | {running, left} | {noise, gate}
   const [cmd, setCmd] = useState({ recording: null, events: [] });   // 연주 명령 상태 표시용
@@ -1625,15 +1653,22 @@ const SettingsSheet = ({ tuner, metro, onClose, layoutTab = 't1' }) => {
           <Fold label="백업 내보내기 · 가져오기, 앱 정보" open={open.misc} onToggle={() => setOpen(o => ({ ...o, misc: !o.misc }))}>
             <BackupSection/>
             <p className="text-xs text-gray-500 leading-relaxed">Violin Tuner — 모든 기록은 이 폰 안에만 저장됩니다.</p>
-            <button onClick={() => { updateSettings({ onboarded: false }); onClose(); }} className="self-start text-xs font-bold text-[#4afc9d]">처음 안내 다시 보기</button>
+            <button onClick={() => { updateSettings({ onboarded: false }); save(); }} className="self-start text-xs font-bold text-[#4afc9d]">처음 안내 다시 보기</button>
           </Fold>
         </Section>
 
-        <div className="flex gap-3 mt-1">
-          <button onClick={() => { resetSettings(); setCalib(null); haptic(10); }}
-            className="flex-1 py-3 rounded-full bg-[#1a1a1a] border border-gray-700 text-gray-300 text-sm font-bold">기본값</button>
-          <button onClick={onClose}
-            className="flex-1 py-3 rounded-full bg-[#4afc9d] text-black text-sm font-black">완료</button>
+        {/* 맨 아래 고정: 기본값(왼쪽) · 취소 · 저장(오른쪽 — 오른손) */}
+        <div className="sticky bottom-0 -mx-4 -mb-6 px-4 pt-3 pb-6 mt-1 flex gap-2 t-sheet" style={{ boxShadow: '0 -10px 20px rgba(0,0,0,.25)' }}>
+          {askClose ? (<>
+            <span className="flex-1 self-center text-xs font-bold" style={{ color: 'var(--ink)' }}>바꾼 설정을 저장할까요?</span>
+            <button onClick={discard} className="px-4 py-3 rounded-full t-chip text-sm font-bold" style={{ color: 'var(--ink2)' }}>저장 안 함</button>
+            <button onClick={save} className="px-5 py-3 rounded-full bg-[#4afc9d] text-black text-sm font-black">저장</button>
+          </>) : (<>
+            <button onClick={() => { resetSettings(); setCalib(null); haptic(10); }}
+              className="px-4 py-3 rounded-full bg-[#1a1a1a] border border-gray-700 text-gray-300 text-sm font-bold">기본값</button>
+            <button onClick={discard} className="flex-1 py-3 rounded-full t-chip text-sm font-bold" style={{ color: 'var(--ink2)' }}>취소</button>
+            <button onClick={save} className="flex-1 py-3 rounded-full bg-[#4afc9d] text-black text-sm font-black">저장</button>
+          </>)}
         </div>
       </div>
     </div>

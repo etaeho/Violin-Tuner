@@ -239,10 +239,10 @@ const MIN_FREQ_CAP = 170;   // 최저 주파수는 이보다 높게 못 올림 (
 const DEFAULT_SETTINGS = {
   gateDb: -40,       // 이 레벨(dB) 미만 소리는 무시 (노이즈 게이트)
   clarity: 0.90,     // 주기성 신뢰도 0~1. 잡음은 낮고 악기 소리는 높음
-  stableFrames: 3,   // 같은 음이 N프레임 연속이어야 표시
+  stableFrames: 8,   // 같은 음이 N프레임 연속이어야 표시 (약 0.13초)
   smoothing: 6,      // 평균낼 프레임 수 (클수록 부드럽고 느림)
   rotate: 'portrait', // 화면 회전: portrait 세로 고정 · auto 자동 회전 · landscape 가로 고정 (가로면 1번 탭 두 칸 · 지판 눕힘)
-  steadyMs: 180,     // 안정화: 작은 흔들림을 이 시간(ms) 동안 부드럽게 (음 바뀜은 즉시)
+  steadyMs: 450,     // 안정화: 작은 흔들림을 이 시간(ms) 동안 부드럽게 (음 바뀜은 즉시)
   holdMs: 400,       // 소리가 끊긴 뒤 표시 유지 시간
   minFreq: 150,      // 감지 최저 Hz (바이올린 G3 = 196Hz, 낮게 풀린 G현도 잡히게 여유)
   maxFreq: 4200,     // 감지 최고 Hz (E현 최상단 A7 ≈ 3.5kHz 포함)
@@ -328,6 +328,7 @@ const loadSettings = () => {
     v.parts = normParts(stored.parts);
     if (stored.meterRev === 1 && v.parts.meter === 'panel') v.parts = { ...v.parts, meter: 'needle' };   // 한 번 벨트형으로 바꿨던 것 되돌림 (음정 표시기 모양은 그대로 두기로)
     v.meterRev = 2;
+    if (!stored.steadyRev) { v.stableFrames = 8; v.steadyMs = 450; v.steadyRev = 1; }   // 확정 프레임 8 · 안정화 450ms로 한 번 바꿈 (사용자 요청 기본값)
     if (!['portrait', 'auto', 'landscape'].includes(v.rotate)) v.rotate = 'portrait';
     if (rev < 4) {
       // 4: 낮게 풀린 G현도 잡히게 최저 주파수 180 → 150, 1번 탭에 정밀 게이지 추가
