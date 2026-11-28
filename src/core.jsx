@@ -158,7 +158,7 @@ const getTempoMarking = (bpm) => {
 // sizes: 이 블록이 고를 수 있는 크기 (녹음은 한 줄 / 두 줄만), noZoom: 크기를 확대 배율 대신 블록이 직접 처리
 const LAYOUT_BLOCKS = {
   t1: [
-    { id: 'vtapes',  name: '현별 세로 테이프', short: '세로 테이프', group: '음정', grow: true },
+    // { id: 'vtapes',  name: '현별 세로 테이프', short: '세로 테이프', group: '음정', grow: true },   // 목록에서 뺌 (사용자 요청 · 켜면 오류 났었음)
     { id: 'meter',   name: '음정 표시기 (설정에서 고른 모양)', short: '음정 표시기', group: '음정' },
     { id: 'history', name: '음정 그래프 + 큰 음이름', short: '음정 그래프', group: '음정', grow: true },   // 박 원과 남는 공간을 반씩
     { id: 'tape',    name: '가로 음 벨트',    short: '가로 벨트', group: '음정' },
@@ -204,7 +204,8 @@ const normLayout = (tab, list) => {
     const b = it && known.find(k => k.id === it.id);
     if (!b || seen.has(b.id)) return;
     seen.add(b.id);
-    out.push({ id: b.id, on: b.lock ? true : !!it.on, size: blockSize(b) });   // 크기는 고정 (화면 배치에선 순서·보이기만)
+    const okSizes = b.sizes || ['s', 'm', 'l'];
+    out.push({ id: b.id, on: b.lock ? true : !!it.on, size: okSizes.includes(it.size) ? it.size : blockSize(b) });   // 크기: 화면 배치에서 작게·보통·크게
   });
   known.forEach(b => { if (!seen.has(b.id)) out.push({ id: b.id, on: !!b.lock, size: blockSize(b) }); });
   return out;
@@ -255,7 +256,7 @@ const DEFAULT_SETTINGS = {
   recClicks: true,   // '메트로놈 녹음': 박 소리를 박에 맞춰 디지털로 넣고, 마이크로 들어온 스피커 메트로놈은 에코 제거로 지움 (recorder.jsx). 음질은 항상 128kbps
   recDelay: 3,       // 녹음 지연: 녹음 버튼 누르고 N초 뒤 시작 (0·3·5·10), 기본 3초
   autoCalib: true,   // 앱을 켤 때 3초 동안 주변 소음을 재서 감도 자동 조정
-  layoutRev: 17,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
+  layoutRev: 18,     // 레이아웃 기본값이 바뀐 버전 (이전 사용자도 1회 새 기본값으로)
   onboarded: false,  // 첫 실행 안내를 마쳤나 (onboarding.jsx) — 끝나기 전엔 마이크 자동 시작 안 함
   cmdEnabled: false, // 연주 명령(음 패턴 → 메트로놈) — 기능 폐기, 쓰지 않음
   cmdPattern: ['G3', 'E5', 'G3'],
@@ -273,7 +274,7 @@ const APP_RESET_REV = 2;   // 2: 첫 화면 순서 = 조작판 · 박 원 · 음
     try { onboarded = !!JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}').onboarded; } catch (_) {}
     const drop = Object.keys(localStorage).filter(k => k === SETTINGS_KEY || /^vt\.(metro\.|a4Freq$|tolerance$|fb\.key$|drone)/.test(k));
     drop.forEach(k => localStorage.removeItem(k));
-    if (onboarded) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onboarded: true, layoutRev: 17 }));
+    if (onboarded) localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onboarded: true, layoutRev: 18 }));
     localStorage.setItem('vt.resetRev', String(APP_RESET_REV));
   } catch (_) {}
 })();
@@ -357,7 +358,8 @@ const loadSettings = () => {
       const l = v.layout1, hi = l.findIndex(b => b.id === 'history' && b.on), ti = l.findIndex(b => b.id === 'tape' && b.on);
       if (hi >= 0 && ti >= 0 && hi < ti) { const h = l[hi]; l[hi] = l[ti]; l[ti] = h; v.layout1 = [...l]; }
     }
-    v.layoutRev = 17;
+    if (rev < 18) v.layout1 = normLayout('t1', makeLayout('t1', LAYOUT_PRESETS[0].on));   // 18: 1번 탭을 기본 배치(조작판 · 박 원 · 벨트 · 그래프, 크기 보통)로 한 번 되돌림 — 이제 위치·크기만 바꿈
+    v.layoutRev = 18;
     if (!(v.minFreq >= 40 && v.minFreq <= MIN_FREQ_CAP)) v.minFreq = Math.min(MIN_FREQ_CAP, Math.max(40, Number(v.minFreq) || 150));
     return v;
   }

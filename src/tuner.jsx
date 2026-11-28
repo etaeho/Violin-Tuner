@@ -501,8 +501,7 @@ const VTape = ({ center, active, perfect, tolerance, vintage, cents = 99 }) => {
   // center = A4 기준 반음 위치. 스프링으로 부드럽게 따라가고, 목표 ±15센트 안이면 자동 확대
   const base = Math.round(center);
   const keys = [];
-  if (bare) for (let k = -20; k <= 40; k++) keys.push(k);   // 벨트: 바이올린 음역 전체를 늘 깔아 둠 (굴러가며 사이 음이 지나가게)
-  else for (let k = base - 8; k <= base + 8; k++) keys.push(k);
+  for (let k = base - 8; k <= base + 8; k++) keys.push(k);
   const needle = !active ? (vintage ? 'rgba(201,161,74,.45)' : '#3f3f46') : perfect ? '#4afc9d' : '#ef4444';
   const zoomT = active && Math.abs(cents) <= 15 ? 1 : 0;
   const rootRef = useRef(null), bandRef = useRef(null), keyRefs = useRef({});
@@ -861,7 +860,8 @@ const NoteTape = ({ tuner, showMic, bare, compact }) => {   // compact: 가로 �
   const semi = semiRef.current;
   const base = Math.round(semi);
   const keys = [];
-  for (let k = base - (bare ? 12 : 8); k <= base + (bare ? 12 : 8); k++) keys.push(k);
+  if (bare) for (let k = -20; k <= 40; k++) keys.push(k);   // 벨트: 바이올린 음역 전체를 늘 깔아 둠 (굴러가며 사이 음이 지나가게)
+  else for (let k = base - 8; k <= base + 8; k++) keys.push(k);
   const inTune = active && Math.abs(cents) <= tolerance;
   // 스프링으로 부드럽게 + 목표 ±15센트 안이면 3배 확대
   const keyRefs = useRef({}), bandRef = useRef(null);
@@ -1337,16 +1337,9 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
       <button onClick={() => { setShowPrev(v => !v); haptic(6); }} className="self-center text-[10px] font-bold text-gray-500 -mt-1">
         {showPrev ? '미리보기 접기 ▲' : '미리보기 보기 ▼'}
       </button>
-      {tab === 't1' && (
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
-          {LAYOUT_PRESETS.map(p => (
-            <button key={p.id} onClick={() => { save(makeLayout('t1', p.on)); haptic(8); }}
-              className="shrink-0 px-2.5 py-1 rounded-full t-chip text-[10px] font-bold" style={{ color: 'var(--ink2)' }}>{p.name}</button>
-          ))}
-        </div>
-      )}
+      {/* 미리 만든 배치(프리셋) · 블록 추가/숨기기는 없앰 — 기본 블록의 위치(순서)와 크기만 바꿈 */}
       {/* 화면 순서: 지금 보이는 블록만 (위 → 아래) */}
-      <div className="text-[10px] font-black tracking-widest text-gray-500 mt-1">화면 순서 <span className="font-bold tracking-normal">(위 → 아래 · ⋮⋮ 끌어서 이동)</span></div>
+      <div className="text-[10px] font-black tracking-widest text-gray-500 mt-1">화면 순서 · 크기 <span className="font-bold tracking-normal">(위 → 아래 · ⋮⋮ 끌어서 이동)</span></div>
       <div ref={listRef} className="flex flex-col gap-1.5" onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
         {onList.map(b => {
           const m = meta(b.id), drag = dragId === b.id;
@@ -1364,40 +1357,21 @@ const LayoutEditor = ({ S, updateSettings, tuner, metro, initialTab = 't1' }) =>
                   <span className="flex items-center gap-1 text-[9px] font-bold" style={{ color: LAYOUT_GROUPS[m.group] }}><GroupIcon g={m.group} size={10}/>{m.group}</span>
                 </span>
               </span>
-              {/* 크기는 고정 (사용자 요청) — 위치·보이기만 바꿈 */}
-              <button disabled={m.lock} onClick={() => { patch(b.id, { on: false }); setSel(null); haptic(8); }}
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0" aria-label="숨기기"
-                style={{ color: m.lock ? 'transparent' : 'var(--ink2)' }}>
-                <X size={15}/>
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* 블록 추가: 숨긴 블록을 기능별로 */}
-      {offList.length > 0 && <>
-        <div className="text-[10px] font-black tracking-widest text-gray-500 mt-1">블록 추가 <span className="font-bold tracking-normal">(누르면 화면 아래쪽에 추가)</span></div>
-        {[...new Set(LAYOUT_BLOCKS[tab].map(k => k.group))].map(gname => {
-          const items = offList.filter(b => meta(b.id).group === gname);
-          if (!items.length) return null;
-          return (
-            <div key={gname}>
-              <div className="text-[11px] font-black mb-1 ml-0.5 flex items-center gap-1" style={{ color: LAYOUT_GROUPS[gname] }}><GroupIcon g={gname}/>{gname}</div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {items.map(b => (
-                  <button key={b.id} onClick={() => { addBlock(b.id); haptic(10); }}
-                    className="flex flex-col items-center gap-1 rounded-xl py-1.5 px-1 active:scale-95"
-                    style={{ background: 'rgba(0,0,0,.25)', border: `1px dashed ${LAYOUT_GROUPS[gname]}88` }}>
-                    <BlockThumb id={b.id} on={false}/>
-                    <span className="text-[10px] font-black leading-tight text-center" style={{ color: 'var(--ink2)' }}>+ {meta(b.id).short}</span>
+              {/* 크기: 작게 · 보통 · 크게 (녹음 블록은 한 줄 · 두 줄) */}
+              <div className="flex gap-0.5 shrink-0">
+                {(m.sizes || ['s', 'm', 'l']).map(z => (
+                  <button key={z} onClick={() => { patch(b.id, { size: z }); setSel(b.id); haptic(8); }}
+                    className="h-8 min-w-[30px] px-1.5 rounded-lg text-[11px] font-black"
+                    style={(b.size || 'm') === z ? { background: 'var(--accent)', color: '#000' } : { background: 'rgba(128,128,128,.12)', color: 'var(--ink2)' }}>
+                    {m.sizes ? (z === 's' ? '한 줄' : '두 줄') : ({ s: '작게', m: '보통', l: '크게' })[z]}
                   </button>
                 ))}
               </div>
             </div>
           );
         })}
-      </>}
+      </div>
+
       <div className="flex justify-between items-center">
         <span className="text-[10px] text-gray-500 leading-snug">이름 누르기 = 미리보기에 테두리 표시</span>
         <button onClick={() => { save(tab === 't1' ? makeLayout('t1', LAYOUT_PRESETS[0].on) : makeLayout('t2', DEFAULT_LAYOUT2_ON)); haptic(8); }}
