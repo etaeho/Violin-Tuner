@@ -152,7 +152,8 @@ const useMetronomeLogic = () => {
       // 튜너가 이 순간 분석을 건너뛸 수 있게 클릭 시각 공유 (출력 지연 포함)
       const ctx = metroAudioCtxRef.current;
       const soundOn = subBeatNumber !== 0 || beatSoundsRef.current[beatNumber] > 0;
-      const heard = performance.now() + delay + ((ctx.outputLatency || ctx.baseLatency || 0) * 1000);   // 스피커에서 실제로 나는 시각
+      const outLat = ctx.outputLatency || ((ctx.baseLatency || 0) + 0.06);   // 안드로이드는 outputLatency를 안 알려주는 경우가 많아 대략 60ms 더함
+      const heard = performance.now() + delay + outLat * 1000;   // 스피커에서 실제로 나는 시각
       if (soundOn) METRO_CLICKS.times.push(heard);
       METRO_CLICKS.grid.push([heard, subBeatNumber === 0]);
       if (METRO_CLICKS.grid.length > 4000) METRO_CLICKS.grid.splice(0, 2000);
@@ -562,12 +563,13 @@ const PitchStrip = ({ tuner, compact, swapColors, big }) => {
   const sectorD = (v) => { const a = ang(v); if (Math.abs(a) < 0.05) return ''; const [x0, y0] = pt(0, R - 1), [x1, y1] = pt(a, R - 1);
     return `M ${cx} ${cy} L ${x0} ${y0} A ${R - 1} ${R - 1} 0 0 ${a > 0 ? 1 : 0} ${x1} ${y1} Z`; };
   const needleRef = useRef(null), tipRef = useRef(null), fanRef = useRef(null);
-  const [c0] = useSpring([c], ([v]) => {
+  // 바늘: 시간 기준 부드러운 스프링(0.26초) — 화면 갱신 간격과 상관없이 매끄럽게 미끄러짐
+  const c0 = useRollSpring(c, (v) => {
     const n = needlePts(v);
     needleRef.current?.setAttribute('points', n.poly);
     if (tipRef.current) { tipRef.current.setAttribute('cx', n.tip[0]); tipRef.current.setAttribute('cy', n.tip[1]); }
     fanRef.current?.setAttribute('d', sectorD(v));
-  }, { k: 0.22, snap: 0.05 });
+  }, 260);
   const n0 = needlePts(c0);
   const ticks = [];
   for (let v = -RG; v <= RG; v++) {

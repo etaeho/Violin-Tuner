@@ -168,7 +168,10 @@ const useTunerLogic = () => {
       else c.count = 1;
       c.freq = raw;
 
-      if (c.count >= S.stableFrames) {
+      // 메트로놈 딸깍(1.4·2.0·2.6kHz, 0.075초)이 음으로 찍히지 않게: 메트로놈이 도는 동안 그 근처 음은 0.17초 넘게 이어질 때만 인정
+      const metroOn = METRO_CLICKS.times.length && METRO_CLICKS.times[METRO_CLICKS.times.length - 1] > now - 1500;
+      const clickLike = metroOn && CLICK_FREQS.some(f => Math.abs(centsBetween(raw, f)) < 60);
+      if (c.count >= (clickLike ? Math.max(10, S.stableFrames) : S.stableFrames)) {
         accepted = true;
         const hist = freqHistoryRef.current;
         const last = hist[hist.length - 1];
@@ -816,7 +819,7 @@ const FineStrip = ({ tuner, B, SC, height = 34, last }) => {
   const active = tuner.isStarted && tuner.pitch > 0, inTune = active && Math.abs(tuner.cents) <= tuner.tolerance;
   const ref = useRef(null), fillRef = useRef(null);
   const fillCss = (c) => { const x = fineX(c); return { left: Math.min(50, x) + '%', width: Math.abs(x - 50) + '%' }; };
-  const [f0] = useSpring([active ? tuner.centsExact : 0], ([c]) => { if (ref.current) ref.current.style.left = fineX(c) + '%'; if (fillRef.current) Object.assign(fillRef.current.style, fillCss(c)); }, { k: 0.22, snap: 0.05 });
+  const f0 = useRollSpring(active ? tuner.centsExact : 0, (c) => { if (ref.current) ref.current.style.left = fineX(c) + '%'; if (fillRef.current) Object.assign(fillRef.current.style, fillCss(c)); }, 260);   // 시간 기준 부드러운 스프링
   const F = FINE_RANGE;
   return (
     <div className="relative" style={{ height, background: B.head, borderBottom: last ? 'none' : `1px solid ${B.line}` }}>

@@ -433,7 +433,8 @@ const usePersistentState = (key, initial, validate = () => true) => {
 
 // 메트로놈 딸깍 소리 시각(performance.now 기준) — metronome.jsx가 기록, 튜너가 그 순간 분석을 건너뜀
 const METRO_CLICKS = { times: [], grid: [] };   // times: 소리 나는 클릭(튜너 건너뛰기용) · grid: 모든 박/쪼갠 박 [시각, 첫박여부] (녹음 박자 분석용)
-const CLICK_GATE_BEFORE = 20, CLICK_GATE_AFTER = 120;  // ms (마이크 지연 포함 여유)
+const CLICK_GATE_BEFORE = 20, CLICK_GATE_AFTER = 200;  // ms (스피커·마이크 지연 + 분석 창 43ms 여유 — 안드로이드는 지연이 커서 넉넉히)
+const CLICK_FREQS = [1400, 2000, 2600];   // 메트로놈 딸깍 주파수(다른 소리 · 기본 · 시작 꺾임) — 메트로놈이 돌 때 이 근처 짧은 소리는 음으로 안 침
 const isNearMetroClick = (now) => {
   const t = METRO_CLICKS.times;
   while (t.length && t[0] < now - 1000) t.shift();
